@@ -1,0 +1,50 @@
+{
+  "_comment": "Provider registry for the ask skill. defaultModel is the single place to update as models improve or get deprecated. Tiers: stream-json (realtime adapter), final-json (structured final output only), text-tee (no structured output; omc ask fallback).",
+  "providers": {
+    "claude": {
+      "defaultModel": "opus",
+      "tier": "stream-json",
+      "adapter": "claude-stream-surface.ts",
+      "versionCheck": "claude --version",
+      "authCheck": "claude auth status"
+    },
+    "codex": {
+      "defaultModel": "gpt-5.6-sol",
+      "tier": "stream-json",
+      "adapter": "codex-stream-surface.ts",
+      "versionCheck": "codex --version",
+      "authCheck": ""
+    },
+    "gemini": {
+      "defaultModel": "",
+      "tier": "final-json",
+      "adapter": "",
+      "versionCheck": "gemini --version",
+      "authCheck": "",
+      "fallback": "omc ask gemini"
+    },
+    "antigravity": {
+      "defaultModel": "",
+      "tier": "text-tee",
+      "adapter": "",
+      "versionCheck": "agy --version",
+      "authCheck": "",
+      "fallback": "omc ask antigravity"
+    },
+    "grok": {
+      "defaultModel": "",
+      "tier": "stream-json",
+      "adapter": "grok-stream-surface.ts",
+      "versionCheck": "grok --version",
+      "authCheck": "grok models"
+    },
+    "cursor": {
+      "defaultModel": "",
+      "tier": "text-tee",
+      "adapter": "",
+      "versionCheck": "cursor-agent --version",
+      "authCheck": "",
+      "fallback": "omc ask cursor"
+    }
+  }
+}
