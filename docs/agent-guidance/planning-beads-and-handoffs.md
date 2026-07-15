@@ -187,6 +187,35 @@ This repo leaves JSONL auto-export disabled unless an integration explicitly req
 
 Never use raw `dolt push` while the shared server is running. Use `bd dolt push --remote origin` so Beads coordinates the operation.
 
+### Temporary Beads 1.1.0 Git-remote push fallback
+
+The current shared-server/Git-remote combination can fail with `dolt remote add ... remote already exists` while `bd dolt push --remote origin` materializes an already-correct remote. Track removal of this workaround in `skills-bjw`.
+
+Before using the fallback, verify `bd dolt remote list` shows exactly `git+ssh://git@github-styrir/styrir/skills.git`. Do not remove the correct remote, stop the machine-wide server, or run raw `dolt push`. Use Dolt's supported SQL-server procedure:
+
+```bash
+uv run --with pymysql python - <<'PY'
+import pymysql
+
+connection = pymysql.connect(
+    host="127.0.0.1",
+    port=3308,
+    user="root",
+    password="",
+    database="skills",
+    autocommit=True,
+)
+with connection.cursor() as cursor:
+    cursor.execute("CALL DOLT_PUSH('origin', 'main')")
+    print(cursor.fetchall())
+connection.close()
+PY
+
+git ls-remote git@github-styrir:styrir/skills.git refs/dolt/data
+```
+
+The procedure is the documented SQL-server equivalent of `dolt push`; the Git remote stores the database under `refs/dolt/data` by default. Treat status `0` plus a nonempty remote ref as success.
+
 The repository uses the conservative profile: do not Git-commit, Git-push, or Dolt-push without explicit user authorization. Local issue writes are allowed when they are necessary to track the current task.
 
 ## Handoffs and Follow-ups
