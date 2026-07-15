@@ -5,3 +5,9 @@
 node_modules/
 .venv/
 __pycache__/
+
+# Beads / Dolt runtime files
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
