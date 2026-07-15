@@ -187,34 +187,37 @@ This repo leaves JSONL auto-export disabled unless an integration explicitly req
 
 Never use raw `dolt push` while the shared server is running. Use `bd dolt push --remote origin` so Beads coordinates the operation.
 
-### Temporary Beads 1.1.0 Git-remote push fallback
+### Dolt CLI/server version alignment
 
-The current shared-server/Git-remote combination can fail with `dolt remote add ... remote already exists` while `bd dolt push --remote origin` materializes an already-correct remote. Track removal of this workaround in `skills-bjw`.
+Git-protocol remotes use the local `dolt` CLI for transfer even though issue reads and writes go through the shared SQL server. The CLI selected from `PATH` must therefore be compatible with the binary running `com.beads.shared-dolt`.
 
-Before using the fallback, verify `bd dolt remote list` shows exactly `git+ssh://git@github-styrir/styrir/skills.git`. Do not remove the correct remote, stop the machine-wide server, or run raw `dolt push`. Use Dolt's supported SQL-server procedure:
+On this Apple-silicon machine, `/opt/homebrew/bin/dolt` is canonical. A stale Intel-Homebrew link at `/usr/local/bin/dolt` can shadow it because some agent environments put `/usr/local/bin` first. Typical symptoms are:
+
+- `dolt status` or `dolt remote -v` reports `table has unknown fields`;
+- `bd dolt push` then misreads the CLI remote as absent and reports `remote already exists` while trying to materialize it.
+
+Compare the active binaries before changing remotes or using a SQL fallback:
 
 ```bash
-uv run --with pymysql python - <<'PY'
-import pymysql
-
-connection = pymysql.connect(
-    host="127.0.0.1",
-    port=3308,
-    user="root",
-    password="",
-    database="skills",
-    autocommit=True,
-)
-with connection.cursor() as cursor:
-    cursor.execute("CALL DOLT_PUSH('origin', 'main')")
-    print(cursor.fetchall())
-connection.close()
-PY
-
-git ls-remote git@github-styrir:styrir/skills.git refs/dolt/data
+command -v dolt
+dolt version
+/opt/homebrew/bin/dolt version
+pid=$(lsof -nP -iTCP:3308 -sTCP:LISTEN -t)
+ps -p "$pid" -o command=
 ```
 
-The procedure is the documented SQL-server equivalent of `dolt push`; the Git remote stores the database under `refs/dolt/data` by default. Treat status `0` plus a nonempty remote ref as success.
+If `/usr/local/bin/dolt` is only a stale symlink, repoint it to the canonical Homebrew entry and clear the shell command cache:
+
+```bash
+ln -sfn /opt/homebrew/bin/dolt /usr/local/bin/dolt
+hash -r
+dolt version
+dolt status
+dolt remote -v
+bd dolt push --remote origin
+```
+
+Do not remove an already-correct remote or stop the machine-wide server merely because an older CLI cannot read a newer database.
 
 The repository uses the conservative profile: do not Git-commit, Git-push, or Dolt-push without explicit user authorization. Local issue writes are allowed when they are necessary to track the current task.
 
