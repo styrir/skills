@@ -2,7 +2,7 @@
 
 This skill reimplements selected concepts after quarantined inspection. It does **not** vendor runtime dependencies from the candidate repositories.
 
-Inspection date: 2026-07-15  
+Inspection date: 2026-07-15
 Inspection staging: `/tmp/skillspector-candidates/voice-tools/`
 
 ## Conceptual sources (MIT at inspected commits)

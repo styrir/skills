@@ -7,8 +7,8 @@ description: Use when revising AI-assisted or over-smoothed prose while preservi
 
 Revise AI-assisted or over-smoothed prose without erasing the author's actual voice.
 
-**Normative plan:** `../docs/plans/voice-preserving-humanizer.md`  
-**Dual-review synthesis:** `../docs/reviews/voice-preserving-humanizer-dual-review-synthesis.md`  
+**Normative plan:** `../docs/plans/voice-preserving-humanizer.md`
+**Dual-review synthesis:** `../docs/reviews/voice-preserving-humanizer-dual-review-synthesis.md`
 **Approved plan SHA-256:** `bc26bca227c496e90e2d219de096d88b1ad6f3a7e0a77120f998cec0b6d62dbe`
 
 ## Decision snapshot
@@ -79,7 +79,7 @@ $VOICE_PROFILE_DIR/<profile-name>/
   evaluation/
 ```
 
-Default root when unset: `~/.local/share/voice-preserving-humanizer/profiles/`.  
+Default root when unset: `~/.local/share/voice-preserving-humanizer/profiles/`.
 Create directories `0700` and files `0600`. Never put private corpus or raw evaluation outputs in this skill tree or Git.
 
 ## Consent (DR-13)
