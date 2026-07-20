@@ -1,0 +1,19 @@
+{
+  "schema_version": "edit-set.v1",
+  "document_id": "draft-001",
+  "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "edits": [
+    {
+      "edit_id": "edit-001",
+      "proposal_id": "proposal-001",
+      "passage_id": "paragraph-003",
+      "start_byte": 412,
+      "end_byte": 608,
+      "original_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "replacement_text": "validated replacement",
+      "protected_sentinel_ids": [
+        "VP_SENTINEL_0004"
+      ]
+    }
+  ]
+}

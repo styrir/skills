@@ -1,0 +1,49 @@
+profile_version: 1
+name: brooks-default
+corpus_manifest:
+  - id: sample-01
+    path: /private/path/sample-01.md
+    genre: analytical-essay
+    included_in_profile: true
+  - id: sample-03
+    path: /private/path/sample-03.md
+    genre: analytical-essay
+    included_in_profile: true
+  - id: heldout-01
+    path: /private/path/heldout-01.md
+    genre: analytical-essay
+    included_in_profile: false
+hypotheses:
+  - id: register-01
+    claim: "Prefers a precise high-register term when a plainer synonym would also be accurate."
+    confidence: 0.92
+    applicability: enforceable
+    evidence:
+      - sample-01:paragraph-3
+      - sample-03:paragraph-5
+    counterevidence: []
+    genericity_check:
+      acceptable_contrast: "Uses the plainer accurate synonym where either lexical choice would remain clear and factual."
+      quality_inversion: false
+      user_confirmed_author_specific: true
+style_features:
+  sentence_length:
+    median_words: null
+    p90_words: null
+  paragraph_length:
+    median_sentences: null
+  punctuation_rates: {}
+  function_word_rates: {}
+  lexical_features: {}
+protected_preferences:
+  glossary:
+    - term: epistemic
+      aliases: []
+      evidence:
+        - sample-01:paragraph-3
+  preserve:
+    - semicolons when structurally useful
+    - domain-specific Latinate terms when precise
+  avoid:
+    - generic motivational conclusions
+    - invented personal anecdotes

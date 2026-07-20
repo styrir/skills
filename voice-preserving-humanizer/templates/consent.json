@@ -1,0 +1,20 @@
+{
+  "schema_version": "voice-consent.v1",
+  "profile_id": "brooks-default",
+  "harness": "hermes",
+  "provider_route": "configured-route-id",
+  "resolved_backend_model": "provider/model@resolved",
+  "data_class": "raw_private",
+  "dynamic_route": false,
+  "dynamic_route_acknowledged": false,
+  "approved_payload_sha256": null,
+  "transcript_policy": "persistent",
+  "transcript_location": "unknown",
+  "purge_procedure": "unavailable",
+  "approved_at": "2026-07-20T00:00:00Z",
+  "scope": [
+    "profile_generation",
+    "document_revision"
+  ],
+  "approved_by": "user"
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": "voice-audit.v1",
+  "document_id": "draft-001",
+  "status": "accepted",
+  "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "output_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "edit_ids": [
+    "edit-001"
+  ],
+  "evidence_by_edit": [],
+  "verifier": {
+    "protected_spans": "pass",
+    "edit_locality": "pass",
+    "semantic_fidelity": "pass",
+    "fresh_context": true,
+    "route": "configured-route-id",
+    "resolved_backend_model": "provider/model@resolved",
+    "different_backend": false,
+    "contextual_pattern_decisions": []
+  },
+  "review_findings": [],
+  "review_approval_ids": [],
+  "voice_metric_warnings": [],
+  "warnings": [],
+  "rejection_codes": []
+}

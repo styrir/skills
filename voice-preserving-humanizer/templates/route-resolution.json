@@ -1,0 +1,9 @@
+{
+  "schema_version": "route-resolution.v1",
+  "harness": "hermes",
+  "provider_route": "configured-route-id",
+  "resolved_backend_model": "provider/model@resolved",
+  "resolved_at": "2026-07-20T00:00:00Z",
+  "resolver_evidence": "adapter-reported",
+  "dynamic_route": false
+}

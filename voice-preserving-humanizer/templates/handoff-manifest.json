@@ -1,0 +1,16 @@
+{
+  "schema_version": "handoff-manifest.v1",
+  "run_id": "run-001",
+  "handoff_kind": "revision",
+  "document_id": "draft-001",
+  "payload_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "route_resolution_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "consent_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "harness": "hermes",
+  "provider_route": "configured-route-id",
+  "resolved_backend_model": "provider/model@resolved",
+  "transcript_policy": "persistent",
+  "scope": [
+    "document_revision"
+  ]
+}

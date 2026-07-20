@@ -1,0 +1,33 @@
+{
+  "schema_version": "edit-proposal.v1",
+  "document_id": "draft-001",
+  "mode": "conservative",
+  "profile_id": "brooks-default",
+  "proposals": [
+    {
+      "proposal_id": "proposal-001",
+      "passage_id": "paragraph-003",
+      "original_text": "exact normalization-sensitive text from the protected passage",
+      "prefix_anchor": "",
+      "suffix_anchor": "",
+      "replacement_text": "replacement containing any required sentinels",
+      "reason_category": "formulaic_ai_residue",
+      "corpus_evidence_ids": [],
+      "pattern_evidence": {
+        "pattern_id": "transition.stock-conclusion.v1",
+        "evidence_kind": "countable",
+        "source_evidence": "exact implicated source text",
+        "corpus_disposition": "absent",
+        "source_rate": 0.12,
+        "corpus_rate": 0.01,
+        "pattern_threshold": 0.08
+      },
+      "protected_sentinel_ids": [
+        "VP_SENTINEL_0004"
+      ],
+      "confidence": 0.91,
+      "requires_review": false
+    }
+  ],
+  "unresolved_conflicts": []
+}

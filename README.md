@@ -8,6 +8,7 @@ Canonical source for Styrir-owned agent skills shared across Claude Code, Codex,
 |---|---|
 | `ask/` | Observable model-to-model consultation through provider-aware CLI adapters, JSONL traces, and Markdown artifacts. |
 | `repo-readiness-synthesis/` | Evidence-grounded repository readiness reviews across tasks, commits, sessions, and documentation. |
+| `voice-preserving-humanizer/` | Revise AI-assisted prose while preserving author voice; dual-approved plan scaffolded, implementation in progress (`skills-cfw`). |
 
 Each skill uses `SKILL.md` as its entry contract. Inspect that file and its linked `scripts/`, `references/`, `templates/`, or `assets/` before changing behavior.
 

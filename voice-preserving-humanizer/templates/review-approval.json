@@ -1,0 +1,20 @@
+{
+  "schema_version": "voice-review-approval.v1",
+  "approval_id": "approval-001",
+  "profile_id": "brooks-default",
+  "run_id": "run-001",
+  "document_id": "draft-001",
+  "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "candidate_output_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "finding_id": "finding-001",
+  "subject_edit_ids": [
+    "edit-001"
+  ],
+  "evidence_ids": [
+    "proposal-001"
+  ],
+  "review_code": "UNVERIFIED_TOKEN_CHANGE",
+  "decision": "approve",
+  "approver": "user",
+  "approved_at": "2026-07-20T00:00:00Z"
+}
