@@ -272,6 +272,21 @@ For a locally completed task:
 
 This is expected only before the designated initial checkout's first authorized `bd dolt push --remote origin`. Do not fabricate history or copy an unrelated database.
 
+### Pull refuses: dirty internal config key (`issue_prefix`)
+
+Symptom chain: `bd dolt push --remote origin` fails with `push cancelled by force` (remote is ahead; a pull is required first), then `bd dolt pull --remote origin` fails with `refusing to auto-commit 1 dirty internal config key(s) before pull: issue_prefix (GH#2455)`, and `bd dolt commit` / `bd vc commit` report success without clearing it — subsequent `bd doctor` still shows `config: modified`.
+
+Root cause (diagnosed 2026-08-08, bd 1.1.0): the Dolt `config` table at HEAD is missing the `issue_prefix` row, so every bd invocation re-inserts it into the working set, while bd's commit paths stage only issue tables — the `config` table stays perpetually unstaged and dirty, and the pull precheck can never pass. `bd vc commit` with nothing staged misreports the existing HEAD hash as a new commit.
+
+Fix: stage and commit the `config` table once through the shared SQL server (the sanctioned path — this is not a raw `dolt` CLI operation):
+
+```sql
+CALL DOLT_ADD('config');
+CALL DOLT_COMMIT('-m', 'bd: commit issue_prefix config key');
+```
+
+(e.g. via `uv run --with pymysql python` against `127.0.0.1:3308`, database `skills`, user `root`). Verify `SELECT * FROM dolt_status` stays empty after another bd invocation — the startup write becomes a no-op once the committed value matches — then run `bd dolt pull --remote origin` and `bd dolt push --remote origin` normally. Do not force-push, and do not loop commit-then-pull retries: if the working set re-dirties after the SQL commit, the committed value differs from what bd writes — compare `SELECT * FROM dolt_diff('HEAD','WORKING','config')` before anything else.
+
 ### Schema mismatch
 
 Stop. Identify the designated migrator and current remote state. Do not apply independent migrations from multiple clones or worktrees.
