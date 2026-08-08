@@ -287,6 +287,8 @@ CALL DOLT_COMMIT('-m', 'bd: commit issue_prefix config key');
 
 (e.g. via `uv run --with pymysql python` against `127.0.0.1:3308`, database `skills`, user `root`). Verify `SELECT * FROM dolt_status` stays empty after another bd invocation — the startup write becomes a no-op once the committed value matches — then run `bd dolt pull --remote origin` and `bd dolt push --remote origin` normally. Do not force-push, and do not loop commit-then-pull retries: if the working set re-dirties after the SQL commit, the committed value differs from what bd writes — compare `SELECT * FROM dolt_diff('HEAD','WORKING','config')` before anything else.
 
+Upstream status (checked 2026-08-08): reported as gastownhall/beads#4934 (all bd commit paths pass `configExclude`, so no CLI can clear a dirty internal config key) and #5111 (the pre-pull error recommends the very command that no-ops); the likely origin of the missing row is #3494 (bootstrap leaves `issue_prefix` uncommitted). No fix on main as of that date — the bug is verified present past v1.1.2, so upgrading bd does not clear it; the SQL commit above remains the recovery.
+
 ### Schema mismatch
 
 Stop. Identify the designated migrator and current remote state. Do not apply independent migrations from multiple clones or worktrees.
