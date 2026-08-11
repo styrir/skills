@@ -1,0 +1,39 @@
+# Beads and Dolt
+
+Load this document when work needs durable tasks, dependencies, blockers, ownership, project memory, handoff state, or tracker synchronization.
+
+## Repository tracker
+
+This repository uses Beads (`bd`) with:
+
+- issue prefix: `{{BEADS_PREFIX}}`;
+- repository-local embedded Dolt under `.beads/embeddeddolt`;
+- the local embedded database as a checkout-specific working copy;
+- the configured Dolt remote as durable cross-machine tracker history once publication is explicitly approved.
+
+Confirm resolution before changing tracker state:
+
+```bash
+bd prime
+bd where
+bd dolt remote list
+```
+
+For a fresh clone with a configured remote, run `bd bootstrap --yes`. Do not edit `.beads/` directly. `.beads/issues.jsonl` is an interchange snapshot, not the writable source of truth.
+
+## Work lifecycle
+
+```bash
+bd ready --exclude-type epic
+bd show <id>
+bd update <id> --claim
+# implement and verify
+bd update <id> --notes "Outcome, validation, and remaining context"
+bd close <id> --reason "Completed outcome and validation"
+```
+
+Create separate Beads for unfinished discoveries instead of silently expanding scope or closing incomplete work.
+
+## Synchronization
+
+Git publication and Dolt synchronization are separate external actions. Do not add a Dolt remote, run `bd dolt push`, create a Git repository, or run `git push` without authorization for the exact target. If either push fails, report the command and error; do not describe that history as current.

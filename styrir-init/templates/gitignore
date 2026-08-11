@@ -1,0 +1,14 @@
+# Styrir local/generated state
+.DS_Store
+__pycache__/
+*.py[cod]
+/.styrir/
+/docs/analysis/
+/.gitnexus/
+
+# Beads / Dolt runtime state
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+.beads/interactions.jsonl

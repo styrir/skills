@@ -1,0 +1,16 @@
+.git/
+.gitnexus/
+.beads/
+.styrir/
+node_modules/
+dist/
+build/
+coverage/
+.DS_Store
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.woff
+*.woff2

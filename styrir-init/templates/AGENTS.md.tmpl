@@ -1,0 +1,30 @@
+# AGENTS.md — {{PROJECT_NAME}}
+
+Read this first. This file is the binding work contract for agents operating in this repository. `CLAUDE.md` is a thin redirect to this file; keep durable guidance here and in the nearest child `AGENTS.md`.
+
+## Repository Contract
+
+- Tracked source, maintained documentation, and reviewed configuration are durable repository truth.
+- Generated reports, run state, logs, caches, build products, and scratch work belong under the ignored `/.styrir/` workspace.
+- Git source history and Beads/Dolt tracker history are separate. Do not report either as synchronized unless its own remote operation succeeds.
+- Do not fabricate live state, tests, receipts, integrations, metrics, or verification.
+
+## Work Guidance
+
+- Read the applicable root and child `AGENTS.md` chain before editing.
+- Use Beads for work that must survive the current session; read `agent-guidance/beads-and-dolt.md` first.
+- Read `agent-guidance/styrir-workspace.md` before creating generated artifacts.
+- Read `agent-guidance/gitnexus.md` before architecture exploration, flow tracing, or blast-radius analysis.
+- Read `agent-guidance/non-interactive-shell.md` before shell operations that can prompt, overwrite, delete, install, or connect externally.
+- Create a child `AGENTS.md` when a directory becomes a durable ownership boundary with distinct contracts or verification rules.
+
+## Verification
+
+- Run checks proportionate to the files and behavior changed.
+- Confirm generated/runtime files remain ignored.
+- Confirm Git and Dolt publication independently before reporting synchronization.
+- Report limitations and unverified external state explicitly.
+
+## Child DOX Index
+
+No child DOX documents are registered yet. Add entries here when durable child boundaries are created.
