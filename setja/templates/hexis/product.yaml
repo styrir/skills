@@ -1,0 +1,14 @@
+name: product
+summary_style: strategic
+include:
+  - workspace/research
+  - workspace/html
+  - workspace/screenshots
+ignore:
+  - workspace/scratch
+focus:
+  - product direction
+  - UX clarity
+boost:
+  - context/decisions
+  - context/guides

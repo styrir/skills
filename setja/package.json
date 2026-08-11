@@ -1,0 +1,39 @@
+{
+  "name": "setja",
+  "version": "0.2.0",
+  "description": "TypeScript-first context construction and injection layer for AI agents",
+  "type": "module",
+  "bin": {
+    "setja": "dist/bin/setja.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "adapters",
+    "templates",
+    "README.md",
+    ".env.example"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/bin/setja.ts",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "SETJA_SUMMARIZER=outline SETJA_RUNIR_ENABLED=false tsx --test test/**/*.test.ts"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "dotenv": "^16.6.1",
+    "sharp": "^0.34.5",
+    "turndown": "^7.2.4",
+    "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.2",
+    "@types/turndown": "^5.0.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

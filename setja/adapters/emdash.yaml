@@ -1,0 +1,19 @@
+name: setja
+
+description: Context construction and injection layer
+
+steps:
+  - name: initialize
+    when: project_is_new
+    run: setja init
+
+  - name: build_context
+    run: setja build --hexis=default
+
+  - name: inject_context
+    run: setja inject --hexis=default
+
+rules:
+  - never_read_workspace_directly
+  - always_use_context_layer
+  - do_not_duplicate_logic

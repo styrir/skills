@@ -20,6 +20,7 @@ This repository is the source of truth for agent skills shared across Claude Cod
 | Beads, task planning, `.pipeline/` artifacts, shared Dolt operation, handoffs, or closeout | `docs/agent-guidance/planning-beads-and-handoffs.md` |
 | Adding, moving, or validating durable documentation | `docs/AGENTS.md` |
 | The Ask skill or provider/model routing | `ask/SKILL.md`, `ask/providers.json`, and the relevant files under `ask/scripts/` |
+| Setja runtime, CLI, package, adapters, or bundled skill | `setja/AGENTS.md`, then the relevant entry contract or source files |
 | Another skill | That skill's `SKILL.md`, then its referenced `scripts/`, `references/`, `templates/`, or `assets/` files |
 
 ## Beads Posture
@@ -31,6 +32,7 @@ Run `bd prime` for the current command contract. The detailed machine posture, f
 ## Child DOX Index
 
 - `docs/AGENTS.md` — owns durable documentation and progressive-disclosure guidance below `docs/`.
+- `setja/AGENTS.md` — owns the Setja TypeScript runtime, package, tests, documentation, templates, adapters, and bundled skill.
 
 <!-- bd-doctor-divergence: ok -->
 

@@ -12,8 +12,8 @@ fi
 APP="$(cd "$APP" && pwd)"
 BIN="$(find "$APP/Contents/MacOS" -type f -perm +111 2>/dev/null | head -1 || true)"
 BID="$(defaults read "$APP/Contents/Info" CFBundleIdentifier 2>/dev/null || echo "?")"
-OUT="${TMPDIR:-/tmp}/lab-recon-$(basename "$APP" .app)-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$OUT"
+OUT="$(mktemp -d "${TMPDIR:-/tmp}/lab-recon-$(basename "$APP" .app).XXXXXX")"
+chmod 700 "$OUT"
 
 {
   echo "=== APP ==="

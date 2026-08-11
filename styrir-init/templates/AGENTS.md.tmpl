@@ -7,6 +7,7 @@ Read this first. This file is the binding work contract for agents operating in 
 - Tracked source, maintained documentation, and reviewed configuration are durable repository truth.
 - Generated reports, run state, logs, caches, build products, and scratch work belong under the ignored `/.styrir/` workspace.
 - Git source history and Beads/Dolt tracker history are separate. Do not report either as synchronized unless its own remote operation succeeds.
+- A completed, verified tranche must be committed and published before closeout: push Git to the configured `origin`, push Beads/Dolt to `origin`, verify both refs, and leave the checkout clean. This is standing authority for ordinary non-force publication; ask before destructive history rewrites, force pushes, or creating/changing remotes.
 - Do not fabricate live state, tests, receipts, integrations, metrics, or verification.
 
 ## Work Guidance
@@ -22,6 +23,7 @@ Read this first. This file is the binding work contract for agents operating in 
 
 - Run checks proportionate to the files and behavior changed.
 - Confirm generated/runtime files remain ignored.
+- After each completed tranche, update or close its Beads, commit the coherent change, push Beads/Dolt and Git to the configured `origin`, verify both remote refs, and leave the checkout clean.
 - Confirm Git and Dolt publication independently before reporting synchronization.
 - Report limitations and unverified external state explicitly.
 

@@ -9,7 +9,7 @@ This repository uses Beads (`bd`) with:
 - issue prefix: `{{BEADS_PREFIX}}`;
 - repository-local embedded Dolt under `.beads/embeddeddolt`;
 - the local embedded database as a checkout-specific working copy;
-- the configured Dolt remote as durable cross-machine tracker history once publication is explicitly approved.
+- the configured Dolt remote as durable cross-machine tracker history.
 
 Confirm resolution before changing tracker state:
 
@@ -34,6 +34,21 @@ bd close <id> --reason "Completed outcome and validation"
 
 Create separate Beads for unfinished discoveries instead of silently expanding scope or closing incomplete work.
 
-## Synchronization
+## Tranche closeout and synchronization
 
-Git publication and Dolt synchronization are separate external actions. Do not add a Dolt remote, run `bd dolt push`, create a Git repository, or run `git push` without authorization for the exact target. If either push fails, report the command and error; do not describe that history as current.
+A completed, verified tranche must be published without waiting for repeated approval when the repository already has the intended `origin` remotes:
+
+1. File follow-up Beads for unfinished work.
+2. Run the tranche's quality gates.
+3. Update or close relevant Beads only when acceptance criteria are met.
+4. Commit only the coherent tranche.
+5. Synchronize both histories:
+
+   ```bash
+   bd dolt push --remote origin
+   git push origin HEAD
+   ```
+
+6. Verify the remote Git branch, `refs/dolt/data`, tracker state, and a clean working tree.
+
+Git publication and Dolt synchronization remain separate external actions; neither is current unless its own push succeeds. A current user or orchestrator instruction may temporarily pause publication for a tranche. Ask before creating or changing remotes, creating a remote repository, force-pushing, rewriting published history, or performing another destructive shared-state operation. If either ordinary push fails, keep the tranche open and report the exact command and error.

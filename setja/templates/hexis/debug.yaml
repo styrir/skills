@@ -1,0 +1,14 @@
+name: debug
+summary_style: technical
+include:
+  - workspace/research
+  - workspace/html
+  - workspace/screenshots
+  - workspace/scratch
+ignore: []
+focus:
+  - implementation details
+  - constraints
+boost:
+  - context/architecture
+  - context/state

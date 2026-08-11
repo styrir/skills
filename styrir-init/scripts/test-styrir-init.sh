@@ -60,6 +60,18 @@ required=(
 )
 for rel in "${required[@]}"; do [[ -e "$fixture/$rel" ]] || { echo "missing $rel"; exit 1; }; done
 
+# Generated guidance must carry the standing tranche-publication contract while
+# preserving the initializer's own no-commit/no-remote/no-push boundary.
+grep -F 'A completed, verified tranche must be committed and published before closeout' "$fixture/AGENTS.md" >/dev/null
+grep -F 'This is standing authority for ordinary non-force publication' "$fixture/AGENTS.md" >/dev/null
+grep -F 'After each completed tranche, update or close its Beads, commit the coherent change' "$fixture/AGENTS.md" >/dev/null
+grep -F 'bd dolt push --remote origin' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
+grep -F 'git push origin HEAD' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
+grep -F 'without waiting for repeated approval' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
+grep -F 'Ask before creating or changing remotes' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
+grep -F 'Ordinary non-force publication of a completed, verified tranche' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
+grep -F 'do not ask for repeated approval' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
+
 # Capture all non-runtime files before the second run; generated tracker runtime is intentionally excluded.
 manifest_before="$(python3 - "$fixture" <<'PY'
 from pathlib import Path

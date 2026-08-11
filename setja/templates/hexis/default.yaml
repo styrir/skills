@@ -1,0 +1,12 @@
+name: default
+summary_style: neutral
+include:
+  - workspace/research
+  - workspace/html
+  - workspace/screenshots
+ignore:
+  - workspace/scratch
+focus:
+  - general understanding
+boost:
+  - context
