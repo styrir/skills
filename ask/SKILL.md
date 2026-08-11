@@ -19,7 +19,7 @@ Examples:
 
 ```bash
 scripts/ask.sh codex -p brief-review.md                      # Codex review, default model, streamed
-scripts/ask.sh claude -b 5 "Second opinion on this plan: …"  # Claude advisor with budget cap
+scripts/ask.sh claude --effort high "Second opinion on this plan: …"  # Claude advisor via the Grok/VibeProxy transport
 scripts/ask.sh codex -m gpt-5.6-terra -d ~/Code/gefa -o .pipeline/safelight/review -p build-review.md  # -m overrides the registry default
 scripts/ask.sh claude --research -p build-review.md          # Reviewer may use bounded web/Context7 research
 scripts/ask.sh grok -p brief-review.md                       # Grok review (read-only tools), streamed
@@ -36,7 +36,7 @@ Defaults live in **`providers.json` — the single place to update as models imp
 
 | Provider | Default model | Tier | Route |
 |---|---|---|---|
-| claude | opus | stream-json | `claude -p --output-format stream-json` → `claude-stream-surface.ts` |
+| claude | claude-opus-5 | stream-json | `grok -m <claude-model> --output-format streaming-json` → `grok-stream-surface.ts` (VibeProxy-owned route) |
 | codex | gpt-5.6-sol | stream-json | `codex exec --json` → `codex-stream-surface.ts` |
 | grok | (grok CLI config default) | stream-json | `grok --prompt-file --output-format streaming-json` → `grok-stream-surface.ts` |
 | gemini | (CLI default) | final-json | `omc ask gemini` fallback |
@@ -66,7 +66,7 @@ Builder-pass rules:
 
 ## Optional reviewer research
 
-Use `--research` or `--with-research-tools` only when current external evidence may change the review: dependency/API behavior, framework docs, provider limits, web-visible facts, or contradiction checks. The runner appends a research appendix to the saved prompt. For Claude, it also expands the review tool surface from local `Read/Grep/Glob/Bash` to include WebSearch, WebFetch, deferred MCP discovery, Context7, and Parallel Search MCP patterns. Codex gets the same prompt contract and should use configured tools/skills when available.
+Use `--research` or `--with-research-tools` only when current external evidence may change the review: dependency/API behavior, framework docs, provider limits, web-visible facts, or contradiction checks. The runner appends a research appendix to the saved prompt. Claude uses the same Grok read-only research surface as the Grok provider route: local file tools plus configured web/documentation tools, with shell, edits, subagents, and interactive tools explicitly denied. Codex gets the same prompt contract and should use configured tools/skills when available.
 
 Research-enabled reviewers should still start from local files, prefer `$styrir-search` for bounded web research, use Context7 for current library/API/CLI/cloud docs, fetch/read sources before citing them, keep search budgets small, and report unavailable tools instead of inventing citations.
 
@@ -92,6 +92,6 @@ For brief and arch/code review gates, set `-o .pipeline/<topic>/review/<gate>` s
 
 ## Relationship to other skills
 
-- Supersedes `~/.codex/skills/ask-codex` (now a pointer here) and absorbs `claude-ask-direct`'s no-settings-mutation rule.
+- Supersedes the former standalone `ask-codex` route and absorbs `claude-ask-direct`'s no-settings-mutation rule; consultations now go through this unified runner.
 - `omc ask` remains the documented fallback route for providers without a streaming adapter; do not hand-assemble raw CLI flags for those providers.
 - Replay a saved trace without re-running: `node --experimental-strip-types scripts/<adapter> --from-file <trace.jsonl> <artifact.md> [prompt.md]`.

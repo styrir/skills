@@ -12,9 +12,10 @@ SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 REGISTRY="$SKILL_DIR/providers.json"
 
 usage() {
-  echo 'Usage: ask.sh <provider> [-m model] [-d workdir] [-o outdir] [-b budget-usd] [--research] [--build] (-p prompt-file | "prompt text")' >&2
+  echo 'Usage: ask.sh <provider> [-m model] [-d workdir] [-o outdir] [-b budget-usd] [--effort low|medium|high|xhigh] [--research] [--build] (-p prompt-file | "prompt text")' >&2
   echo '  --research, --with-research-tools  Let the reviewer use bounded web search and Context7 when useful.' >&2
   echo '  --build, --write                   Write-enabled builder pass (grok only): full toolset, tool executions auto-approved.' >&2
+  echo '  --effort LEVEL                     Codex/Claude reasoning effort when supported (default: unset / provider default).' >&2
   echo "Providers: $(python3 -c "import json;print(' '.join(json.load(open('$REGISTRY'))['providers']))" 2>/dev/null || echo 'claude codex gemini antigravity grok cursor')" >&2
   exit 1
 }
@@ -22,7 +23,7 @@ usage() {
 [ $# -ge 2 ] || usage
 PROVIDER="$1"; shift
 
-MODEL="" WORKDIR="$PWD" WORKDIR_SET=0 OUTDIR="" BUDGET="" PROMPT_FILE="" PROMPT_TEXT="" RESEARCH_TOOLS=0 BUILD_MODE=0
+MODEL="" WORKDIR="$PWD" WORKDIR_SET=0 OUTDIR="" BUDGET="" PROMPT_FILE="" PROMPT_TEXT="" RESEARCH_TOOLS=0 BUILD_MODE=0 EFFORT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     -m) MODEL="$2"; shift 2 ;;
@@ -30,6 +31,7 @@ while [ $# -gt 0 ]; do
     -o) OUTDIR="$2"; shift 2 ;;
     -b) BUDGET="$2"; shift 2 ;;
     -p) PROMPT_FILE="$2"; shift 2 ;;
+    --effort) EFFORT="$2"; shift 2 ;;
     --research|--with-research|--with-research-tools) RESEARCH_TOOLS=1; shift ;;
     --build|--write) BUILD_MODE=1; shift ;;
     -h|--help) usage ;;
@@ -45,6 +47,8 @@ sys.exit(1) if p is None else print(p.get('$1',''))
 
 TIER="$(field tier)" || { echo "ask.sh: unknown provider '$PROVIDER'" >&2; usage; }
 [ -n "$MODEL" ] || MODEL="$(field defaultModel)"
+TRANSPORT="$(field transport)"
+[ -n "$TRANSPORT" ] || TRANSPORT="$PROVIDER"
 ADAPTER="$(field adapter)"
 
 # Materialize the prompt as a file so it is preserved with the run.
@@ -112,12 +116,12 @@ if [ "$BUILD_MODE" = "1" ]; then
   WORKDIR="$(cd "$WORKDIR" && pwd -P)"
 fi
 
-echo "ask: provider=$PROVIDER model=${MODEL:-<cli-default>} tier=$TIER" >&2
+echo "ask: provider=$PROVIDER transport=$TRANSPORT model=${MODEL:-<cli-default>} tier=$TIER" >&2
 echo "ask: tail -f $TRACE" >&2
 
 case "$TIER" in
   stream-json)
-    case "$PROVIDER" in
+    case "$TRANSPORT" in
       claude)
         command -v claude >/dev/null || blocker "claude CLI not found on PATH"
         AUTH_OUT="$(claude auth status 2>&1 || true)"
@@ -130,10 +134,15 @@ case "$TIER" in
           CLAUDE_ARGS+=(--allowedTools "$(join_csv "${CLAUDE_ALLOWED_TOOLS[@]}")")
         fi
         CLAUDE_ARGS+=(--tools "$(join_csv "${CLAUDE_TOOLS[@]}")" --output-format stream-json --verbose)
+        if [ -n "$EFFORT" ]; then
+          CLAUDE_ARGS+=(--effort "$EFFORT")
+          echo "ask: claude effort=$EFFORT" >&2
+        fi
         if [ -n "$BUDGET" ]; then
           CLAUDE_ARGS+=(--max-budget-usd "$BUDGET")
         fi
         set +e
+        # shellcheck disable=SC2094 # adapter receives the prompt path for metadata; it does not write it.
         claude "${CLAUDE_ARGS[@]}" < "$OUTDIR/prompt.md" \
           | node --experimental-strip-types "$SCRIPT_DIR/$ADAPTER" "$TRACE" "$ARTIFACT" "$OUTDIR/prompt.md"
         STATUSES=("${PIPESTATUS[@]}")
@@ -148,8 +157,13 @@ case "$TIER" in
         # gpt-5.6-sol's reserved collaboration.spawn_agent schema → HTTP 400 on
         # every turn (openai/codex#26753, closed not_planned). Harmless for
         # other models; the config.toml table form does not reliably disable it.
+        CODEX_EFFORT_ARGS=()
+        if [ -n "$EFFORT" ]; then
+          CODEX_EFFORT_ARGS=(-c "model_reasoning_effort=\"$EFFORT\"")
+          echo "ask: codex effort=$EFFORT" >&2
+        fi
         codex exec --json --sandbox read-only --skip-git-repo-check --disable multi_agent_v2 \
-          ${MODEL:+-m "$MODEL"} -C "$WORKDIR" "$(cat "$OUTDIR/prompt.md")" </dev/null \
+          ${MODEL:+-m "$MODEL"} "${CODEX_EFFORT_ARGS[@]}" -C "$WORKDIR" "$(cat "$OUTDIR/prompt.md")" </dev/null \
           | node --experimental-strip-types "$SCRIPT_DIR/$ADAPTER" "$TRACE" "$ARTIFACT" "$OUTDIR/prompt.md"
         STATUSES=("${PIPESTATUS[@]}")
         set -e
@@ -170,6 +184,10 @@ case "$TIER" in
         if [ -n "$MODEL" ]; then
           GROK_ARGS+=(-m "$MODEL")
         fi
+        if [ -n "$EFFORT" ]; then
+          GROK_ARGS+=(--reasoning-effort "$EFFORT")
+          echo "ask: $PROVIDER via grok effort=$EFFORT" >&2
+        fi
         if [ "$BUILD_MODE" = "1" ]; then
           # Builder pass: grok's full default toolset with tool executions
           # auto-approved (headless runs cannot prompt for approval).
@@ -187,10 +205,10 @@ case "$TIER" in
             enter_plan_mode exit_plan_mode)
           GROK_ARGS+=(--disallowed-tools "$(join_csv "${GROK_DENY[@]}")")
         else
-          GROK_ARGS+=(--tools read_file,grep,list_dir)
+          GROK_ARGS+=(--tools "read_file,grep,list_dir")
         fi
         if [ -n "$BUDGET" ]; then
-          echo "ask: grok CLI has no budget flag; -b $BUDGET not enforced" >&2
+          echo "ask: grok transport has no budget flag; -b $BUDGET not enforced" >&2
         fi
         set +e
         grok "${GROK_ARGS[@]}" --prompt-file "$OUTDIR/prompt.md" \

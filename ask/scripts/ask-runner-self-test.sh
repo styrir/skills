@@ -30,40 +30,12 @@ mkdir -p "$BIN" "$TMPDIR/work"
 cat > "$BIN/claude" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-
-if [ "${1:-}" = "auth" ] && [ "${2:-}" = "status" ]; then
-  echo "logged in"
-  exit 0
-fi
-
-printf '%s\n' "$*" > "${CLAUDE_ARGS_CAPTURE:?}"
-cat <<'JSON'
-{"type":"assistant","message":{"content":[{"type":"text","text":"stub review"}]}}
-{"type":"result","subtype":"success","duration_ms":1}
-JSON
+echo "native claude must not be invoked for proxy-owned routing" > "${CLAUDE_NATIVE_CALLED:?}"
+exit 99
 SH
 chmod +x "$BIN/claude"
 
 export PATH="$BIN:$PATH"
-
-CLAUDE_ARGS_CAPTURE="$TMPDIR/default-args.txt" \
-  "$ASK" claude -d "$TMPDIR/work" -o "$TMPDIR/default" "Review the local change" >/dev/null
-
-assert_not_contains "Optional Research Tools" "$TMPDIR/default/prompt.md"
-assert_not_contains "WebSearch" "$TMPDIR/default-args.txt"
-assert_not_contains "mcp__context7__*" "$TMPDIR/default-args.txt"
-
-CLAUDE_ARGS_CAPTURE="$TMPDIR/research-args.txt" \
-  "$ASK" claude --research -d "$TMPDIR/work" -o "$TMPDIR/research" "Review the local change" >/dev/null
-
-assert_contains "Optional Research Tools" "$TMPDIR/research/prompt.md"
-assert_contains '$styrir-search' "$TMPDIR/research/prompt.md"
-assert_contains "Context7" "$TMPDIR/research/prompt.md"
-assert_contains "WebSearch" "$TMPDIR/research-args.txt"
-assert_contains "WebFetch" "$TMPDIR/research-args.txt"
-assert_contains "mcp__context7__*" "$TMPDIR/research-args.txt"
-
-echo "ok - ask runner research tool option"
 
 cat > "$BIN/grok" <<'SH'
 #!/usr/bin/env bash
@@ -94,6 +66,28 @@ cat <<'JSON'
 JSON
 SH
 chmod +x "$BIN/grok"
+
+CLAUDE_NATIVE_CALLED="$TMPDIR/native-claude-called.txt" GROK_ARGS_CAPTURE="$TMPDIR/claude-default-args.txt" \
+  "$ASK" claude -m claude-opus-5 --effort medium -d "$TMPDIR/work" -o "$TMPDIR/default" "Review the local change" >/dev/null
+
+[ ! -e "$TMPDIR/native-claude-called.txt" ] || fail "proxy-owned Claude route invoked native claude"
+assert_not_contains "Optional Research Tools" "$TMPDIR/default/prompt.md"
+assert_contains "-m claude-opus-5" "$TMPDIR/claude-default-args.txt"
+assert_contains "--reasoning-effort medium" "$TMPDIR/claude-default-args.txt"
+assert_contains "--tools read_file,grep,list_dir" "$TMPDIR/claude-default-args.txt"
+
+CLAUDE_NATIVE_CALLED="$TMPDIR/native-claude-called-research.txt" GROK_ARGS_CAPTURE="$TMPDIR/claude-research-args.txt" \
+  "$ASK" claude --research -m claude-fable-5 -d "$TMPDIR/work" -o "$TMPDIR/research" "Review the local change" >/dev/null
+
+[ ! -e "$TMPDIR/native-claude-called-research.txt" ] || fail "proxy-owned Claude research route invoked native claude"
+assert_contains "Optional Research Tools" "$TMPDIR/research/prompt.md"
+# shellcheck disable=SC2016 # literal skill token, not shell expansion.
+assert_contains '$styrir-search' "$TMPDIR/research/prompt.md"
+assert_contains "Context7" "$TMPDIR/research/prompt.md"
+assert_contains "-m claude-fable-5" "$TMPDIR/claude-research-args.txt"
+assert_contains "--disallowed-tools run_terminal_cmd,get_task_output,kill_task,task,Agent,search_replace,hashline_edit,ask_user_question,enter_plan_mode,exit_plan_mode" "$TMPDIR/claude-research-args.txt"
+
+echo "ok - ask runner proxy-owned claude route"
 
 GROK_ARGS_CAPTURE="$TMPDIR/grok-default-args.txt" \
   "$ASK" grok -d "$TMPDIR/work" -o "$TMPDIR/grok-default" "Review the local change" >/dev/null
@@ -149,7 +143,15 @@ fi
 assert_contains "not authenticated" "$TMPDIR/grok-noauth/artifact.md"
 assert_contains "not authenticated" "$TMPDIR/grok-noauth/summary.md"
 
-echo "ok - ask runner grok guard rails"
+if CLAUDE_NATIVE_CALLED="$TMPDIR/native-claude-called-noauth.txt" GROK_ARGS_CAPTURE="$TMPDIR/claude-noauth-args.txt" GROK_STUB_MODE=noauth \
+  "$ASK" claude -m claude-opus-5 -d "$TMPDIR/work" -o "$TMPDIR/claude-noauth" "Review the local change" >/dev/null 2>&1; then
+  fail "expected proxy-unavailable claude route to be blocked"
+fi
+[ ! -e "$TMPDIR/native-claude-called-noauth.txt" ] || fail "failed proxy route fell back to native claude"
+assert_contains "grok not authenticated" "$TMPDIR/claude-noauth/artifact.md"
+assert_not_contains "claude auth login" "$TMPDIR/claude-noauth/artifact.md"
+
+echo "ok - ask runner grok and claude transport guard rails"
 
 # summary.md extraction: review-shaped output keeps VERDICT + numbered
 # findings only; other output falls back to the last paragraph.
