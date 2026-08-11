@@ -1,0 +1,3 @@
+# Preserve imported upstream conference templates byte-for-byte. Their source
+# distributions contain intentional trailing spaces and blank lines.
+research/ml-paper-writing/templates/** -whitespace
