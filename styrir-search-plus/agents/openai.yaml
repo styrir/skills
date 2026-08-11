@@ -1,0 +1,4 @@
+interface:
+  display_name: "StyrirSearch:plus"
+  short_description: "Broader Styrir search with sweep"
+  default_prompt: "Use $styrir-search-plus for a broader bounded Styrir Search with forceMode=styrir_plus, contradiction sweep, proof gaps, and deterministic gate output."

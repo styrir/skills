@@ -1,0 +1,4 @@
+interface:
+  display_name: "StyrirSearch:deep-AIQ"
+  short_description: "NVIDIA AI-Q target or handoff"
+  default_prompt: "Use $styrir-search-deep-aiq with forceMode=nvidia_aiq_handoff; include aiqBaseUrl only for a configured local AI-Q target."

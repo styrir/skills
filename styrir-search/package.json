@@ -1,0 +1,23 @@
+{
+  "name": "styrir-search-skill",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test scripts/*.test.ts",
+    "test:gate": "node --experimental-strip-types --test scripts/styrir-search-gate.test.ts",
+    "test:normalize": "node --experimental-strip-types --test scripts/styrir-ledger-normalize.test.ts",
+    "test:route": "node --experimental-strip-types --test scripts/styrir-route.test.ts",
+    "test:handoff": "node --experimental-strip-types --test scripts/styrir-handoff-manifest.test.ts",
+    "test:artifact-gate": "node --experimental-strip-types --test scripts/styrir-artifact-gate.test.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "gate": "node --experimental-strip-types scripts/styrir-search-gate.ts",
+    "artifact-gate": "node --experimental-strip-types scripts/styrir-artifact-gate.ts",
+    "normalize": "node --experimental-strip-types scripts/styrir-ledger-normalize.ts",
+    "normalize:ledger": "node --experimental-strip-types scripts/styrir-ledger-normalize.ts",
+    "route": "node --experimental-strip-types scripts/styrir-route.ts",
+    "handoff": "node --experimental-strip-types scripts/styrir-handoff-manifest.ts"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

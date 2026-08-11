@@ -1,0 +1,4 @@
+interface:
+  display_name: "StyrirSearch:simple"
+  short_description: "Standard bounded Styrir search"
+  default_prompt: "Use $styrir-search-simple for a normal bounded Styrir Search with forceMode=styrir_search, a JSON evidence ledger, and deterministic gate output."

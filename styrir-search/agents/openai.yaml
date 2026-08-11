@@ -1,0 +1,4 @@
+interface:
+  display_name: "Styrir Search"
+  short_description: "Bounded research routing and evidence gates"
+  default_prompt: "Use $styrir-search to route a search task, or use the StyrirSearch preset wrappers for simple, plus, deep-local, or deep-AIQ lanes."

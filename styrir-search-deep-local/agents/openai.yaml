@@ -1,0 +1,4 @@
+interface:
+  display_name: "StyrirSearch:deep-local"
+  short_description: "Local deep-search handoff"
+  default_prompt: "Use $styrir-search-deep-local for a local deep-search handoff with forceMode=deep_search_local, source scope, proof gaps, and gate checklist."
