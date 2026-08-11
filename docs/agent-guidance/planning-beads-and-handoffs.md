@@ -1,5 +1,5 @@
 ---
-summary: "Skills-repo task workflow: Beads on the machine-wide shared Dolt server, progressive-disclosure artifacts, handoffs, recovery, and conservative closeout."
+summary: "Skills-repo task workflow: Beads on the machine-wide shared Dolt server, progressive-disclosure artifacts, handoffs, recovery, and tranche publication."
 read_when:
   - "You are starting substantive work and need to create or claim a bead."
   - "You are planning or decomposing an epic."
@@ -219,7 +219,7 @@ bd dolt push --remote origin
 
 Do not remove an already-correct remote or stop the machine-wide server merely because an older CLI cannot read a newer database.
 
-The repository uses the conservative profile: do not Git-commit, Git-push, or Dolt-push without explicit user authorization. Local issue writes are allowed when they are necessary to track the current task.
+The repository uses the tranche-publisher profile. Completing and verifying a tranche grants standing authority to commit its coherent Git changes, push Beads/Dolt to the configured `origin`, push Git to the configured `origin`, verify both refs, and leave the checkout clean. A current instruction may explicitly pause publication for a tranche. Destructive history rewrites, force pushes, and creating or replacing remotes still require separate confirmation.
 
 ## Handoffs and Follow-ups
 
@@ -233,30 +233,23 @@ A bead must contain the durable scope and acceptance criteria. Create a handoff 
 
 Create follow-up beads before ending the session. Do not leave durable work only in chat, a final reply, or an unchecked Markdown list.
 
-## Conservative Closeout
+## Tranche Closeout
 
-For a locally completed task:
+For a completed task or coherent tranche:
 
 1. File follow-up beads for anything unfinished.
-2. Run the task's tests, linters, documentation checks, or other quality gates.
-3. Update or close the current bead only when its acceptance criteria are actually met.
-4. Check both issue and Git state:
-
-   ```bash
-   bd show <id>
-   bd dolt status
-   git status --short --branch
-   ```
-
-5. Without explicit authorization, stop and report the exact Git and Dolt push commands rather than running them.
-6. With authorization, keep the two sync operations explicit:
+2. Run the tranche's tests, linters, documentation checks, or other quality gates.
+3. Update or close the relevant Beads only when their acceptance criteria are actually met.
+4. Review and commit only the coherent tranche; do not absorb unrelated dirty work.
+5. Synchronize both histories:
 
    ```bash
    bd dolt push --remote origin
-   git push
+   git push origin HEAD
    ```
 
-7. Verify the final remote and local state.
+6. Verify the remote Git branch, `refs/dolt/data`, tracker state, and a clean working tree.
+7. If publication fails, keep the tranche open and report the exact command and error. Do not describe the tranche as complete while either history remains local-only.
 
 ## Recovery Guardrails
 

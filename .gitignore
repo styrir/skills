@@ -1,6 +1,8 @@
 .DS_Store
 .ask/
 .pipeline/
+.omc/
+ask/backups/
 *.log
 node_modules/
 .venv/
