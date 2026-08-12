@@ -16,10 +16,10 @@ The initializer performs **local, reversible setup only**:
 - initializes or safely bootstraps repository-local Beads with embedded Dolt;
 - installs Beads Git hooks and defaults an unset `beads.role` to `maintainer`;
 - creates standard ignore rules, GitNexus configuration, root DOX guidance, topic guidance, and the `.styrir/` workspace layout;
-- installs the standing closeout contract for future work: each completed, verified tranche is committed, pushed to the already-configured Git and Beads/Dolt `origin` remotes, independently verified, and left with a clean checkout without repeated approval;
+- installs the standing closeout contract for future work: each completed, verified tranche receives a focused local Git commit, only satisfied Beads are closed, Beads/Dolt is pushed to its configured `origin`, and Git source push remains separately approval-gated;
 - does not itself install dependencies, leave a Git commit, create remote repositories, add Git remotes, push Git, explicitly commit Dolt changes, add Dolt remotes, or push Dolt. Beads still creates the embedded database's required internal history.
 
-The initialization run remains local-only. Later ordinary non-force tranche publication to intended, already-configured origins is standing authority; remote creation/replacement, force pushes, and destructive history rewrites remain separate confirmation gates.
+The initialization run remains local-only. Later verified-work closeout has standing authority for a focused local commit, completed-Bead closure, and Beads/Dolt synchronization to the intended configured origin. Git source push remains a separate confirmation gate, as do remote creation/replacement, force pushes, deployments, and destructive history rewrites.
 
 ## Workflow
 
@@ -68,6 +68,7 @@ The script creates missing entries and preserves existing ones:
 │   └── tmp/
 ├── agent-guidance/
 │   ├── beads-and-dolt.md
+│   ├── handoffs.md
 │   ├── gitnexus.md
 │   ├── non-interactive-shell.md
 │   └── styrir-workspace.md
@@ -82,14 +83,14 @@ Beads additionally owns its generated `.beads/` metadata, ignore file, README, e
 
 ## Publication boundary
 
-The initializer creates no remote repository, remote, commit, or push. Establishing the initial shared target still requires deliberate setup:
+The initializer creates no remote repository, remote, commit, or push. Establishing the initial shared target—and any first Git source publication—still requires deliberate setup:
 
 1. inspect existing GitHub namespaces, repository ownership conventions, remotes, authentication, and repository visibility;
 2. state the exact proposed repository owner/name, visibility, remote name, Git branch, Git remote URL, Dolt remote URL, and commands that will run;
 3. ask for confirmation before creating the remote repository or adding/replacing either remote unless the user's current request already authorizes that exact target and operation;
 4. seed Git and Dolt deliberately, verify Git `refs/heads/<branch>` and `refs/dolt/data` independently, and smoke-test a fresh clone with `bd bootstrap --yes` before claiming reproducibility.
 
-Once the intended `origin` remotes exist, future completed and verified tranches are ordinary repository closeout: commit the coherent change, push Beads/Dolt, push Git, verify both refs, and leave the checkout clean without repeated approval. A current instruction can pause publication for a tranche. Force pushes, destructive history rewrites, and remote creation or replacement always require separate confirmation.
+Once the intended Beads/Dolt `origin` exists, future completed and verified tranches use the standing repository closeout: commit the coherent local change, close only satisfied Beads, push Beads/Dolt, and verify local Git and remote tracker state without repeated approval. A current instruction can pause that routine closeout. Git source push remains separately approval-gated; deployments, force pushes, destructive history rewrites, and remote creation or replacement always require separate confirmation.
 
 Git publication and Dolt synchronization are separate. Neither is current unless its own push succeeds.
 

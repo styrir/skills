@@ -28,27 +28,37 @@ bd ready --exclude-type epic
 bd show <id>
 bd update <id> --claim
 # implement and verify
-bd update <id> --notes "Outcome, validation, and remaining context"
-bd close <id> --reason "Completed outcome and validation"
 ```
 
 Create separate Beads for unfinished discoveries instead of silently expanding scope or closing incomplete work.
 
-## Tranche closeout and synchronization
+## Close and synchronize
 
-A completed, verified tranche must be published without waiting for repeated approval when the repository already has the intended `origin` remotes:
+Verified completion carries standing authority for the repository's routine closeout. Do not stop for redundant approval before these actions:
 
-1. File follow-up Beads for unfinished work.
-2. Run the tranche's quality gates.
-3. Update or close relevant Beads only when acceptance criteria are met.
-4. Commit only the coherent tranche.
-5. Synchronize both histories:
+1. create a focused **local Git commit** containing the verified source and documentation changes;
+2. attach the commit and validation evidence to each completed Bead;
+3. close only the Beads whose acceptance criteria are satisfied; and
+4. run `bd dolt push --remote origin` to synchronize tracker history to the configured `origin`.
 
-   ```bash
-   bd dolt push --remote origin
-   git push origin HEAD
-   ```
+```bash
+git add -- <scoped-paths>
+git commit -m "Focused completed outcome"
+bd update <id> --notes "Outcome, validation, and local Git commit"
+bd close <id> --reason "Completed outcome and validation"
+bd dolt push --remote origin
+```
 
-6. Verify the remote Git branch, `refs/dolt/data`, tracker state, and a clean working tree.
+Before closing:
 
-Git publication and Dolt synchronization remain separate external actions; neither is current unless its own push succeeds. A current user or orchestrator instruction may temporarily pause publication for a tranche. Ask before creating or changing remotes, creating a remote repository, force-pushing, rewriting published history, or performing another destructive shared-state operation. If either ordinary push fails, keep the tranche open and report the exact command and error.
+1. run proportionate tests, lint, type checks, or builds;
+2. create separate Beads for unfinished discoveries;
+3. record validation and evidence;
+4. confirm the acceptance criteria are satisfied; and
+5. confirm the commit contains no unrelated operator work.
+
+Keep unfinished work open. In particular, do not close a parent epic merely because one child or tranche completed; close it only when the epic's own exit proof and all required scope are satisfied.
+
+The local commit and tracker closeout above are the default completion path, not shared-state exceptions requiring a fresh question. Skip or pause them only when the user explicitly forbids the action, verification is incomplete, the commit would mix unrelated work, tracker state is ambiguous, or synchronization would target the wrong remote. If `bd dolt push` fails, report the exact command and error. Do not claim remote tracker state is current when only local Beads state changed.
+
+**Git source push is separate.** A local Git commit does not authorize `git push`; pushing source history, deploying, rewriting history, force operations, and shared external mutations outside the routine Beads/Dolt closeout above remain approval-gated unless the operator has explicitly granted that authority. Conversely, closing and pushing Beads/Dolt does not imply that Git source history was pushed. Verify and report Git and Dolt state independently.

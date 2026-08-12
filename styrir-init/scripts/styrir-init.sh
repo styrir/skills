@@ -166,6 +166,15 @@ if [[ -n "$existing_hooks_path" && "$existing_hooks_path" != "$TARGET/.beads/hoo
   fail "custom core.hooksPath requires manual integration: $existing_hooks_path"
 fi
 
+# Beads 1.1.x infers a Dolt remote from Git origin during first-time init. That
+# would silently cross the initializer's local-only remote boundary, so require
+# explicit manual Beads adoption whenever an existing repository already has
+# Git origin and no tracker metadata/seed exists yet.
+if [[ ! -f "$TARGET/.beads/metadata.json" && ! -f "$TARGET/.beads/config.yaml" && ! -f "$TARGET/.beads/issues.jsonl" ]] \
+  && git -C "$TARGET" remote get-url origin >/dev/null 2>&1; then
+  fail "existing Git origin requires explicit Beads/Dolt remote adoption before styrir-init; refusing inferred tracker remote"
+fi
+
 git -C "$TARGET" config --local --get beads.role >/dev/null 2>&1 || git -C "$TARGET" config beads.role maintainer
 
 for directory in \
@@ -213,6 +222,7 @@ else
   render_template "$TEMPLATES/CLAUDE.md" "$TARGET/CLAUDE.md"
 fi
 render_template "$TEMPLATES/beads-and-dolt.md.tmpl" "$TARGET/agent-guidance/beads-and-dolt.md"
+render_template "$TEMPLATES/handoffs.md" "$TARGET/agent-guidance/handoffs.md"
 render_template "$TEMPLATES/gitnexus.md" "$TARGET/agent-guidance/gitnexus.md"
 render_template "$TEMPLATES/non-interactive-shell.md" "$TARGET/agent-guidance/non-interactive-shell.md"
 render_template "$TEMPLATES/styrir-workspace.md" "$TARGET/agent-guidance/styrir-workspace.md"
@@ -242,19 +252,21 @@ elif [[ -d "$TARGET/.beads" ]] && find "$TARGET/.beads" -mindepth 1 -maxdepth 1 
   log "bootstrapped existing Beads seed/configuration"
 else
   init_log="$(mktemp "${TMPDIR:-/tmp}/styrir-bd-init.XXXXXX")"
-  if ! (cd -- "$TARGET" && GIT_AUTHOR_NAME='' GIT_AUTHOR_EMAIL='' GIT_COMMITTER_NAME='' GIT_COMMITTER_EMAIL='' bd init --prefix "$PREFIX" --skip-agents --skip-hooks --non-interactive --role maintainer) >"$init_log" 2>&1; then
+  temp_index="$(mktemp "${TMPDIR:-/tmp}/styrir-bd-index.XXXXXX")"
+  rm -f -- "$temp_index"
+  if ! (cd -- "$TARGET" && GIT_INDEX_FILE="$temp_index" GIT_AUTHOR_NAME='' GIT_AUTHOR_EMAIL='' GIT_COMMITTER_NAME='' GIT_COMMITTER_EMAIL='' bd init --prefix "$PREFIX" --skip-agents --skip-hooks --non-interactive --role maintainer) >"$init_log" 2>&1; then
     cat "$init_log" >&2
-    rm -f -- "$init_log"
+    rm -f -- "$init_log" "$temp_index"
     fail "Beads initialization failed"
   fi
-  rm -f -- "$init_log"
+  rm -f -- "$init_log" "$temp_index"
   CREATED_BEADS=1
   log "initialized repository-local Beads/Dolt tracker"
 fi
 bd_here hooks install --beads >/dev/null
 
 # bd 1.1.0 creates a Git commit during first-time tracker initialization. The
-# Styrir local-init contract leaves publication checkpoints to the operator, so
+# Styrir local-init contract leaves the initial commit and publication checkpoint to the operator, so
 # remove only that freshly-created commit when this script started with no HEAD.
 if ((CREATED_BEADS)) && git -C "$TARGET" rev-parse --verify HEAD >/dev/null 2>&1; then
   post_init_head="$(git -C "$TARGET" rev-parse HEAD)"
@@ -282,7 +294,7 @@ root=Path(sys.argv[1]); prefix=sys.argv[2]
 required=[
  '.git','.beads','.styrir','agent-guidance','.gitignore','.gitnexusignore','.gitnexusrc','AGENTS.md','CLAUDE.md',
  '.styrir/runs','.styrir/analysis/raw','.styrir/analysis/reports','.styrir/pipelines','.styrir/build','.styrir/cache','.styrir/logs','.styrir/tmp',
- 'agent-guidance/beads-and-dolt.md','agent-guidance/gitnexus.md','agent-guidance/non-interactive-shell.md','agent-guidance/styrir-workspace.md',
+ 'agent-guidance/beads-and-dolt.md','agent-guidance/handoffs.md','agent-guidance/gitnexus.md','agent-guidance/non-interactive-shell.md','agent-guidance/styrir-workspace.md',
 ]
 missing=[p for p in required if not (root/p).exists()]
 if missing: raise SystemExit('missing generated paths: '+', '.join(missing))

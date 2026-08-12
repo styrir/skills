@@ -7,13 +7,14 @@ Read this first. This file is the binding work contract for agents operating in 
 - Tracked source, maintained documentation, and reviewed configuration are durable repository truth.
 - Generated reports, run state, logs, caches, build products, and scratch work belong under the ignored `/.styrir/` workspace.
 - Git source history and Beads/Dolt tracker history are separate. Do not report either as synchronized unless its own remote operation succeeds.
-- A completed, verified tranche must be committed and published before closeout: push Git to the configured `origin`, push Beads/Dolt to `origin`, verify both refs, and leave the checkout clean. This is standing authority for ordinary non-force publication; ask before destructive history rewrites, force pushes, or creating/changing remotes.
+- **Verified completion has standing closeout authority:** create a focused local Git commit, close only Beads whose acceptance criteria are satisfied, and push Beads/Dolt to its configured `origin` without asking for redundant approval. Keep incomplete tasks and unfinished parent epics open. A Git source push, deployment, force operation, or shared external mutation outside this routine Beads/Dolt closeout remains separately approval-gated unless the operator has explicitly authorized it.
 - Do not fabricate live state, tests, receipts, integrations, metrics, or verification.
 
 ## Work Guidance
 
 - Read the applicable root and child `AGENTS.md` chain before editing.
 - Use Beads for work that must survive the current session; read `agent-guidance/beads-and-dolt.md` first.
+- Read `agent-guidance/handoffs.md` when work crosses sessions, agents, or operators.
 - Read `agent-guidance/styrir-workspace.md` before creating generated artifacts.
 - Read `agent-guidance/gitnexus.md` before architecture exploration, flow tracing, or blast-radius analysis.
 - Read `agent-guidance/non-interactive-shell.md` before shell operations that can prompt, overwrite, delete, install, or connect externally.
@@ -21,9 +22,9 @@ Read this first. This file is the binding work contract for agents operating in 
 
 ## Verification
 
+- Before reporting completed tracked work, perform the standing closeout: focused local Git commit, completion notes, close satisfied Beads, `bd dolt push`, then verify Git and Dolt state separately. Do not close unfinished parent epics or imply an unperformed Git push.
 - Run checks proportionate to the files and behavior changed.
 - Confirm generated/runtime files remain ignored.
-- After each completed tranche, update or close its Beads, commit the coherent change, push Beads/Dolt and Git to the configured `origin`, verify both remote refs, and leave the checkout clean.
 - Confirm Git and Dolt publication independently before reporting synchronization.
 - Report limitations and unverified external state explicitly.
 

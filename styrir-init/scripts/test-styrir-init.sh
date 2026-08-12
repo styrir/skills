@@ -38,6 +38,7 @@ PY
 "$INIT" --target "$fixture" --project-name "Random Fixture" --prefix random-fixture
 first_status="$(git -C "$fixture" status --porcelain=v1)"
 [[ -n "$first_status" ]] || { echo 'expected uncommitted generated files'; exit 1; }
+[[ -z "$(git -C "$fixture" diff --cached --name-only)" ]] || { echo 'initializer left generated files staged'; exit 1; }
 [[ -z "$(git -C "$fixture" remote)" ]] || { echo 'initializer created a Git remote'; exit 1; }
 if git -C "$fixture" rev-parse --verify HEAD >/dev/null 2>&1; then echo 'initializer created a commit'; exit 1; fi
 
@@ -55,22 +56,47 @@ PY
 required=(
   .git .beads .styrir agent-guidance .gitignore .gitnexusignore .gitnexusrc AGENTS.md CLAUDE.md
   .styrir/runs .styrir/analysis/raw .styrir/analysis/reports .styrir/pipelines .styrir/build .styrir/cache .styrir/logs .styrir/tmp
-  agent-guidance/beads-and-dolt.md agent-guidance/gitnexus.md agent-guidance/non-interactive-shell.md agent-guidance/styrir-workspace.md
+  agent-guidance/beads-and-dolt.md agent-guidance/handoffs.md agent-guidance/gitnexus.md agent-guidance/non-interactive-shell.md agent-guidance/styrir-workspace.md
   .preexisting-hidden .preexisting-hidden/subdir visible-folder visible-folder/subdir "visible folder" "visible folder/Unicode-Þór" "visible folder/Unicode-Þór/sentinel file.txt" .env.example README.seed
 )
 for rel in "${required[@]}"; do [[ -e "$fixture/$rel" ]] || { echo "missing $rel"; exit 1; }; done
 
-# Generated guidance must carry the standing tranche-publication contract while
+# Generated guidance must carry the verified-work closeout contract while
 # preserving the initializer's own no-commit/no-remote/no-push boundary.
-grep -F 'A completed, verified tranche must be committed and published before closeout' "$fixture/AGENTS.md" >/dev/null
-grep -F 'This is standing authority for ordinary non-force publication' "$fixture/AGENTS.md" >/dev/null
-grep -F 'After each completed tranche, update or close its Beads, commit the coherent change' "$fixture/AGENTS.md" >/dev/null
+grep -F 'Verified completion has standing closeout authority' "$fixture/AGENTS.md" >/dev/null
+grep -F 'Keep incomplete tasks and unfinished parent epics open' "$fixture/AGENTS.md" >/dev/null
+grep -F 'A Git source push, deployment, force operation' "$fixture/AGENTS.md" >/dev/null
+grep -F 'Before reporting completed tracked work, perform the standing closeout' "$fixture/AGENTS.md" >/dev/null
+grep -F 'Read `agent-guidance/handoffs.md` when work crosses sessions' "$fixture/AGENTS.md" >/dev/null
 grep -F 'bd dolt push --remote origin' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-grep -F 'git push origin HEAD' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-grep -F 'without waiting for repeated approval' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-grep -F 'Ask before creating or changing remotes' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-grep -F 'Ordinary non-force publication of a completed, verified tranche' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
-grep -F 'do not ask for repeated approval' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
+grep -F 'Git source push is separate' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
+grep -F 'does not authorize `git push`' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
+python3 - "$fixture" <<'PY'
+from pathlib import Path
+import re, sys
+root=Path(sys.argv[1])
+files=[root/'AGENTS.md', *(root/'agent-guidance'/n for n in ('beads-and-dolt.md','handoffs.md','non-interactive-shell.md'))]
+allowed=(
+    'does not authorize `git push`',
+    'git source push is separate',
+    'confirm before git source pushes',
+    'imply an unperformed git push',
+    'separately gated git source push',
+    'git source push, deployment, force operation',
+)
+for path in files:
+    for line_no, line in enumerate(path.read_text().splitlines(), 1):
+        lower=line.lower()
+        if not re.search(r'git\s+push|push\s+git|ordinary non-force publication|standing authority.*git|git source push', lower):
+            continue
+        if any(fragment in lower for fragment in allowed):
+            continue
+        raise SystemExit(f'generated guidance authorizes Git source push: {path}:{line_no}: {line}')
+PY
+grep -F 'For completed tracked work, prepare the handoff only after the standing closeout' "$fixture/agent-guidance/handoffs.md" >/dev/null
+grep -F 'Report any separately gated Git source push or deployment as still pending' "$fixture/agent-guidance/handoffs.md" >/dev/null
+grep -F 'routine Beads/Dolt closeout' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
+grep -F 'Confirm before Git source pushes' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
 
 # Capture all non-runtime files before the second run; generated tracker runtime is intentionally excluded.
 manifest_before="$(python3 - "$fixture" <<'PY'
@@ -127,6 +153,26 @@ failure_root="$fixture_parent/failure-cases"
 mkdir -p -- "$failure_root/parent/nested"
 git -C "$failure_root/parent" init -b main >/dev/null
 if "$INIT" --target "$failure_root/parent/nested" --prefix nested-project >/dev/null 2>&1; then echo 'nested repository safety check failed'; exit 1; fi
+
+mkdir -p -- "$failure_root/existing-origin"
+git -C "$failure_root/existing-origin" init -b main >/dev/null
+git -C "$failure_root/existing-origin" remote add origin https://github.com/example/example.git
+if "$INIT" --target "$failure_root/existing-origin" --prefix existing-origin >/dev/null 2>&1; then echo 'existing Git origin must require explicit Beads adoption'; exit 1; fi
+[[ ! -e "$failure_root/existing-origin/.beads/metadata.json" ]] || { echo 'origin safety failure created Beads metadata'; exit 1; }
+
+mkdir -p -- "$failure_root/staged-preservation"
+git -C "$failure_root/staged-preservation" init -b main >/dev/null
+git -C "$failure_root/staged-preservation" config user.name 'Styrir Init Test'
+git -C "$failure_root/staged-preservation" config user.email 'styrir-init@example.invalid'
+printf 'base\n' > "$failure_root/staged-preservation/operator.txt"
+git -C "$failure_root/staged-preservation" add operator.txt
+git -C "$failure_root/staged-preservation" commit -m base >/dev/null
+printf 'staged operator work\n' > "$failure_root/staged-preservation/operator.txt"
+git -C "$failure_root/staged-preservation" add operator.txt
+staged_before="$(git -C "$failure_root/staged-preservation" diff --cached --binary)"
+"$INIT" --target "$failure_root/staged-preservation" --prefix staged-preservation >/dev/null
+staged_after="$(git -C "$failure_root/staged-preservation" diff --cached --binary)"
+[[ "$staged_before" == "$staged_after" ]] || { echo 'initializer changed pre-existing staged operator work'; exit 1; }
 
 mkdir -p -- "$failure_root/non-main"
 git -C "$failure_root/non-main" init -b develop >/dev/null
