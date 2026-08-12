@@ -34,19 +34,22 @@ Create separate Beads for unfinished discoveries instead of silently expanding s
 
 ## Close and synchronize
 
-Verified completion carries standing authority for the repository's routine closeout. Do not stop for redundant approval before these actions:
+Verified completion carries standing authority for the repository's ordinary publication closeout. Do not stop for redundant approval before these actions:
 
 1. create a focused **local Git commit** containing the verified source and documentation changes;
 2. attach the commit and validation evidence to each completed Bead;
-3. close only the Beads whose acceptance criteria are satisfied; and
-4. run `bd dolt push --remote origin` to synchronize tracker history to the configured `origin`.
+3. close only the Beads whose acceptance criteria are satisfied;
+4. run `bd dolt push --remote origin`;
+5. run non-force `git push origin HEAD`; and
+6. verify both remote refs and a clean checkout.
 
 ```bash
 git add -- <scoped-paths>
 git commit -m "Focused completed outcome"
-bd update <id> --notes "Outcome, validation, and local Git commit"
+bd update <id> --notes "Outcome, validation, and Git commit"
 bd close <id> --reason "Completed outcome and validation"
 bd dolt push --remote origin
+git push origin HEAD
 ```
 
 Before closing:
@@ -59,6 +62,6 @@ Before closing:
 
 Keep unfinished work open. In particular, do not close a parent epic merely because one child or tranche completed; close it only when the epic's own exit proof and all required scope are satisfied.
 
-The local commit and tracker closeout above are the default completion path, not shared-state exceptions requiring a fresh question. Skip or pause them only when the user explicitly forbids the action, verification is incomplete, the commit would mix unrelated work, tracker state is ambiguous, or synchronization would target the wrong remote. If `bd dolt push` fails, report the exact command and error. Do not claim remote tracker state is current when only local Beads state changed.
+The commit and dual-history publication above are the default completion path, not shared-state exceptions requiring a fresh question. Skip or pause them only when the user explicitly forbids publication for the tranche, verification is incomplete, the commit would mix unrelated work, tracker state is ambiguous, or synchronization would target the wrong remote. If either ordinary push fails, keep the affected Bead open or reopen/update it, preserve local state, and report the exact command and error. Do not describe the tranche as fully complete while either Git or Dolt history remains local-only.
 
-**Git source push is separate.** A local Git commit does not authorize `git push`; pushing source history, deploying, rewriting history, force operations, and shared external mutations outside the routine Beads/Dolt closeout above remain approval-gated unless the operator has explicitly granted that authority. Conversely, closing and pushing Beads/Dolt does not imply that Git source history was pushed. Verify and report Git and Dolt state independently.
+Ordinary non-force pushes to the already-configured intended `origin` remotes are included in standing closeout authority. Remote creation or replacement, force pushes, destructive history rewrites, deployment, sending messages, permission changes, and other newly shared or destructive operations still require separate confirmation. Verify Git and Dolt refs independently.

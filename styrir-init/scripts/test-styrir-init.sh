@@ -61,42 +61,20 @@ required=(
 )
 for rel in "${required[@]}"; do [[ -e "$fixture/$rel" ]] || { echo "missing $rel"; exit 1; }; done
 
-# Generated guidance must carry the verified-work closeout contract while
+# Generated guidance must carry the verified-work publication contract while
 # preserving the initializer's own no-commit/no-remote/no-push boundary.
-grep -F 'Verified completion has standing closeout authority' "$fixture/AGENTS.md" >/dev/null
+grep -F 'Verified completion has standing publication authority' "$fixture/AGENTS.md" >/dev/null
 grep -F 'Keep incomplete tasks and unfinished parent epics open' "$fixture/AGENTS.md" >/dev/null
-grep -F 'A Git source push, deployment, force operation' "$fixture/AGENTS.md" >/dev/null
-grep -F 'Before reporting completed tracked work, perform the standing closeout' "$fixture/AGENTS.md" >/dev/null
+grep -F 'Remote creation/replacement, force pushes' "$fixture/AGENTS.md" >/dev/null
+grep -F 'Before reporting completed tracked work, perform the standing publication closeout' "$fixture/AGENTS.md" >/dev/null
+grep -F 'git push origin HEAD' "$fixture/AGENTS.md" >/dev/null
 grep -F 'Read `agent-guidance/handoffs.md` when work crosses sessions' "$fixture/AGENTS.md" >/dev/null
 grep -F 'bd dolt push --remote origin' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-grep -F 'Git source push is separate' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-grep -F 'does not authorize `git push`' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-python3 - "$fixture" <<'PY'
-from pathlib import Path
-import re, sys
-root=Path(sys.argv[1])
-files=[root/'AGENTS.md', *(root/'agent-guidance'/n for n in ('beads-and-dolt.md','handoffs.md','non-interactive-shell.md'))]
-allowed=(
-    'does not authorize `git push`',
-    'git source push is separate',
-    'confirm before git source pushes',
-    'imply an unperformed git push',
-    'separately gated git source push',
-    'git source push, deployment, force operation',
-)
-for path in files:
-    for line_no, line in enumerate(path.read_text().splitlines(), 1):
-        lower=line.lower()
-        if not re.search(r'git\s+push|push\s+git|ordinary non-force publication|standing authority.*git|git source push', lower):
-            continue
-        if any(fragment in lower for fragment in allowed):
-            continue
-        raise SystemExit(f'generated guidance authorizes Git source push: {path}:{line_no}: {line}')
-PY
-grep -F 'For completed tracked work, prepare the handoff only after the standing closeout' "$fixture/agent-guidance/handoffs.md" >/dev/null
-grep -F 'Report any separately gated Git source push or deployment as still pending' "$fixture/agent-guidance/handoffs.md" >/dev/null
-grep -F 'routine Beads/Dolt closeout' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
-grep -F 'Confirm before Git source pushes' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
+grep -F 'git push origin HEAD' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
+grep -F 'Ordinary non-force pushes to the already-configured intended `origin` remotes' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
+grep -F 'successful Dolt and non-force Git pushes' "$fixture/agent-guidance/handoffs.md" >/dev/null
+grep -F 'ordinary non-force Git plus Beads/Dolt pushes' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
+if grep -Eqi 'Git source push is separate|does not authorize `git push`|separately gated Git source push|Git source push remains separately' "$fixture/AGENTS.md" "$fixture/agent-guidance/beads-and-dolt.md" "$fixture/agent-guidance/handoffs.md" "$fixture/agent-guidance/non-interactive-shell.md"; then echo 'generated guidance still gates ordinary Git publication'; exit 1; fi
 
 # Capture all non-runtime files before the second run; generated tracker runtime is intentionally excluded.
 manifest_before="$(python3 - "$fixture" <<'PY'

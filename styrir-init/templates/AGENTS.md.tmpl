@@ -7,7 +7,7 @@ Read this first. This file is the binding work contract for agents operating in 
 - Tracked source, maintained documentation, and reviewed configuration are durable repository truth.
 - Generated reports, run state, logs, caches, build products, and scratch work belong under the ignored `/.styrir/` workspace.
 - Git source history and Beads/Dolt tracker history are separate. Do not report either as synchronized unless its own remote operation succeeds.
-- **Verified completion has standing closeout authority:** create a focused local Git commit, close only Beads whose acceptance criteria are satisfied, and push Beads/Dolt to its configured `origin` without asking for redundant approval. Keep incomplete tasks and unfinished parent epics open. A Git source push, deployment, force operation, or shared external mutation outside this routine Beads/Dolt closeout remains separately approval-gated unless the operator has explicitly authorized it.
+- **Verified completion has standing publication authority:** create a focused local Git commit, close only Beads whose acceptance criteria are satisfied, push Beads/Dolt to its configured `origin`, push Git non-force to its configured `origin`, verify both refs, and leave the checkout clean without asking for redundant approval. Keep incomplete tasks and unfinished parent epics open. A current operator instruction may pause publication for a tranche. Remote creation/replacement, force pushes, destructive history rewrites, deployment, and other newly shared or destructive actions remain separately approval-gated.
 - Do not fabricate live state, tests, receipts, integrations, metrics, or verification.
 
 ## Work Guidance
@@ -22,7 +22,7 @@ Read this first. This file is the binding work contract for agents operating in 
 
 ## Verification
 
-- Before reporting completed tracked work, perform the standing closeout: focused local Git commit, completion notes, close satisfied Beads, `bd dolt push`, then verify Git and Dolt state separately. Do not close unfinished parent epics or imply an unperformed Git push.
+- Before reporting completed tracked work, perform the standing publication closeout: focused local Git commit, completion notes, close satisfied Beads, `bd dolt push --remote origin`, non-force `git push origin HEAD`, then verify both refs and a clean checkout. Do not close unfinished parent epics or report completion while either history remains local-only.
 - Run checks proportionate to the files and behavior changed.
 - Confirm generated/runtime files remain ignored.
 - Confirm Git and Dolt publication independently before reporting synchronization.

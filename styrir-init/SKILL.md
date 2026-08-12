@@ -16,10 +16,10 @@ The initializer performs **local, reversible setup only**:
 - initializes or safely bootstraps repository-local Beads with embedded Dolt;
 - installs Beads Git hooks and defaults an unset `beads.role` to `maintainer`;
 - creates standard ignore rules, GitNexus configuration, root DOX guidance, topic guidance, and the `.styrir/` workspace layout;
-- installs the standing closeout contract for future work: each completed, verified tranche receives a focused local Git commit, only satisfied Beads are closed, Beads/Dolt is pushed to its configured `origin`, and Git source push remains separately approval-gated;
+- installs the standing publication contract for future work: each completed, verified tranche receives a focused Git commit, only satisfied Beads are closed, Git and Beads/Dolt are pushed non-force to their already-configured intended `origin` remotes, both refs are verified, and the checkout is left clean without repeated approval;
 - does not itself install dependencies, leave a Git commit, create remote repositories, add Git remotes, push Git, explicitly commit Dolt changes, add Dolt remotes, or push Dolt. Beads still creates the embedded database's required internal history.
 
-The initialization run remains local-only. Later verified-work closeout has standing authority for a focused local commit, completed-Bead closure, and Beads/Dolt synchronization to the intended configured origin. Git source push remains a separate confirmation gate, as do remote creation/replacement, force pushes, deployments, and destructive history rewrites.
+The initialization run remains local-only. Later verified-work closeout has standing authority for a focused commit, completed-Bead closure, and ordinary non-force Git plus Beads/Dolt pushes to the intended already-configured origins. Remote creation/replacement, force pushes, deployments, and destructive history rewrites remain separate confirmation gates.
 
 ## Workflow
 
@@ -90,7 +90,7 @@ The initializer creates no remote repository, remote, commit, or push. Establish
 3. ask for confirmation before creating the remote repository or adding/replacing either remote unless the user's current request already authorizes that exact target and operation;
 4. seed Git and Dolt deliberately, verify Git `refs/heads/<branch>` and `refs/dolt/data` independently, and smoke-test a fresh clone with `bd bootstrap --yes` before claiming reproducibility.
 
-Once the intended Beads/Dolt `origin` exists, future completed and verified tranches use the standing repository closeout: commit the coherent local change, close only satisfied Beads, push Beads/Dolt, and verify local Git and remote tracker state without repeated approval. A current instruction can pause that routine closeout. Git source push remains separately approval-gated; deployments, force pushes, destructive history rewrites, and remote creation or replacement always require separate confirmation.
+Once the intended Git and Beads/Dolt `origin` remotes exist, future completed and verified tranches use the standing repository publication closeout: commit the coherent change, close only satisfied Beads, push Beads/Dolt, push Git non-force, verify both refs, and leave the checkout clean without repeated approval. A current instruction can pause publication for a tranche. Deployments, force pushes, destructive history rewrites, and remote creation or replacement always require separate confirmation.
 
 Git publication and Dolt synchronization are separate. Neither is current unless its own push succeeds.
 

@@ -54,4 +54,4 @@ A completed handoff should state:
 4. repository and external synchronization state; and
 5. whether any publication or deployment action remains.
 
-The final summary must stand on its own without requiring access to collapsed commentary or hidden agent context. For completed tracked work, prepare the handoff only after the standing closeout in [`beads-and-dolt.md`](beads-and-dolt.md): focused local commit, completed-Bead closure, and successful Dolt push. Report any separately gated Git source push or deployment as still pending rather than withholding the routine closeout.
+The final summary must stand on its own without requiring access to collapsed commentary or hidden agent context. For completed tracked work, prepare the handoff only after the standing publication closeout in [`beads-and-dolt.md`](beads-and-dolt.md): focused commit, completed-Bead closure, successful Dolt and non-force Git pushes to the configured origins, verified remote refs, and a clean checkout. Report a current explicit publication pause or failed push as a blocker rather than describing the tranche as complete.
