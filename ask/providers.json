@@ -9,7 +9,8 @@
       "versionCheck": "grok --version",
       "authCheck": "grok models",
       "authOwner": "vibeproxy",
-      "routeContract": "agent-ops:ops-ts4"
+      "routeContract": "agent-ops:ops-ts4",
+      "rollbackNote": "127.0.0.1:8319 standalone (agent-ops:ops-ts4)"
     },
     "codex": {
       "defaultModel": "gpt-5.6-sol",

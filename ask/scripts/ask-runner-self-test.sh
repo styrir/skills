@@ -67,10 +67,61 @@ JSON
 SH
 chmod +x "$BIN/grok"
 
+# curl stub: answers the ops-ts4 proxy preflight probe. Serves a model list
+# for any endpoint except the deliberately closed 127.0.0.1:1, which fails
+# like a refused connection. Records probed URLs when CURL_CALLS_CAPTURE is
+# set so cases can assert the probe ran (or did not).
+cat > "$BIN/curl" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+url=""
+for arg in "$@"; do url="$arg"; done
+if [ -n "${CURL_CALLS_CAPTURE:-}" ]; then
+  printf '%s\n' "$url" >> "$CURL_CALLS_CAPTURE"
+fi
+case "$url" in
+  *127.0.0.1:1/*) exit 7 ;;
+esac
+cat <<'JSON'
+{"object":"list","data":[{"id":"claude-opus-5","object":"model"},{"id":"claude-fable-5","object":"model"},{"id":"gpt-5.6-sol","object":"model"}]}
+JSON
+SH
+chmod +x "$BIN/curl"
+
+# Hermetic grok route config: claude models are proxy-owned (base_url), the
+# native xAI model has no [model.*] section at all.
+cat > "$TMPDIR/grok-config.toml" <<'TOML'
+[model.claude-opus-5]
+model = "claude-opus-5"
+base_url = "http://127.0.0.1:8318/v1"
+api_key = "sk-dummy"
+
+[model.claude-fable-5]
+model = "claude-fable-5"
+base_url = "http://127.0.0.1:8318/v1"
+api_key = "sk-dummy"
+
+[model.claude-opus-5-high]
+model = "claude-opus-5(high)"
+base_url = "http://127.0.0.1:8318/v1"
+api_key = "sk-dummy"
+TOML
+export ASK_GROK_CONFIG="$TMPDIR/grok-config.toml"
+
+# Same routes pointed at a closed port for the fail-closed case.
+cat > "$TMPDIR/grok-config-down.toml" <<'TOML'
+[model.claude-opus-5]
+model = "claude-opus-5"
+base_url = "http://127.0.0.1:1/v1"
+api_key = "sk-dummy"
+TOML
+
 CLAUDE_NATIVE_CALLED="$TMPDIR/native-claude-called.txt" GROK_ARGS_CAPTURE="$TMPDIR/claude-default-args.txt" \
+  CURL_CALLS_CAPTURE="$TMPDIR/curl-default-calls.txt" \
   "$ASK" claude -m claude-opus-5 --effort medium -d "$TMPDIR/work" -o "$TMPDIR/default" "Review the local change" >/dev/null
 
 [ ! -e "$TMPDIR/native-claude-called.txt" ] || fail "proxy-owned Claude route invoked native claude"
+assert_contains "http://127.0.0.1:8318/v1/models" "$TMPDIR/curl-default-calls.txt"
 assert_not_contains "Optional Research Tools" "$TMPDIR/default/prompt.md"
 assert_contains "-m claude-opus-5" "$TMPDIR/claude-default-args.txt"
 assert_contains "--reasoning-effort medium" "$TMPDIR/claude-default-args.txt"
@@ -152,6 +203,61 @@ assert_contains "grok not authenticated" "$TMPDIR/claude-noauth/artifact.md"
 assert_not_contains "claude auth login" "$TMPDIR/claude-noauth/artifact.md"
 
 echo "ok - ask runner grok and claude transport guard rails"
+
+# ops-ts4: proxy-down fail-closed — the resolved base_url points at a closed
+# port, so preflight must block (exit 2) naming the endpoint and the auth
+# owner, without suggesting a native claude login and without invoking claude.
+set +e
+CLAUDE_NATIVE_CALLED="$TMPDIR/native-claude-called-proxydown.txt" GROK_ARGS_CAPTURE="$TMPDIR/claude-proxydown-args.txt" \
+  ASK_GROK_CONFIG="$TMPDIR/grok-config-down.toml" \
+  "$ASK" claude -m claude-opus-5 -d "$TMPDIR/work" -o "$TMPDIR/claude-proxydown" "Review the local change" >/dev/null 2>&1
+PROXY_DOWN_STATUS=$?
+set -e
+[ "$PROXY_DOWN_STATUS" -eq 2 ] || fail "expected proxy-down claude route to exit 2, got $PROXY_DOWN_STATUS"
+[ ! -e "$TMPDIR/native-claude-called-proxydown.txt" ] || fail "proxy-down claude route fell back to native claude"
+assert_contains "http://127.0.0.1:1/v1" "$TMPDIR/claude-proxydown/artifact.md"
+assert_contains "vibeproxy" "$TMPDIR/claude-proxydown/artifact.md"
+assert_not_contains "claude auth login" "$TMPDIR/claude-proxydown/artifact.md"
+assert_not_contains "claude auth login" "$TMPDIR/claude-proxydown/summary.md"
+
+# ops-ts4: native xAI model — no [model.*] base_url in the route config, so
+# the proxy probe must not run at all.
+GROK_ARGS_CAPTURE="$TMPDIR/grok-native-args.txt" CURL_CALLS_CAPTURE="$TMPDIR/curl-native-calls.txt" \
+  "$ASK" grok -m grok-4.6 -d "$TMPDIR/work" -o "$TMPDIR/grok-native" "Review the local change" >/dev/null
+
+assert_contains "-m grok-4.6" "$TMPDIR/grok-native-args.txt"
+assert_contains "stub grok review" "$TMPDIR/grok-native/artifact.md"
+[ ! -e "$TMPDIR/curl-native-calls.txt" ] || fail "native xAI model unexpectedly probed the proxy"
+
+echo "ok - ask runner proxy route preflight probe"
+
+# ops-ts4: --route-status prints exactly one JSON object on stdout, runs no
+# consultation, and reports route + health facts without credential material.
+mkdir -p "$TMPDIR/route-status-cwd"
+(cd "$TMPDIR/route-status-cwd" && "$ASK" claude --route-status) > "$TMPDIR/route-status.json" 2>"$TMPDIR/route-status.err"
+python3 - "$TMPDIR/route-status.json" <<'PY'
+import json, sys
+
+d = json.load(open(sys.argv[1]))
+expected_keys = {"provider", "transport", "model", "endpoint", "authOwner",
+                 "endpointHealthy", "modelListed", "cliFound",
+                 "authCheckPassed", "rollback"}
+assert set(d) == expected_keys, sorted(d)
+assert d["provider"] == "claude", d
+assert d["transport"] == "grok", d
+assert d["model"] == "claude-opus-5", d
+assert d["endpoint"] == "http://127.0.0.1:8318/v1", d
+assert d["authOwner"] == "vibeproxy", d
+assert d["endpointHealthy"] is True, d
+assert d["modelListed"] is True, d
+assert d["cliFound"] is True, d
+assert d["authCheckPassed"] is True, d
+assert d["rollback"] == "127.0.0.1:8319 standalone (agent-ops:ops-ts4)", d
+assert "sk-dummy" not in json.dumps(d), d
+PY
+[ ! -e "$TMPDIR/route-status-cwd/.ask" ] || fail "--route-status must not create an outdir"
+
+echo "ok - ask runner route status"
 
 # summary.md extraction: review-shaped output keeps VERDICT + numbered
 # findings only; other output falls back to the last paragraph.

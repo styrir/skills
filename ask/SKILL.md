@@ -13,6 +13,7 @@ Always go through the runner (it resolves defaults, preflight, adapters, artifac
 
 ```bash
 <skill-dir>/scripts/ask.sh <provider> [-m model] [-d workdir] [-o outdir] [-b budget-usd] [--research] [--build] (-p prompt-file | "prompt text")
+<skill-dir>/scripts/ask.sh <provider> [-m model] --route-status   # route/health JSON only, no consultation
 ```
 
 Examples:
@@ -43,6 +44,8 @@ Defaults live in **`providers.json` — the single place to update as models imp
 | antigravity / cursor | (CLI default) | text-tee | `omc ask <provider>` fallback |
 
 Tiers: **stream-json** = realtime adapter (trace + progress + artifact); **final-json** = structured output only at the end; **text-tee** = no structured output, raw tee. A new provider starts at the lowest honest tier and earns an adapter (`scripts/<provider>-stream-surface.ts` built on `stream-core.ts`).
+
+**Proxy-owned claude route (ops-ts4):** the claude provider's models ride a local CLIProxyAPI whose endpoint is declared in the grok CLI config (`[model.claude-*]` `base_url`; override the config path with `ASK_GROK_CONFIG` for tests). Preflight resolves that route and hard-gates on `GET <base_url>/models`, so a dead proxy blocks up front with an artifact naming the owner (`authOwner: vibeproxy`), the exact endpoint, and the rollback route from the registry's `rollbackNote` (default `127.0.0.1:8319`, agent-ops:ops-ts4) — never remediate that blocker with a native claude login. Native xAI models (no `base_url`) skip the probe. `ask.sh <provider> --route-status` prints one JSON object — `{provider, transport, model, endpoint, authOwner, endpointHealthy, modelListed, cliFound, authCheckPassed, rollback}` — for checking the route without spending tokens.
 
 Codex specifics (verified 2026-07-09): GPT-5.6 ships as three tiers — **Sol** (flagship, the registry default), **Terra** (balanced), **Luna** (fast/cheap) — slugs `gpt-5.6-sol|terra|luna`. Sol requires codex CLI ≥ 0.144 and the runner passes `--disable multi_agent_v2` (its injected spawn_agent tool collides with Sol's reserved `collaboration.spawn_agent`; openai/codex#26753).
 
