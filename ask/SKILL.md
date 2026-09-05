@@ -21,7 +21,7 @@ Examples:
 ```bash
 scripts/ask.sh codex -p brief-review.md                      # Codex review, default model, streamed
 scripts/ask.sh claude --effort high "Second opinion on this plan: …"  # Claude advisor via the Grok/VibeProxy transport
-scripts/ask.sh codex -m gpt-5.6-terra -d ~/Code/gefa -o .pipeline/safelight/review -p build-review.md  # -m overrides the registry default
+scripts/ask.sh codex -m gpt-5.6-sol -d ~/Code/gefa -o .pipeline/safelight/review -p build-review.md  # -m overrides the registry default
 scripts/ask.sh claude --research -p build-review.md          # Reviewer may use bounded web/Context7 research
 scripts/ask.sh grok -p brief-review.md                       # Grok review (read-only tools), streamed
 scripts/ask.sh grok --build -d ~/Code/gefa -p build-brief.md # Grok as builder: write-enabled, auto-approved
@@ -38,7 +38,7 @@ Defaults live in **`providers.json` — the single place to update as models imp
 | Provider | Default model | Tier | Route |
 |---|---|---|---|
 | claude | claude-opus-5 | stream-json | `grok -m <claude-model> --output-format streaming-json` → `grok-stream-surface.ts` (VibeProxy-owned route) |
-| codex | gpt-5.6-sol | stream-json | `codex exec --json` → `codex-stream-surface.ts` |
+| codex | gpt-6-astra | stream-json | `codex exec --json` → `codex-stream-surface.ts` |
 | grok | (grok CLI config default) | stream-json | `grok --prompt-file --output-format streaming-json` → `grok-stream-surface.ts` |
 | gemini | (CLI default) | final-json | `omc ask gemini` fallback |
 | antigravity / cursor | (CLI default) | text-tee | `omc ask <provider>` fallback |
@@ -47,7 +47,7 @@ Tiers: **stream-json** = realtime adapter (trace + progress + artifact); **final
 
 **Proxy-owned claude route (ops-ts4):** the claude provider's models ride a local CLIProxyAPI whose endpoint is declared in the grok CLI config (`[model.claude-*]` `base_url`; override the config path with `ASK_GROK_CONFIG` for tests). Preflight resolves that route and hard-gates on `GET <base_url>/models`, so a dead proxy blocks up front with an artifact naming the owner (`authOwner: vibeproxy`), the exact endpoint, and the rollback route from the registry's `rollbackNote` (default `127.0.0.1:8319`, agent-ops:ops-ts4) — never remediate that blocker with a native claude login. Native xAI models (no `base_url`) skip the probe. `ask.sh <provider> --route-status` prints one JSON object — `{provider, transport, model, endpoint, authOwner, endpointHealthy, modelListed, cliFound, authCheckPassed, rollback}` — for checking the route without spending tokens.
 
-Codex specifics (verified 2026-07-09): GPT-5.6 ships as three tiers — **Sol** (flagship, the registry default), **Terra** (balanced), **Luna** (fast/cheap) — slugs `gpt-5.6-sol|terra|luna`. Sol requires codex CLI ≥ 0.144 and the runner passes `--disable multi_agent_v2` (its injected spawn_agent tool collides with Sol's reserved `collaboration.spawn_agent`; openai/codex#26753).
+Codex specifics: **the registry default is GPT-6 Astra (`gpt-6-astra`; owner directive 2026-09-05 — faster, more thorough, cheaper than 5.6 Sol; slug verified with codex-cli 0.153.3 via `codex exec -m gpt-6-astra`).** Older note (verified 2026-07-09): GPT-5.6 ships as three tiers — **Sol** (flagship, the registry default), **Terra** (balanced), **Luna** (fast/cheap) — slugs `gpt-5.6-sol|terra|luna`. Sol requires codex CLI ≥ 0.144 and the runner passes `--disable multi_agent_v2` (its injected spawn_agent tool collides with Sol's reserved `collaboration.spawn_agent`; openai/codex#26753).
 
 Grok specifics (grok CLI 0.2.93, verified 2026-07-09): the model default lives in the grok CLI config (grok-4.5 at verification time), so leave `-m` off to use it; the stream carries only `thought`/`text` token deltas plus `end` — tool calls do not surface, so progress is coarser than codex/claude; `-b` budget caps are not enforced (no CLI flag); auth is the cached `grok login` OAuth (preflight runs `grok models` and blocks with instructions if signed out). Review passes run with a read-only tool allowlist (`read_file,grep,list_dir`). `--research` cannot extend that allowlist — naming `web_search`/`web_fetch` under `--tools` pulls `run_terminal_cmd` into the toolset with `enabled_background=false` + `auto_background_on_timeout=true` and session creation fails its params constraint (grok 0.2.93) — so the research pass instead runs the default toolset with `--disallowed-tools` stripping shell/edit/subagent/interactive tools: same read-only file surface plus `web_search`/`web_fetch` (verified 2026-07-10). The `end` progress line includes the session id and a ready-made `grok -r <id>` resume command for follow-ups.
 

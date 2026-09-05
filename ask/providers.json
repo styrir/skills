@@ -13,7 +13,7 @@
       "rollbackNote": "127.0.0.1:8319 standalone (agent-ops:ops-ts4)"
     },
     "codex": {
-      "defaultModel": "gpt-5.6-sol",
+      "defaultModel": "gpt-6-astra",
       "tier": "stream-json",
       "adapter": "codex-stream-surface.ts",
       "versionCheck": "codex --version",
