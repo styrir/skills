@@ -1,0 +1,35 @@
+{
+  "schema": "session-eval-source-provenance/v1",
+  "artifacts": [
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/phoenix-arch/architecture.txt",
+      "snapshot_path": "evidence/phoenix-arch/architecture.txt",
+      "sha256": "c3451e299b12c4762b8b25a93209a649f7598f577c32731184d6689b181c94a9",
+      "bytes": 774
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/phoenix-arch/report.md",
+      "snapshot_path": "evidence/phoenix-arch/report.md",
+      "sha256": "43a7798bcc31c1976725ef7f208acb743697dd2faa0304b4ca7c3be99433c2fb",
+      "bytes": 24464
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/phoenix-arch/summary.txt",
+      "snapshot_path": "evidence/phoenix-arch/summary.txt",
+      "sha256": "35f38f80effe426bb6a0cf513a0adc5c9c8c04811de97f816743648d10d3a19c",
+      "bytes": 773
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/phoenix-ui/report.md",
+      "snapshot_path": "evidence/phoenix-ui/report.md",
+      "sha256": "417f7906c967bf9159f3de4af4206207ce4e215e0cf39f63b3dd92841218b979",
+      "bytes": 12189
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/phoenix-ui/summary.txt",
+      "snapshot_path": "evidence/phoenix-ui/summary.txt",
+      "sha256": "a9b7d8bc55308f9b7c4ede486e3fa9dba0d7de051795cc493c74d20143b5cb0f",
+      "bytes": 454
+    }
+  ]
+}

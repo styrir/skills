@@ -1,0 +1,15 @@
+{
+  "question": "Resolve license and open-core contradictions for Inspect AI, OpenLLMetry/Traceloop, Langfuse OSS vs cloud, Helicone, and Ragas agent_evals; also list official titles of US patents 11,315,043 and 11,615,345 named in Arize Phoenix IP_NOTICE.",
+  "objective": "Fill first-wave proof gaps so we know what we can borrow for a first-party session-eval skill without vendoring Phoenix",
+  "lane": "comparison",
+  "requiresCurrentInfo": true,
+  "requiresOfficialSources": true,
+  "contestedOrHighStakes": true,
+  "needsClaimLevelValidation": false,
+  "needsReportArtifact": false,
+  "estimatedSearchQueries": 8,
+  "estimatedFetches": 8,
+  "preferredProviders": ["tavily", "exa"],
+  "sourceScope": ["official docs", "GitHub LICENSE files", "USPTO/Google Patents titles only"],
+  "forceMode": "styrir_plus"
+}

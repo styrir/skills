@@ -1,0 +1,10 @@
+{
+  "gateStatus": "pass",
+  "blockers": [],
+  "warnings": [],
+  "counts": {
+    "entries": 17,
+    "sources": 10,
+    "proofGaps": 4
+  }
+}

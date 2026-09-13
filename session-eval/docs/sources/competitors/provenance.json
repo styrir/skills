@@ -1,0 +1,143 @@
+{
+  "schema": "session-eval-source-provenance/v1",
+  "artifacts": [
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/competitors/architecture.txt",
+      "snapshot_path": "evidence/competitors/architecture.txt",
+      "sha256": "0e0aee742357e34f2abad14c95f092b341e605a81b53165f9297825161a2ed8d",
+      "bytes": 587
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/competitors/contradiction-sweep.md",
+      "snapshot_path": "evidence/competitors/contradiction-sweep.md",
+      "sha256": "79079dd217db9a93fc4b858a96203edc0576aa112f52128fc1d6c8e0d7aeafe9",
+      "bytes": 6690
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/competitors/gate-result.json",
+      "snapshot_path": "evidence/competitors/gate-result.json",
+      "sha256": "2d5cdce7953d4957cf8322636f064890098b772144b4ea88153e196c93fd9a9e",
+      "bytes": 294
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/competitors/ledger.json",
+      "snapshot_path": "evidence/competitors/ledger.json",
+      "sha256": "802284d45a6b56f06b576a1af844b5e0de471cb986a83579f9fc829516e29712",
+      "bytes": 53886
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/competitors/plan.json",
+      "snapshot_path": "evidence/competitors/plan.json",
+      "sha256": "8570f6e3edbb5a40318dca35abf9913b158ad791510fad57421084f694f1dbd7",
+      "bytes": 2190
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/competitors/request.json",
+      "snapshot_path": "evidence/competitors/request.json",
+      "sha256": "a80393cb620c337a223ae514926148bd0db4d304945f96c7acb1dcb60de34015",
+      "bytes": 641
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/competitors/source-registry.json",
+      "snapshot_path": "evidence/competitors/source-registry.json",
+      "sha256": "bc1cfee7c2a311ed429df212585498f91bcbc59c06bc760b23692a53f49e629d",
+      "bytes": 3033
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/competitors/summary.txt",
+      "snapshot_path": "evidence/competitors/summary.txt",
+      "sha256": "39692cfc711e3b85368826bcd1550ea6c00f11d8d7206a206be8579211cf360f",
+      "bytes": 554
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/agent-session-eval/contradiction-sweep.md",
+      "snapshot_path": "evidence/agent-session-eval/contradiction-sweep.md",
+      "sha256": "4e6b83b4f2930bedc49ae9d1e28483b070d048bc42730b8ec31b96d8f041b5be",
+      "bytes": 5366
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/agent-session-eval/gate-result.json",
+      "snapshot_path": "evidence/agent-session-eval/gate-result.json",
+      "sha256": "b7fb4f0cb1badc9d7dedeee318ed696869eba0587759fddc03931bfa060c28d2",
+      "bytes": 341
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/agent-session-eval/ledger.json",
+      "snapshot_path": "evidence/agent-session-eval/ledger.json",
+      "sha256": "0d1938ea27e90bdae00ab8235f0f513882ee58df5f4e8aa333227d5282f67466",
+      "bytes": 34702
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/agent-session-eval/plan.json",
+      "snapshot_path": "evidence/agent-session-eval/plan.json",
+      "sha256": "29ea895efd86ff4b968f492860f99026ccad120f8cb2347f60b0c1720cd533e7",
+      "bytes": 356
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/agent-session-eval/request.json",
+      "snapshot_path": "evidence/agent-session-eval/request.json",
+      "sha256": "148f93a861342007dc226c8aa7e2039fd63f4bfd93633c29eb7dbe58716bbc7e",
+      "bytes": 733
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/agent-session-eval/source-registry.json",
+      "snapshot_path": "evidence/agent-session-eval/source-registry.json",
+      "sha256": "cebdfd22b593e0f74b29ef414cf34b852a3a414bb441ce867df71f80aa5fed83",
+      "bytes": 2055
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-licenses/architecture.txt",
+      "snapshot_path": "evidence/second-pass-licenses/architecture.txt",
+      "sha256": "0bb5953901cfbff4d421f75067ca854e2b0387dda2bee4ed7a5cd8f2341948ad",
+      "bytes": 679
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-licenses/contradiction-sweep.md",
+      "snapshot_path": "evidence/second-pass-licenses/contradiction-sweep.md",
+      "sha256": "6abd75c7034dd983b442487a3464556784f3cda3c19efaf4219bb36345bc6964",
+      "bytes": 6098
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-licenses/gate-result.json",
+      "snapshot_path": "evidence/second-pass-licenses/gate-result.json",
+      "sha256": "3ecf3ed29152babddd40c5346b843679822938d644b615702295ed6f8be27aea",
+      "bytes": 139
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-licenses/ledger.json",
+      "snapshot_path": "evidence/second-pass-licenses/ledger.json",
+      "sha256": "c186b31a01df43ffada4ea23a7086d322bb386b6c8778d326f66d9e0638221c6",
+      "bytes": 31022
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-licenses/plan.json",
+      "snapshot_path": "evidence/second-pass-licenses/plan.json",
+      "sha256": "356652a58e3ac76fa7c2a398b74d5217352bcbdaead99176956b84bc36b67f09",
+      "bytes": 2253
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-licenses/report.md",
+      "snapshot_path": "evidence/second-pass-licenses/report.md",
+      "sha256": "7540cc1f4c9a426adca8d69043ccf18b5c77aa8ee700781aa83e86f460907d1d",
+      "bytes": 43416
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-licenses/request.json",
+      "snapshot_path": "evidence/second-pass-licenses/request.json",
+      "sha256": "36ac53cc3e9ec2788e62040f1ccb1de66862b17a14b3ab42e0b293b14b0bb0da",
+      "bytes": 816
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-licenses/source-registry.json",
+      "snapshot_path": "evidence/second-pass-licenses/source-registry.json",
+      "sha256": "9d3f0756ee3f593cc628376698ae504db1d3ce8b4f834d2ef583987249a35a4d",
+      "bytes": 3136
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-licenses/summary.txt",
+      "snapshot_path": "evidence/second-pass-licenses/summary.txt",
+      "sha256": "2ac06daa70e8d1dfb52d8f498ca1ff14b9e16a67af5eb1d9b963ece2c8e2d703",
+      "bytes": 466
+    }
+  ]
+}

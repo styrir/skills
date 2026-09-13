@@ -1,0 +1,58 @@
+{
+  "mode": "styrir_plus",
+  "facets": [
+    "OSS tracing UIs",
+    "OSS eval libraries and harnesses",
+    "Licenses and open-core boundaries",
+    "HTML and dashboard reports",
+    "Contradiction sweep: open source versus source-available or hosted-only"
+  ],
+  "reservedFollowups": 2,
+  "budget": {
+    "maxSearchQueries": 10,
+    "maxFetches": 10,
+    "maxFollowups": 3,
+    "maxConcurrency": 3
+  },
+  "accounting": {
+    "totalQueriesRun": 8,
+    "totalSuccessfulExternalFetches": 10,
+    "localReadsExcludedFromExternalFetchBudget": true,
+    "failedFetchAttemptsNotCountedAsSources": 2,
+    "note": "Eight product/facet searches were run. Ten external URLs were successfully read. Local pinned Phoenix and Langfuse package reads are listed in the source registry but are not counted against the external fetch budget. Two malformed/404 Opik URL attempts yielded no source and were not counted."
+  },
+  "searches": [
+    {
+      "facet": "OSS tracing UIs and evals",
+      "query": "Langfuse official docs open source tracing evaluations self-host GitHub license"
+    },
+    {
+      "facet": "OSS tracing UIs and evals",
+      "query": "LangWatch official docs open source tracing evaluations self-host GitHub license"
+    },
+    {
+      "facet": "OSS tracing UIs and evals",
+      "query": "Opik Comet official docs open source tracing evaluations self-host GitHub license"
+    },
+    {
+      "facet": "OSS eval libraries and harnesses",
+      "query": "Promptfoo official docs open source eval red teaming GitHub license"
+    },
+    {
+      "facet": "OSS eval libraries and harnesses",
+      "query": "Ragas TruLens official docs open source evaluation GitHub license"
+    },
+    {
+      "facet": "OSS tracing instrumentation",
+      "query": "Helicone OpenLLMetry Traceloop official docs open source tracing GitHub license self-host"
+    },
+    {
+      "facet": "HTML and dashboard reports",
+      "query": "W&B Weave Evidently official docs open source evaluation observability GitHub license self-host"
+    },
+    {
+      "facet": "License contradiction baseline",
+      "query": "Arize Phoenix official docs open source tracing evaluations self-host GitHub license"
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "sources": [
+    {
+      "id": "s1",
+      "url": "https://raw.githubusercontent.com/UKGovernmentBEIS/inspect_ai/main/LICENSE",
+      "title": "Inspect AI LICENSE (MIT)",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s2",
+      "url": "https://github.com/traceloop/openllmetry",
+      "title": "traceloop/openllmetry GitHub repository README and metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s3",
+      "url": "https://raw.githubusercontent.com/langfuse/langfuse/main/LICENSE",
+      "title": "Langfuse repository root LICENSE with MIT and EE split",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s4",
+      "url": "https://langfuse.com/handbook/chapters/open-source",
+      "title": "Why is Langfuse Open Source?",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s5",
+      "url": "https://langfuse.com/pricing-self-host",
+      "title": "Langfuse Self-Hosted Pricing and Feature Comparison",
+      "sourceType": "product",
+      "fetched": true
+    },
+    {
+      "id": "s6",
+      "url": "https://docs.helicone.ai/references/open-source",
+      "title": "Helicone Open Source",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s7",
+      "url": "https://docs.helicone.ai/getting-started/self-host/overview",
+      "title": "Helicone Self-Hosting Overview",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s8",
+      "url": "https://github.com/vibrantlabsai/ragas",
+      "title": "vibrantlabsai/ragas GitHub repository README and metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s9",
+      "url": "https://raw.githubusercontent.com/vibrantlabsai/ragas/main/docs/howtos/cli/agent_evals.md",
+      "title": "Ragas Agent Evaluation Quickstart",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s10",
+      "url": "https://patents.google.com/?q=(US11315043+OR+US11615345)",
+      "title": "Google Patents combined query shell for US11315043 and US11615345",
+      "sourceType": "legal",
+      "fetched": true
+    },
+    {
+      "id": "s11",
+      "url": "local:///Users/brooks/Code/refs/observability/phoenix/README.md",
+      "title": "Pinned Arize Phoenix README",
+      "sourceType": "local",
+      "fetched": true
+    },
+    {
+      "id": "s12",
+      "url": "local:///Users/brooks/Code/refs/observability/phoenix/LICENSE",
+      "title": "Pinned Arize Phoenix LICENSE",
+      "sourceType": "local",
+      "fetched": true
+    },
+    {
+      "id": "s13",
+      "url": "local:///Users/brooks/Code/refs/observability/phoenix/docs/phoenix/resources/frequently-asked-questions/langfuse-alternative-arize-phoenix-vs-langfuse-key-differences.mdx",
+      "title": "Pinned Phoenix Langfuse comparison page",
+      "sourceType": "local",
+      "fetched": true
+    },
+    {
+      "id": "s14",
+      "url": "local:///Users/brooks/Code/refs/observability/phoenix/IP_NOTICE",
+      "title": "Pinned Phoenix IP_NOTICE",
+      "sourceType": "local",
+      "fetched": true
+    }
+  ]
+}

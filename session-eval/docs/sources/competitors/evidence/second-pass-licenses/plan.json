@@ -1,0 +1,60 @@
+{
+  "mode": "styrir_plus",
+  "facets": [
+    "Inspect AI MIT LICENSE and GitHub license metadata",
+    "OpenLLMetry/Traceloop LICENSE versus platform boundary",
+    "Langfuse current OSS self-host versus Cloud and Playground/LLM-as-judge",
+    "Helicone official self-host deployment feature list",
+    "Ragas agent_evals status versus README",
+    "Google Patents titles for US 11,315,043 and US 11,615,345 only",
+    "Contradiction sweep: Langfuse OSS versus Phoenix comparison"
+  ],
+  "reservedFollowups": 2,
+  "budget": {
+    "maxSearchQueries": 10,
+    "maxFetches": 10,
+    "maxFollowups": 3,
+    "maxConcurrency": 3
+  },
+  "accounting": {
+    "totalQueriesRun": 8,
+    "totalSuccessfulExternalFetches": 10,
+    "localReadsExcludedFromExternalFetchBudget": true,
+    "searchSnippetsAreDiscoveryOnly": true,
+    "note": "Ten external URLs were read. The combined Google Patents query was fetched but returned only the generic search shell, so direct patent record fetches remain a proof gap."
+  },
+  "searches": [
+    {
+      "facet": "Inspect AI license",
+      "query": "site:github.com/UKGovernmentBEIS/inspect_ai license LICENSE Inspect AI MIT GitHub"
+    },
+    {
+      "facet": "OpenLLMetry license and platform",
+      "query": "site:github.com/traceloop/openllmetry LICENSE Traceloop open source platform official docs"
+    },
+    {
+      "facet": "Langfuse OSS and self-host",
+      "query": "site:langfuse.com/docs self-hosted Langfuse open source cloud playground LLM-as-a-judge pricing features"
+    },
+    {
+      "facet": "Helicone self-host",
+      "query": "site:docs.helicone.ai self-hosting Helicone open source features sessions evaluations official"
+    },
+    {
+      "facet": "Ragas agent_evals",
+      "query": "site:github.com/explodinggradients/ragas agent_evals Ragas official status"
+    },
+    {
+      "facet": "Patent titles",
+      "query": "Google Patents US11315043 US11615345 title"
+    },
+    {
+      "facet": "Langfuse versus Phoenix contradiction",
+      "query": "site:langfuse.com Phoenix comparison Langfuse open source self-host official"
+    },
+    {
+      "facet": "License cross-check",
+      "query": "official GitHub license metadata inspect_ai openllmetry Langfuse Helicone Ragas licenses"
+    }
+  ]
+}

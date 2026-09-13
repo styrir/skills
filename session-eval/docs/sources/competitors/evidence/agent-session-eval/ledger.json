@@ -1,0 +1,747 @@
+{
+  "meta": {
+    "searchId": "session-obs-2026-09-13",
+    "mode": "styrir_plus",
+    "totalQueriesRun": 8,
+    "totalSourcesFetched": 10,
+    "budget": {
+      "maxSearchQueries": 10,
+      "maxFetches": 10
+    }
+  },
+  "entries": [
+    {
+      "id": "e1",
+      "entity": "Inspect AI",
+      "signalType": "input_format",
+      "observation": "Inspect documentation states that each inspect eval execution or eval() call writes an evaluation log for each task, with the default directory ./logs.",
+      "possibleImplication": "An ingest adapter can enumerate Inspect task logs from a configured run directory.",
+      "sourceId": "s1",
+      "sourceUrl": "https://inspect.aisi.org.uk/eval-logs.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.94
+    },
+    {
+      "id": "e2",
+      "entity": "Inspect AI",
+      "signalType": "log_format",
+      "observation": "Inspect log files represent evaluation hierarchy as JSON stored in either .eval binary files or .json text files, and both formats are supported by the Log File API.",
+      "possibleImplication": "The adapter should call Inspect's API rather than assume that every log is directly readable JSON.",
+      "sourceId": "s1",
+      "sourceUrl": "https://inspect.aisi.org.uk/eval-logs.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.92
+    },
+    {
+      "id": "e3",
+      "entity": "Inspect AI",
+      "signalType": "versioning",
+      "observation": "Inspect documentation states that .eval became the default log format beginning with Inspect v0.3.46.",
+      "possibleImplication": "The adapter should record the Inspect version and retain a compatibility path for older JSON logs.",
+      "sourceId": "s1",
+      "sourceUrl": "https://inspect.aisi.org.uk/eval-logs.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.85
+    },
+    {
+      "id": "e4",
+      "entity": "Inspect AI",
+      "signalType": "schema",
+      "observation": "The EvalLog API exposes version, status, eval, plan, results, stats, error, tags, metadata, log_updates, samples, and reductions fields.",
+      "possibleImplication": "Those fields provide direct sources for run metadata, aggregate metrics, sample outcomes, and audit history in a normalized record.",
+      "sourceId": "s1",
+      "sourceUrl": "https://inspect.aisi.org.uk/eval-logs.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.9
+    },
+    {
+      "id": "e5",
+      "entity": "Inspect AI",
+      "signalType": "api",
+      "observation": "Inspect documentation lists list_eval_logs, read_eval_log, read_eval_log_sample, read_eval_log_samples, read_eval_log_sample_summaries, and write_eval_log as log helpers.",
+      "possibleImplication": "An adapter can use stable helper operations for enumeration, header reads, selective sample reads, streaming reads, and writes.",
+      "sourceId": "s1",
+      "sourceUrl": "https://inspect.aisi.org.uk/eval-logs.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.9
+    },
+    {
+      "id": "e6",
+      "entity": "Inspect AI",
+      "signalType": "large_log_handling",
+      "observation": "Inspect's read_eval_log accepts header_only, and read_eval_log_samples yields samples incrementally one at a time.",
+      "possibleImplication": "The first-party ingest path can avoid loading multi-gigabyte evaluation logs into memory.",
+      "sourceId": "s1",
+      "sourceUrl": "https://inspect.aisi.org.uk/eval-logs.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.86
+    },
+    {
+      "id": "e7",
+      "entity": "Inspect View",
+      "signalType": "interactive_report",
+      "observation": "Inspect View reads the configured log directory, runs locally on loopback port 7575 by default, and updates as new evaluations run.",
+      "possibleImplication": "Inspect View is useful for live debugging but is a specialized viewer rather than the canonical cross-harness report format.",
+      "sourceId": "s2",
+      "sourceUrl": "https://inspect.aisi.org.uk/log-viewer.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.87
+    },
+    {
+      "id": "e8",
+      "entity": "Inspect View",
+      "signalType": "trace_view",
+      "observation": "Inspect View sample details contain Messages, Scoring, and Metadata tabs.",
+      "possibleImplication": "A report can expose transcript evidence separately from scoring explanations and tool metadata.",
+      "sourceId": "s2",
+      "sourceUrl": "https://inspect.aisi.org.uk/log-viewer.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.86
+    },
+    {
+      "id": "e9",
+      "entity": "Inspect View",
+      "signalType": "html_output",
+      "observation": "The inspect view bundle command produces a directory containing index.html, robots.txt, assets, and logs.",
+      "possibleImplication": "The bundle shape can be copied for a self-contained static report export.",
+      "sourceId": "s2",
+      "sourceUrl": "https://inspect.aisi.org.uk/log-viewer.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.95
+    },
+    {
+      "id": "e10",
+      "entity": "Inspect View",
+      "signalType": "deployment_constraint",
+      "observation": "Inspect documentation requires an HTTP server with Range request support for bundled logs and explicitly states that Python's built-in http.server does not support the required ranges.",
+      "possibleImplication": "The first-party report server or deployment documentation must use a Range-capable static host.",
+      "sourceId": "s2",
+      "sourceUrl": "https://inspect.aisi.org.uk/log-viewer.html",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.8
+    },
+    {
+      "id": "e11",
+      "entity": "Inspect AI",
+      "signalType": "eval_capability",
+      "observation": "The Inspect README lists built-in facilities for prompt engineering, tool usage, multi-turn dialog, and model-graded evaluations.",
+      "possibleImplication": "Inspect can supply check implementations and transcript semantics for an agent-oriented check taxonomy.",
+      "sourceId": "s3",
+      "sourceUrl": "https://github.com/UKGovernmentBEIS/inspect_ai/blob/main/README.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.88
+    },
+    {
+      "id": "e12",
+      "entity": "Inspect AI",
+      "signalType": "eval_catalog",
+      "observation": "The Inspect README states that the project includes more than 200 pre-built evaluations.",
+      "possibleImplication": "A first-party skill can borrow evaluation categories or import selected Inspect eval outputs instead of rebuilding every check.",
+      "sourceId": "s3",
+      "sourceUrl": "https://github.com/UKGovernmentBEIS/inspect_ai/blob/main/README.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.73
+    },
+    {
+      "id": "e13",
+      "entity": "Harbor",
+      "signalType": "license",
+      "observation": "GitHub repository metadata for harbor-framework/harbor identifies the license as Apache License 2.0.",
+      "possibleImplication": "Harbor code can be evaluated as a borrow candidate subject to normal Apache notice and dependency review.",
+      "sourceId": "s4",
+      "sourceUrl": "https://github.com/harbor-framework/harbor",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.92
+    },
+    {
+      "id": "e14",
+      "entity": "Harbor",
+      "signalType": "harness_scope",
+      "observation": "The Harbor README names Claude Code, OpenHands, and Codex CLI as arbitrary agents that Harbor can evaluate.",
+      "possibleImplication": "Harbor is a useful reference for dispatching several coding-agent adapters against the same task set.",
+      "sourceId": "s4",
+      "sourceUrl": "https://github.com/harbor-framework/harbor",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.96
+    },
+    {
+      "id": "e15",
+      "entity": "Harbor / Terminal-Bench",
+      "signalType": "harness_input",
+      "observation": "The Harbor README describes Harbor as the official harness for Terminal-Bench-2.0 and demonstrates harbor run with dataset, agent, model, and concurrency arguments.",
+      "possibleImplication": "A normalized adapter should identify dataset version, agent adapter, model, and trial count as run dimensions.",
+      "sourceId": "s4",
+      "sourceUrl": "https://github.com/harbor-framework/harbor",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.93
+    },
+    {
+      "id": "e16",
+      "entity": "Harbor",
+      "signalType": "execution",
+      "observation": "The Harbor README documents local Docker execution and cloud execution through providers including Daytona, Modal, LangSmith, Blaxel, Novita Sandbox, Tensorlake, and Runta.",
+      "possibleImplication": "Environment/provider should be retained in run metadata when comparing quality or cost over time.",
+      "sourceId": "s4",
+      "sourceUrl": "https://github.com/harbor-framework/harbor",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.79
+    },
+    {
+      "id": "e17",
+      "entity": "Harbor",
+      "signalType": "rollout_output",
+      "observation": "The Harbor README states that Harbor generates rollouts for reinforcement-learning optimization.",
+      "possibleImplication": "Rollouts are candidate raw-trace inputs for a later first-party ingestion or training-quality report.",
+      "sourceId": "s4",
+      "sourceUrl": "https://github.com/harbor-framework/harbor",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.74
+    },
+    {
+      "id": "e18",
+      "entity": "Harbor",
+      "signalType": "artifact_input",
+      "observation": "Harbor automatically collects files written inside the sandbox convention directory /logs/artifacts/ after each trial, and Docker exposes them under the trial output artifacts/logs/artifacts path.",
+      "possibleImplication": "An adapter can collect agent-produced reports, traces, and evidence without depending on a provider-specific log path.",
+      "sourceId": "s5",
+      "sourceUrl": "https://www.harborframework.com/docs/run-jobs/results-and-artifacts",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.9
+    },
+    {
+      "id": "e19",
+      "entity": "Harbor",
+      "signalType": "artifact_config",
+      "observation": "Harbor config-driven artifact collection accepts path entries and object fields named source, destination, and service.",
+      "possibleImplication": "The first-party runner can declare collection of session logs and verifier evidence explicitly while preserving sidecar provenance.",
+      "sourceId": "s5",
+      "sourceUrl": "https://www.harborframework.com/docs/run-jobs/results-and-artifacts",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.85
+    },
+    {
+      "id": "e20",
+      "entity": "Harbor",
+      "signalType": "artifact_manifest",
+      "observation": "Harbor writes a manifest.json collection manifest that records each artifact's source, destination, originating service, type, and collection status.",
+      "possibleImplication": "Manifest fields can become provenance metadata on normalized rows and report links.",
+      "sourceId": "s5",
+      "sourceUrl": "https://www.harborframework.com/docs/run-jobs/results-and-artifacts",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.87
+    },
+    {
+      "id": "e21",
+      "entity": "Harbor",
+      "signalType": "trial_output",
+      "observation": "Harbor's documented trial output contains artifacts, agent, verifier, config.json, and result.json directories or files.",
+      "possibleImplication": "A Harbor adapter can separate raw agent traces, verifier evidence, configuration, and aggregate result data.",
+      "sourceId": "s5",
+      "sourceUrl": "https://www.harborframework.com/docs/run-jobs/results-and-artifacts",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.94
+    },
+    {
+      "id": "e22",
+      "entity": "Harbor",
+      "signalType": "artifact_semantics",
+      "observation": "Harbor documents artifact collection as best effort: collection failures do not fail the trial and are recorded in the manifest.",
+      "possibleImplication": "Reports must distinguish trial score from missing observability artifacts rather than treating an absent file as a failed task.",
+      "sourceId": "s5",
+      "sourceUrl": "https://www.harborframework.com/docs/run-jobs/results-and-artifacts",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.91
+    },
+    {
+      "id": "e23",
+      "entity": "Harbor",
+      "signalType": "interactive_report",
+      "observation": "Harbor documentation states that collected artifacts are viewable in the Harbor results viewer through harbor view.",
+      "possibleImplication": "Harbor View can remain the harness-specific drill-down while the first-party report aggregates normalized outcomes.",
+      "sourceId": "s5",
+      "sourceUrl": "https://www.harborframework.com/docs/run-jobs/results-and-artifacts",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.82
+    },
+    {
+      "id": "e24",
+      "entity": "OpenHands Benchmarks",
+      "signalType": "license",
+      "observation": "GitHub repository metadata for OpenHands/benchmarks identifies the license as MIT License.",
+      "possibleImplication": "The benchmark harness is a borrow candidate subject to its dependency and SDK boundary.",
+      "sourceId": "s6",
+      "sourceUrl": "https://github.com/OpenHands/benchmarks",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.9
+    },
+    {
+      "id": "e25",
+      "entity": "OpenHands Benchmarks",
+      "signalType": "harness_scope",
+      "observation": "The OpenHands benchmarks README describes standardized evaluation pipelines and lists SWE-Bench, SWE-Bench Pro, GAIA, Commit0, OpenAgentSafety, and ProgramBench benchmarks.",
+      "possibleImplication": "Benchmark identity and version should be first-class dimensions in trend reports.",
+      "sourceId": "s6",
+      "sourceUrl": "https://github.com/OpenHands/benchmarks",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.89
+    },
+    {
+      "id": "e26",
+      "entity": "OpenHands Benchmarks",
+      "signalType": "versioning",
+      "observation": "The OpenHands benchmarks README says the repository is migrating benchmarks from OpenHands V0 evaluation code to the OpenHands Software Agent SDK V1 infrastructure.",
+      "possibleImplication": "An adapter must record benchmark generation and SDK generation rather than treating an OpenHands trajectory as permanently stable.",
+      "sourceId": "s6",
+      "sourceUrl": "https://github.com/OpenHands/benchmarks",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.9
+    },
+    {
+      "id": "e27",
+      "entity": "OpenHands Benchmarks",
+      "signalType": "reproducibility",
+      "observation": "The OpenHands benchmarks README says make build initializes a local Agent SDK submodule pinned to a specific reproducible commit and then runs uv sync.",
+      "possibleImplication": "SDK commit belongs in run.configSnapshot or equivalent version metadata.",
+      "sourceId": "s6",
+      "sourceUrl": "https://github.com/OpenHands/benchmarks",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.86
+    },
+    {
+      "id": "e28",
+      "entity": "OpenHands Benchmarks",
+      "signalType": "harness_input",
+      "observation": "The OpenHands README's example LLM configuration is JSON with model, base_url, and api_key fields, and the repository documents validate-cfg for checking the configuration.",
+      "possibleImplication": "A run adapter can capture a redacted config snapshot while excluding API key values.",
+      "sourceId": "s6",
+      "sourceUrl": "https://github.com/OpenHands/benchmarks",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.83
+    },
+    {
+      "id": "e29",
+      "entity": "OpenHands Benchmarks",
+      "signalType": "log_output",
+      "observation": "The OpenHands README documents RICH_LOGGING=1 for real-time tool calls and agent messages with an instance summary, and states that file logging is written to logs/instance_<id>.log.",
+      "possibleImplication": "The first-party skill can ingest per-instance logs while separately retaining structured benchmark outcomes.",
+      "sourceId": "s6",
+      "sourceUrl": "https://github.com/OpenHands/benchmarks",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.89
+    },
+    {
+      "id": "e30",
+      "entity": "OpenHands Benchmarks",
+      "signalType": "compatibility",
+      "observation": "The OpenHands benchmarks README warns that not every benchmarks version is compatible with every Agent SDK version.",
+      "possibleImplication": "Compatibility checks should fail clearly or downgrade confidence when benchmark and SDK versions are not paired.",
+      "sourceId": "s6",
+      "sourceUrl": "https://github.com/OpenHands/benchmarks",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.88
+    },
+    {
+      "id": "e31",
+      "entity": "OpenHands Trajectory Visualizer",
+      "signalType": "license",
+      "observation": "The Trajectory Visualizer README states that the project is licensed under the MIT License.",
+      "possibleImplication": "The visualizer is a borrow candidate for a raw OpenHands trajectory drill-down.",
+      "sourceId": "s7",
+      "sourceUrl": "https://github.com/OpenHands/trajectory-visualizer",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.9
+    },
+    {
+      "id": "e32",
+      "entity": "OpenHands Trajectory Visualizer",
+      "signalType": "input_format",
+      "observation": "The Trajectory Visualizer README documents uploading a locally exported OpenHands trajectory JSON file.",
+      "possibleImplication": "A raw-trace adapter can link normalized rows to the original JSON trajectory for detailed replay.",
+      "sourceId": "s7",
+      "sourceUrl": "https://github.com/OpenHands/trajectory-visualizer",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.88
+    },
+    {
+      "id": "e33",
+      "entity": "OpenHands Trajectory Visualizer",
+      "signalType": "input_transport",
+      "observation": "The Trajectory Visualizer README documents loading a trajectory from a fileUrl query parameter or embedding data through a base64 data query parameter.",
+      "possibleImplication": "A report can deep-link to a hosted or embedded trajectory without copying all raw turns into the summary page.",
+      "sourceId": "s7",
+      "sourceUrl": "https://github.com/OpenHands/trajectory-visualizer",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.81
+    },
+    {
+      "id": "e34",
+      "entity": "OpenHands Trajectory Visualizer",
+      "signalType": "trace_output",
+      "observation": "The Trajectory Visualizer timeline displays actions in blue, observations in gray or red, and each step's timestamp, title, content, and metadata, with arrow-key navigation.",
+      "possibleImplication": "This is suitable for raw trajectory replay, not as the cross-harness pass/fail taxonomy itself.",
+      "sourceId": "s7",
+      "sourceUrl": "https://github.com/OpenHands/trajectory-visualizer",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.85
+    },
+    {
+      "id": "e35",
+      "entity": "SWE-bench Experiments",
+      "signalType": "submission_input",
+      "observation": "The SWE-bench experiments checklist requires a metadata.yaml file with submission information and an assets block.",
+      "possibleImplication": "SWE-bench ingestion should treat metadata and artifact links as separate from the session transcript itself.",
+      "sourceId": "s8",
+      "sourceUrl": "https://github.com/SWE-bench/experiments/blob/main/checklist.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.82
+    },
+    {
+      "id": "e36",
+      "entity": "SWE-bench Experiments",
+      "signalType": "artifact_links",
+      "observation": "The SWE-bench checklist's assets block contains repo, logs, and trajs links to a public repository; it says older S3 paths still resolve and new submissions should be self-hosted.",
+      "possibleImplication": "A collector can download or mirror declared logs and trajectories while preserving the submission repository as provenance.",
+      "sourceId": "s8",
+      "sourceUrl": "https://github.com/SWE-bench/experiments/blob/main/checklist.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.9
+    },
+    {
+      "id": "e37",
+      "entity": "SWE-bench Experiments",
+      "signalType": "evaluation_policy",
+      "observation": "The SWE-bench checklist requires pass@1 submissions and prohibits use of PASS_TO_PASS, FAIL_TO_PASS, hints, and unmitigated web browsing to task solutions.",
+      "possibleImplication": "These policy checks belong in a harness-specific compliance suite, not in a generic transcript parser.",
+      "sourceId": "s8",
+      "sourceUrl": "https://github.com/SWE-bench/experiments/blob/main/checklist.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.87
+    },
+    {
+      "id": "e38",
+      "entity": "SWE-bench Experiments",
+      "signalType": "reporting_policy",
+      "observation": "The SWE-bench checklist requires a technical report, blog post, or equivalent system description for a submission.",
+      "possibleImplication": "The first-party report should retain a run-level report link alongside scores and trajectories.",
+      "sourceId": "s8",
+      "sourceUrl": "https://github.com/SWE-bench/experiments/blob/main/checklist.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.75
+    },
+    {
+      "id": "e39",
+      "entity": "eval-dashboards",
+      "signalType": "license",
+      "observation": "GitHub repository metadata for IcodeNet/eval-dashboards identifies the license as MIT License.",
+      "possibleImplication": "The reporting layer is a borrow candidate for a first-party skill, subject to its active-development compatibility caveat.",
+      "sourceId": "s9",
+      "sourceUrl": "https://github.com/IcodeNet/eval-dashboards",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.95
+    },
+    {
+      "id": "e40",
+      "entity": "eval-dashboards",
+      "signalType": "normalized_input",
+      "observation": "The eval-dashboards README defines eval-report/v1 as a shared JSON artifact emitted by Vitest, Jest, custom Node, Python, and other runners, then consumed for reports, quality gates, history, and publishing.",
+      "possibleImplication": "This is the cross-harness normalization boundary: raw session adapters should emit eval-report/v1 rather than make the HTML layer understand every native format.",
+      "sourceId": "s9",
+      "sourceUrl": "https://github.com/IcodeNet/eval-dashboards",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.98
+    },
+    {
+      "id": "e41",
+      "entity": "eval-dashboards",
+      "signalType": "html_output",
+      "observation": "The eval-dashboards README describes pure static HTML reports and recommends one artifact file per run in .evals_output to preserve history.",
+      "possibleImplication": "Static HTML plus immutable per-run JSON is a suitable first-party trend-report publication model.",
+      "sourceId": "s9",
+      "sourceUrl": "https://github.com/IcodeNet/eval-dashboards",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.96
+    },
+    {
+      "id": "e42",
+      "entity": "eval-report/v1",
+      "signalType": "run_schema",
+      "observation": "The eval-report/v1 artifact schema defines run metadata including id, generatedAt, project, team, kind, branch, commit, buildId, sourceUrl, and a redaction-aware configSnapshot.",
+      "possibleImplication": "Harness, agent, skill, commit, and sanitized configuration versions can be compared at run level.",
+      "sourceId": "s10",
+      "sourceUrl": "https://raw.githubusercontent.com/IcodeNet/eval-dashboards/main/docs/artifact-format.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.94
+    },
+    {
+      "id": "e43",
+      "entity": "eval-report/v1",
+      "signalType": "row_schema",
+      "observation": "The eval-report/v1 row schema includes turns, toolCalls, judgeModel, judgeVerdict, judgeReasoning, promptVersion, agentChannel, agentVersion, trace identifiers and URLs, axisScores, passed, score, severity, category, and durationMs.",
+      "possibleImplication": "The row contract covers transcript evidence, skill/prompt versions, tool behavior, judge data, and trace drill-down links needed by the target skill.",
+      "sourceId": "s10",
+      "sourceUrl": "https://raw.githubusercontent.com/IcodeNet/eval-dashboards/main/docs/artifact-format.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.99
+    },
+    {
+      "id": "e44",
+      "entity": "eval-report/v1",
+      "signalType": "evidence_governance",
+      "observation": "The eval-dashboards artifact documentation describes report rows as durable and gateable, requires sanitized config snapshots for safe emission, and gives first-class judge and rubric identity fields.",
+      "possibleImplication": "Raw transcripts should be reduced to sanitized durable evidence rows before publication, with rubric and judge drift explicit.",
+      "sourceId": "s10",
+      "sourceUrl": "https://raw.githubusercontent.com/IcodeNet/eval-dashboards/main/docs/artifact-format.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.95
+    },
+    {
+      "id": "e45",
+      "entity": "eval-report/v1",
+      "signalType": "suite_taxonomy",
+      "observation": "The suite manifest schema includes target, datasetSource, datasetVersion, rubricVersion, riskArea, graders, and blocking or report-only gate thresholds.",
+      "possibleImplication": "Checks for tool use, routing, safety, PII, quality, and skill behavior can share one taxonomy while retaining suite-specific governance.",
+      "sourceId": "s10",
+      "sourceUrl": "https://raw.githubusercontent.com/IcodeNet/eval-dashboards/main/docs/artifact-format.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.94
+    },
+    {
+      "id": "e46",
+      "entity": "eval-dashboards",
+      "signalType": "trend_gating",
+      "observation": "The artifact documentation names rolling and champion baseline strategies and supports pass-rate, maximum critical-failure, and critical-failure-rate threshold keys.",
+      "possibleImplication": "Skill and agent performance over time can use explicit baseline selection and regression thresholds instead of ad hoc chart comparisons.",
+      "sourceId": "s10",
+      "sourceUrl": "https://raw.githubusercontent.com/IcodeNet/eval-dashboards/main/docs/artifact-format.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.97
+    },
+    {
+      "id": "e47",
+      "entity": "eval-dashboards",
+      "signalType": "cli_and_skill",
+      "observation": "The eval-dashboards README documents report, check, publish, history, and import commands, and gives npx skills add IcodeNet/eval-dashboards -s eval-dashboards-adopt -y as the adoption-skill installation command.",
+      "possibleImplication": "The first-party skill can borrow the adapter-plus-CI wiring workflow and import boundary while keeping Styrir's own artifact governance.",
+      "sourceId": "s9",
+      "sourceUrl": "https://github.com/IcodeNet/eval-dashboards",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.91
+    },
+    {
+      "id": "e48",
+      "entity": "eval-dashboards",
+      "signalType": "maturity",
+      "observation": "The eval-dashboards README labels the project as active development at v0.x and says its core schema and API are stabilizing.",
+      "possibleImplication": "Pin the borrowed schema/CLI version and keep a local compatibility adapter rather than depending on unpinned behavior.",
+      "sourceId": "s9",
+      "sourceUrl": "https://github.com/IcodeNet/eval-dashboards",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.84
+    }
+  ],
+  "proofGaps": [
+    {
+      "description": "This bundle's fetched primary sources do not establish the native Claude Code, Codex, Pi, or Grok session schemas or license status of community analyzers; search snippets were discovery only.",
+      "attemptedQueries": [
+        "Claude Code session transcript JSONL format GitHub analyzer open source",
+        "OpenAI Codex CLI session logs JSONL format GitHub transcript analyzer",
+        "Pi coding agent session file format JSONL GitHub transcript analysis"
+      ]
+    },
+    {
+      "description": "The fetched Inspect AI README did not expose a license declaration, so Inspect's license needs a direct LICENSE or repository metadata fetch before adoption.",
+      "attemptedQueries": [
+        "Inspect AI agent evaluation logs transcript HTML report open source official docs"
+      ]
+    },
+    {
+      "description": "The fetched SWE-bench checklist does not declare the experiments repository license, and the fetched Harbor README identifies Harbor's license but not the standalone Terminal-Bench task repository license.",
+      "attemptedQueries": [
+        "Harbor Terminal-Bench open source agent evaluation harness logs report GitHub",
+        "SWE-bench open source evaluation harness trajectories logs report GitHub README"
+      ]
+    },
+    {
+      "description": "No fetched source documents direct raw Claude/Codex/Pi/Grok ingestion by eval-dashboards; its documented input boundary is eval-report/v1 JSON.",
+      "attemptedQueries": [
+        "open source LLM coding agent skill evaluation version tracking dashboard HTML traces GitHub"
+      ]
+    },
+    {
+      "description": "The sources expose different scoring and artifact semantics (Inspect scores, Harbor verifier/result artifacts, SWE-bench submission links, and eval-report rows); no apples-to-apples cross-harness score equivalence was established.",
+      "attemptedQueries": [
+        "Inspect AI agent evaluation logs transcript HTML report open source official docs",
+        "Harbor Terminal-Bench open source agent evaluation harness logs report GitHub",
+        "SWE-bench open source evaluation harness trajectories logs report GitHub README"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "s1",
+      "url": "https://inspect.aisi.org.uk/eval-logs.html",
+      "title": "Log Files \u2013 Inspect",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s2",
+      "url": "https://inspect.aisi.org.uk/log-viewer.html",
+      "title": "Log Viewer \u2013 Inspect",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s3",
+      "url": "https://github.com/UKGovernmentBEIS/inspect_ai/blob/main/README.md",
+      "title": "UKGovernmentBEIS/inspect_ai README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s4",
+      "url": "https://github.com/harbor-framework/harbor",
+      "title": "harbor-framework/harbor README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s5",
+      "url": "https://www.harborframework.com/docs/run-jobs/results-and-artifacts",
+      "title": "Harbor Artifact Collection",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s6",
+      "url": "https://github.com/OpenHands/benchmarks",
+      "title": "OpenHands/benchmarks README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s7",
+      "url": "https://github.com/OpenHands/trajectory-visualizer",
+      "title": "OpenHands Trajectory Visualizer README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s8",
+      "url": "https://github.com/SWE-bench/experiments/blob/main/checklist.md",
+      "title": "SWE-bench Experiments Submission Checklist",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s9",
+      "url": "https://github.com/IcodeNet/eval-dashboards",
+      "title": "IcodeNet/eval-dashboards README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s10",
+      "url": "https://raw.githubusercontent.com/IcodeNet/eval-dashboards/main/docs/artifact-format.md",
+      "title": "eval-dashboards Artifact Format",
+      "sourceType": "repo",
+      "fetched": true
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "question": "Which open-source products compete with Arize Phoenix for LLM observability, tracing, evaluation, and HTML/dashboard reports?",
+  "objective": "List OSS competitors we can borrow from for a first-party coding-agent session-eval skill",
+  "lane": "comparison",
+  "requiresCurrentInfo": true,
+  "requiresOfficialSources": true,
+  "contestedOrHighStakes": false,
+  "needsClaimLevelValidation": false,
+  "needsReportArtifact": false,
+  "estimatedSearchQueries": 8,
+  "estimatedFetches": 8,
+  "preferredProviders": ["tavily", "exa"],
+  "sourceScope": ["official docs", "GitHub repos", "licenses"],
+  "forceMode": "styrir_plus"
+}

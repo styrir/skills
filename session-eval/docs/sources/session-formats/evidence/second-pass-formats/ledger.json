@@ -1,0 +1,334 @@
+{
+  "meta": {
+    "searchId": "search-2026-09-13-second-pass-formats",
+    "mode": "styrir_plus",
+    "totalQueriesRun": 8,
+    "totalSourcesFetched": 10,
+    "budget": {
+      "maxSearchQueries": 10,
+      "maxFetches": 10
+    }
+  },
+  "entries": [
+    {
+      "id": "e1",
+      "entity": "Harbor ATIF",
+      "signalType": "trajectory_schema",
+      "observation": "Harbor RFC 0001 defines ATIF as a JSON specification with root schema_version, agent, and steps fields; current changelog is v1.8.",
+      "possibleImplication": "Use ATIF as the normalized file-native trajectory target.",
+      "sourceId": "s1",
+      "sourceUrl": "https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.99
+    },
+    {
+      "id": "e2",
+      "entity": "Harbor ATIF",
+      "signalType": "trajectory_schema",
+      "observation": "ATIF AgentSchema requires agent.name and agent.version; StepObject requires step_id, source, and message, and permits reasoning_content, tool_calls, observation, metrics, extra, and llm_call_count.",
+      "possibleImplication": "Preserve agent runtime version separately from skill version and map tool/result events into structured steps.",
+      "sourceId": "s1",
+      "sourceUrl": "https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.98
+    },
+    {
+      "id": "e3",
+      "entity": "Harbor ATIF",
+      "signalType": "subagent_and_context",
+      "observation": "ATIF v1.7 adds trajectory_id, embedded subagent_trajectories, and context_management conventions; v1.8 adds audio content.",
+      "possibleImplication": "Represent delegated OMP/agent sessions and compaction boundaries without producer-specific heuristics.",
+      "sourceId": "s1",
+      "sourceUrl": "https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.92
+    },
+    {
+      "id": "e4",
+      "entity": "Harbor",
+      "signalType": "license",
+      "observation": "The fetched Harbor LICENSE is Apache License 2.0.",
+      "possibleImplication": "Apache-2.0 schema/model code is a candidate for borrowing subject to attribution and compatibility review.",
+      "sourceId": "s2",
+      "sourceUrl": "https://github.com/harbor-framework/harbor/blob/main/LICENSE",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.85
+    },
+    {
+      "id": "e5",
+      "entity": "OpenInference",
+      "signalType": "transport_and_backend",
+      "observation": "The OpenInference README describes the specification as transport- and file-format-agnostic, complementary to OpenTelemetry, and usable with JSON, ProtoBuf, DataFrames, or other formats.",
+      "possibleImplication": "Do not make an OTel collector a prerequisite for local normalization or static HTML.",
+      "sourceId": "s4",
+      "sourceUrl": "https://github.com/Arize-ai/openinference",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.99
+    },
+    {
+      "id": "e6",
+      "entity": "OpenInference",
+      "signalType": "span_conventions",
+      "observation": "The fetched semantic convention defines required openinference.span.kind values including AGENT, TOOL, LLM, CHAIN, and EVALUATOR, plus session.id, agent.name, graph.node.id, graph.node.parent_id, tool, message, token, cost, and evaluation attributes.",
+      "possibleImplication": "Offer an optional ATIF-to-OpenInference projection for OTel-compatible consumers.",
+      "sourceId": "s3",
+      "sourceUrl": "https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.98
+    },
+    {
+      "id": "e7",
+      "entity": "OpenInference",
+      "signalType": "license",
+      "observation": "The fetched OpenInference repository metadata identifies Apache License 2.0.",
+      "possibleImplication": "Apache-2.0 conventions/instrumentation are candidates for borrowing with attribution review.",
+      "sourceId": "s4",
+      "sourceUrl": "https://github.com/Arize-ai/openinference",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.83
+    },
+    {
+      "id": "e8",
+      "entity": "ccdiag",
+      "signalType": "claude_jsonl_parser",
+      "observation": "ccdiag is a Go CLI that analyzes Claude Code session JSONL, including files under ~/.claude/projects, and offers recover/analyze/proxy modes.",
+      "possibleImplication": "Reuse its input discovery and stream-oriented diagnostic boundary for Claude ingestion.",
+      "sourceId": "s5",
+      "sourceUrl": "https://github.com/kolkov/ccdiag",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.96
+    },
+    {
+      "id": "e9",
+      "entity": "ccdiag",
+      "signalType": "checks_and_outputs",
+      "observation": "ccdiag documents orphaned tool-call detection, stuck/error/interrupted checks, token usage, CI JSON output, and recovery outputs named handoff, messages, actions, and full.",
+      "possibleImplication": "Borrow a pre-normalization check taxonomy and machine-readable diagnostics in the static report.",
+      "sourceId": "s5",
+      "sourceUrl": "https://github.com/kolkov/ccdiag",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.95
+    },
+    {
+      "id": "e10",
+      "entity": "ccdiag",
+      "signalType": "license",
+      "observation": "The fetched ccdiag repository metadata and LICENSE identify the MIT License.",
+      "possibleImplication": "MIT parser/check logic is a candidate for selective borrowing with attribution.",
+      "sourceId": "s6",
+      "sourceUrl": "https://github.com/kolkov/ccdiag/blob/main/LICENSE",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.84
+    },
+    {
+      "id": "e11",
+      "entity": "claude-code-transcripts",
+      "signalType": "claude_jsonl_to_html",
+      "observation": "claude-code-transcripts converts Claude Code JSON or JSONL session files to mobile-friendly HTML, with local/json/all commands and local discovery under ~/.claude/projects.",
+      "possibleImplication": "Borrow static HTML archive and source-session discovery patterns.",
+      "sourceId": "s7",
+      "sourceUrl": "https://github.com/simonw/claude-code-transcripts/blob/main/README.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.98
+    },
+    {
+      "id": "e12",
+      "entity": "claude-code-transcripts",
+      "signalType": "static_report",
+      "observation": "The converter emits index.html and paginated page-*.html files; --json retains the original session file and --include-agents includes agent session files in an all-session archive.",
+      "possibleImplication": "Use static pages and optional raw JSON retention without Phoenix or OTel infrastructure.",
+      "sourceId": "s7",
+      "sourceUrl": "https://github.com/simonw/claude-code-transcripts/blob/main/README.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.96
+    },
+    {
+      "id": "e13",
+      "entity": "claude-code-transcripts",
+      "signalType": "license",
+      "observation": "The fetched README license badge and LICENSE identify Apache-2.0.",
+      "possibleImplication": "Apache-2.0 HTML conversion patterns are candidates for borrowing with attribution.",
+      "sourceId": "s8",
+      "sourceUrl": "https://github.com/simonw/claude-code-transcripts/blob/main/LICENSE",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.84
+    },
+    {
+      "id": "e14",
+      "entity": "Agent Skills",
+      "signalType": "skill_format",
+      "observation": "The Agent Skills specification requires a skill directory containing SKILL.md with YAML frontmatter and Markdown; name and description are required, while license, compatibility, metadata, and allowed-tools are optional.",
+      "possibleImplication": "Ingest SKILL.md metadata and body as versioned skill artifacts rather than assuming a mandatory version field.",
+      "sourceId": "s9",
+      "sourceUrl": "https://agentskills.io/specification",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.96
+    },
+    {
+      "id": "e15",
+      "entity": "Agent Skills",
+      "signalType": "skill_versioning",
+      "observation": "The specification defines metadata as an arbitrary string-to-string map and shows metadata.version in an example, but does not require a version field.",
+      "possibleImplication": "Use metadata.version when present and supplement it with immutable content provenance.",
+      "sourceId": "s9",
+      "sourceUrl": "https://agentskills.io/specification",
+      "sourceType": "official",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.98
+    },
+    {
+      "id": "e16",
+      "entity": "Vercel skills CLI",
+      "signalType": "skill_versioning",
+      "observation": "Vercel skills lock format v3 stores skillFolderHash, a GitHub tree SHA for the skill folder, and skillPath in ~/.agents/.skill-lock.json.",
+      "possibleImplication": "Tree SHA is an exact skill-content identity suitable for longitudinal reports.",
+      "sourceId": "s10",
+      "sourceUrl": "https://github.com/vercel-labs/skills/blob/main/AGENTS.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.97
+    },
+    {
+      "id": "e17",
+      "entity": "Vercel skills CLI",
+      "signalType": "update_detection",
+      "observation": "The documented check/update flow fetches the latest GitHub tree SHA, compares it with skillFolderHash, and reinstalls changed skills.",
+      "possibleImplication": "Track semver and hash independently and emit an update event when either changes.",
+      "sourceId": "s10",
+      "sourceUrl": "https://github.com/vercel-labs/skills/blob/main/AGENTS.md",
+      "sourceType": "repo",
+      "dateObserved": "2026-09-13",
+      "confidence": "high",
+      "relevance": 0.95
+    }
+  ],
+  "proofGaps": [
+    {
+      "description": "No fetched primary source in this pass establishes a Codex rollout JSONL community parser license or stable API.",
+      "attemptedQueries": [
+        "Codex rollout JSONL parser GitHub OpenAI sessions"
+      ]
+    },
+    {
+      "description": "Agent Skills and Vercel CLI license files were not fetched within the ten-fetch budget.",
+      "attemptedQueries": [
+        "SKILL.md version tracking agent skill evaluation GitHub",
+        "agent skills benchmark SKILL.md eval over time GitHub open source"
+      ]
+    },
+    {
+      "description": "No fetched primary source documents a ready-made Claude/Codex JSONL-to-ATIF exporter; Harbor documents the target schema and validator only.",
+      "attemptedQueries": [
+        "Agent Trajectory Interchange Format ATIF Claude Code JSONL converter"
+      ]
+    },
+    {
+      "description": "No fetched primary source establishes a shared longitudinal SKILL.md evaluator artifact schema.",
+      "attemptedQueries": [
+        "agent skills benchmark SKILL.md eval over time GitHub open source"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "s1",
+      "url": "https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md",
+      "title": "Harbor RFC 0001 ATIF",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s2",
+      "url": "https://github.com/harbor-framework/harbor/blob/main/LICENSE",
+      "title": "Harbor LICENSE",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s3",
+      "url": "https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md",
+      "title": "OpenInference Semantic Conventions",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s4",
+      "url": "https://github.com/Arize-ai/openinference",
+      "title": "Arize-ai/openinference README and repository metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s5",
+      "url": "https://github.com/kolkov/ccdiag",
+      "title": "ccdiag README and repository metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s6",
+      "url": "https://github.com/kolkov/ccdiag/blob/main/LICENSE",
+      "title": "ccdiag LICENSE",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s7",
+      "url": "https://github.com/simonw/claude-code-transcripts/blob/main/README.md",
+      "title": "claude-code-transcripts README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s8",
+      "url": "https://github.com/simonw/claude-code-transcripts/blob/main/LICENSE",
+      "title": "claude-code-transcripts LICENSE",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s9",
+      "url": "https://agentskills.io/specification",
+      "title": "Agent Skills Specification",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s10",
+      "url": "https://github.com/vercel-labs/skills/blob/main/AGENTS.md",
+      "title": "Vercel skills CLI update and lockfile design",
+      "sourceType": "repo",
+      "fetched": true
+    }
+  ]
+}

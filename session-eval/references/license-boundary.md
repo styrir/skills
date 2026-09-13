@@ -1,8 +1,10 @@
 # License boundary
 
+Canonical authority: [specification](../docs/specification.md), SE-PRIVACY-001 and SE-DEC-007/010/011 in [decisions](../docs/decisions.md). Preserved findings and exact source artifacts: [Phoenix dossier](../docs/sources/phoenix/index.md), [competitor dossier](../docs/sources/competitors/index.md), [format dossier](../docs/sources/session-formats/index.md). Statements below are pinned research findings, not current legal clearance or dependency approval.
+
 Not legal advice. This is an engineering split so agents do not vendor the wrong tree.
 
-Phoenix clone: `~/Code/refs/observability/phoenix` HEAD `e127482` (arize-phoenix 12.11.0 / release 20.11.0). Root `LICENSE` is Elastic License 2.0. `IP_NOTICE` names US patents 11,315,043 and 11,615,345.
+Phoenix clone inspected by the original scout: `~/Code/refs/observability/phoenix`, reported HEAD `e127482`. The historical version labels are inconsistent (arize-phoenix 12.11.0 / release 20.11.0); use the inspected revision, not those labels, as source identity. Root `LICENSE` is Elastic License 2.0. `IP_NOTICE` names US patents 11,315,043 and 11,615,345.
 
 ## Do not
 

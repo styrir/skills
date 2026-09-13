@@ -1,0 +1,74 @@
+{
+  "sources": [
+    {
+      "id": "s1",
+      "url": "https://github.com/harbor-framework/harbor/blob/main/rfcs/0001-trajectory-format.md",
+      "title": "Harbor RFC 0001: Agent Trajectory Interchange Format (ATIF) Specification",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s2",
+      "url": "https://github.com/harbor-framework/harbor/blob/main/LICENSE",
+      "title": "Harbor LICENSE",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s3",
+      "url": "https://github.com/Arize-ai/openinference/blob/main/spec/semantic_conventions.md",
+      "title": "OpenInference Semantic Conventions",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s4",
+      "url": "https://github.com/Arize-ai/openinference",
+      "title": "Arize-ai/openinference README and repository metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s5",
+      "url": "https://github.com/kolkov/ccdiag",
+      "title": "ccdiag Claude Code Session Analyzer, Recovery & Proxy Tool",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s6",
+      "url": "https://github.com/kolkov/ccdiag/blob/main/LICENSE",
+      "title": "ccdiag LICENSE",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s7",
+      "url": "https://github.com/simonw/claude-code-transcripts/blob/main/README.md",
+      "title": "claude-code-transcripts README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s8",
+      "url": "https://github.com/simonw/claude-code-transcripts/blob/main/LICENSE",
+      "title": "claude-code-transcripts LICENSE",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s9",
+      "url": "https://agentskills.io/specification",
+      "title": "Agent Skills Specification",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s10",
+      "url": "https://github.com/vercel-labs/skills/blob/main/AGENTS.md",
+      "title": "Vercel skills CLI update and lockfile design notes",
+      "sourceType": "repo",
+      "fetched": true
+    }
+  ]
+}

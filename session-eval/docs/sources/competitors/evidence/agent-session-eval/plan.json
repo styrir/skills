@@ -1,0 +1,10 @@
+{
+  "mode": "styrir_plus",
+  "facets": [
+    "Claude Code / Codex / Pi session file formats and community analyzers",
+    "agent eval harnesses (Inspect AI, Harbor, Terminal-Bench, SWE-bench harnesses)",
+    "HTML session reports / dashboards",
+    "skill evaluation / skill version tracking",
+    "contradiction sweep (harness-specific vs general)"
+  ]
+}

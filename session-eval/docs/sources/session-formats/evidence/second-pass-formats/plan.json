@@ -1,0 +1,31 @@
+{
+  "question": "What is the ATIF / OpenInference coding-agent trajectory format, which OSS tools parse Claude Code JSONL (~/.claude/projects/*.jsonl), Codex rollout JSONL, and how do projects track agent skill versions over time?",
+  "objective": "Borrowable parsers and skill-version tracking after local session-format inventory",
+  "lane": "exploratory_topic",
+  "forceMode": "styrir_plus",
+  "mode": "styrir_plus",
+  "facets": [
+    "ATIF spec and Harbor validator",
+    "OpenInference agent/tool span conventions",
+    "OSS Claude Code JSONL analyzers and static HTML converters",
+    "SKILL.md metadata/version and exact-content update tracking",
+    "OTel/server dependency versus file-native contradiction sweep"
+  ],
+  "budgets": {
+    "maxSearchQueries": 10,
+    "maxFetches": 10,
+    "searchQueriesRun": 8,
+    "sourcesFetched": 10
+  },
+  "sourceScope": [
+    "official docs",
+    "GitHub repositories",
+    "OpenInference/ATIF specs"
+  ],
+  "deliverables": [
+    "named parser/spec license and input format",
+    "Phoenix/OTel dependency note",
+    "compact borrow list",
+    "proof gaps"
+  ]
+}

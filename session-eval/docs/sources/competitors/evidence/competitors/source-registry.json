@@ -1,0 +1,102 @@
+{
+  "sources": [
+    {
+      "id": "s1",
+      "url": "https://langfuse.com/docs.md",
+      "title": "Langfuse Overview (Markdown)",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s2",
+      "url": "https://langwatch.ai/docs/introduction",
+      "title": "LangWatch Introduction",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s3",
+      "url": "https://github.com/comet-ml/opik",
+      "title": "Comet Opik repository README and metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s4",
+      "url": "https://raw.githubusercontent.com/promptfoo/promptfoo/main/README.md",
+      "title": "Promptfoo repository README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s5",
+      "url": "https://github.com/vibrantlabsai/ragas",
+      "title": "Ragas repository README and metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s6",
+      "url": "https://github.com/truera/trulens",
+      "title": "TruLens repository README and metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s7",
+      "url": "https://docs.helicone.ai/references/open-source",
+      "title": "Helicone Open Source documentation",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s8",
+      "url": "https://www.traceloop.com/docs/openllmetry/introduction",
+      "title": "OpenLLMetry Introduction",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s9",
+      "url": "https://github.com/wandb/weave",
+      "title": "W&B Weave repository README and metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s10",
+      "url": "https://github.com/evidentlyai/evidently",
+      "title": "Evidently repository README and metadata",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s11",
+      "url": "local:///Users/brooks/Code/refs/observability/phoenix/README.md",
+      "title": "Arize Phoenix README at pinned local clone e127482",
+      "sourceType": "local",
+      "fetched": true
+    },
+    {
+      "id": "s12",
+      "url": "local:///Users/brooks/Code/refs/observability/phoenix/LICENSE",
+      "title": "Arize Phoenix LICENSE at pinned local clone e127482",
+      "sourceType": "local",
+      "fetched": true
+    },
+    {
+      "id": "s13",
+      "url": "local:///Users/brooks/Code/refs/memory-systems/honcho/.venv/lib/python3.11/site-packages/langfuse-3.14.5.dist-info/METADATA",
+      "title": "Installed Langfuse Python SDK 3.14.5 package metadata",
+      "sourceType": "local",
+      "fetched": true
+    },
+    {
+      "id": "s14",
+      "url": "local:///Users/brooks/Code/refs/observability/phoenix/docs/phoenix/resources/frequently-asked-questions/langfuse-alternative-arize-phoenix-vs-langfuse-key-differences.mdx",
+      "title": "Phoenix local Langfuse comparison page",
+      "sourceType": "local",
+      "fetched": true
+    }
+  ]
+}

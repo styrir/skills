@@ -1,0 +1,71 @@
+{
+  "schema": "session-eval-source-provenance/v1",
+  "artifacts": [
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/session-formats/report.md",
+      "snapshot_path": "evidence/session-formats/report.md",
+      "sha256": "fbad2edde1501ff4c985c971c61635831b0e2af7bf8ca0ffe34f4d63ae7fdb30",
+      "bytes": 14462
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/session-formats/summary.txt",
+      "snapshot_path": "evidence/session-formats/summary.txt",
+      "sha256": "dd8d3825a3f8be9da222308fb4c9cf4dc854026456b9fd4da050b54ffcad2e39",
+      "bytes": 396
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-formats/architecture.txt",
+      "snapshot_path": "evidence/second-pass-formats/architecture.txt",
+      "sha256": "9bd879f6a006124e58fe114994ad5a8de698f9c396b50b84bf8a3b0bab44f630",
+      "bytes": 464
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-formats/contradiction-sweep.md",
+      "snapshot_path": "evidence/second-pass-formats/contradiction-sweep.md",
+      "sha256": "52d9e133e385c8f36b9d20161ddbf5030a2b5af47fde3b28df22b661519c14b8",
+      "bytes": 1820
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-formats/gate-result.json",
+      "snapshot_path": "evidence/second-pass-formats/gate-result.json",
+      "sha256": "4f174f89805c189d23007392be1e6130498d0690f54010abe956a4395e77bdc3",
+      "bytes": 139
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-formats/ledger.json",
+      "snapshot_path": "evidence/second-pass-formats/ledger.json",
+      "sha256": "7ffdc2dc2551fec06a118891eb16abe77a27f9e08d166a7c5b42034da4943fdc",
+      "bytes": 13876
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-formats/plan.json",
+      "snapshot_path": "evidence/second-pass-formats/plan.json",
+      "sha256": "58ebf61f34f58377391b7e8c1584a226459e8379f5524ba0fda2555c330b1e2e",
+      "bytes": 1108
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-formats/report.md",
+      "snapshot_path": "evidence/second-pass-formats/report.md",
+      "sha256": "fba7202ac3caf91ef4f8cff2df338ad5f438a8e1a218359fdfd4e7efc8367212",
+      "bytes": 27169
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-formats/request.json",
+      "snapshot_path": "evidence/second-pass-formats/request.json",
+      "sha256": "feceb0d1ddd44322bcd3b7b8688256c74451550259c952429660f47f9c4b6e81",
+      "bytes": 745
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-formats/source-registry.json",
+      "snapshot_path": "evidence/second-pass-formats/source-registry.json",
+      "sha256": "c240d9ef3b6b97463ed0a24626e3f25a2d26a4661a952e83466856bd207a33c8",
+      "bytes": 2155
+    },
+    {
+      "original_path": "/Users/brooks/Code/agent-ops/.styrir/runs/2026-09-13-session-obs/second-pass-formats/summary.txt",
+      "snapshot_path": "evidence/second-pass-formats/summary.txt",
+      "sha256": "6c130dcd8cb0140b6d131dc1b6fa671c331cbe647b0bb76ec1e2da7185f51161",
+      "bytes": 506
+    }
+  ]
+}

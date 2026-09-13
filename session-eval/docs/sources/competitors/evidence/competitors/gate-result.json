@@ -1,0 +1,16 @@
+{
+  "gateStatus": "pass",
+  "blockers": [],
+  "warnings": [
+    {
+      "severity": "warning",
+      "code": "possibly_bundled_observation",
+      "message": "Some observations may bundle multiple facts."
+    }
+  ],
+  "counts": {
+    "entries": 83,
+    "sources": 14,
+    "proofGaps": 10
+  }
+}

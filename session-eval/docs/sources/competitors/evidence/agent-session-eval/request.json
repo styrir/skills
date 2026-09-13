@@ -1,0 +1,15 @@
+{
+  "question": "What open-source tools analyze coding-agent session logs or transcripts (Claude Code, Codex, Pi, Grok, OpenHands) and produce evals, traces, or HTML reports, including skill/tool performance over time?",
+  "objective": "Find borrowable OSS for ingesting harness session files and tracking agent/skill quality over time",
+  "lane": "exploratory_topic",
+  "requiresCurrentInfo": true,
+  "requiresOfficialSources": true,
+  "contestedOrHighStakes": false,
+  "needsClaimLevelValidation": false,
+  "needsReportArtifact": false,
+  "estimatedSearchQueries": 8,
+  "estimatedFetches": 8,
+  "preferredProviders": ["tavily", "exa"],
+  "sourceScope": ["official docs", "GitHub repos", "licenses"],
+  "forceMode": "styrir_plus"
+}

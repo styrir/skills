@@ -1,0 +1,74 @@
+{
+  "sources": [
+    {
+      "id": "s1",
+      "url": "https://inspect.aisi.org.uk/eval-logs.html",
+      "title": "Log Files \u2013 Inspect",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s2",
+      "url": "https://inspect.aisi.org.uk/log-viewer.html",
+      "title": "Log Viewer \u2013 Inspect",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s3",
+      "url": "https://github.com/UKGovernmentBEIS/inspect_ai/blob/main/README.md",
+      "title": "UKGovernmentBEIS/inspect_ai README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s4",
+      "url": "https://github.com/harbor-framework/harbor",
+      "title": "harbor-framework/harbor README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s5",
+      "url": "https://www.harborframework.com/docs/run-jobs/results-and-artifacts",
+      "title": "Harbor Artifact Collection",
+      "sourceType": "official",
+      "fetched": true
+    },
+    {
+      "id": "s6",
+      "url": "https://github.com/OpenHands/benchmarks",
+      "title": "OpenHands/benchmarks README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s7",
+      "url": "https://github.com/OpenHands/trajectory-visualizer",
+      "title": "OpenHands Trajectory Visualizer README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s8",
+      "url": "https://github.com/SWE-bench/experiments/blob/main/checklist.md",
+      "title": "SWE-bench Experiments Submission Checklist",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s9",
+      "url": "https://github.com/IcodeNet/eval-dashboards",
+      "title": "IcodeNet/eval-dashboards README",
+      "sourceType": "repo",
+      "fetched": true
+    },
+    {
+      "id": "s10",
+      "url": "https://raw.githubusercontent.com/IcodeNet/eval-dashboards/main/docs/artifact-format.md",
+      "title": "eval-dashboards Artifact Format",
+      "sourceType": "repo",
+      "fetched": true
+    }
+  ]
+}

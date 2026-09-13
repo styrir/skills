@@ -1,6 +1,7 @@
 .DS_Store
 .ask/
 .pipeline/
+.styrir/
 .omc/
 ask/backups/
 *.log
