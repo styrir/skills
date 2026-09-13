@@ -11,6 +11,7 @@ Canonical source for Styrir-owned agent skills shared across Claude Code, Codex,
 | `productivity/meetcal-operations/` | Inspect and operate MeetCal database, audit-log, backup, and calendar-sync state. |
 | `red-teaming/macos-app-defender-lab/` | Authorized macOS application self-red-team and hardening workflow. |
 | `repo-readiness-synthesis/` | Evidence-grounded repository readiness reviews across tasks, commits, sessions, and documentation. |
+| `session-eval/` | Ingest Claude/Codex/Pi/Grok/OMP session logs, run a code-first check catalog, track Styrir skill activations, emit a self-contained HTML trend report. |
 | `research/` | Canonical research-tool skills for Context7, Deep Search, provider setup, report delivery, paper writing, and related retrieval workflows. |
 | `setja/` | TypeScript context-construction and agent-injection layer with templates and harness adapters. |
 | `styrir-init/` | Safely initialize or adopt a repository with local Git, Beads/Dolt, GitNexus, DOX guidance, and the Styrir generated-workspace layout. |
