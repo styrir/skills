@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://styrir.local/session-eval/schemas/atif-v1.8.schema.json",
+  "$comment": "Independent JSON Schema encoding of Harbor ATIF-v1.8 at commit 88fdbc9d42e907c0414654f041ece5eaf798f538 (Apache-2.0). Derived from rfcs/0001-trajectory-format.md and src/harbor/models/trajectories/. Not a copy of Harbor Python sources. extra=forbid is additionalProperties:false on each model object.",
+  "title": "ATIF-v1.8 Trajectory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "agent", "steps"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "ATIF-v1.0",
+        "ATIF-v1.1",
+        "ATIF-v1.2",
+        "ATIF-v1.3",
+        "ATIF-v1.4",
+        "ATIF-v1.5",
+        "ATIF-v1.6",
+        "ATIF-v1.7",
+        "ATIF-v1.8"
+      ]
+    },
+    "session_id": { "type": "string" },
+    "trajectory_id": { "type": "string" },
+    "agent": { "$ref": "#/$defs/agent" },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "notes": { "type": "string" },
+    "final_metrics": { "$ref": "#/$defs/final_metrics" },
+    "continued_trajectory_ref": { "type": "string" },
+    "extra": { "type": "object" },
+    "subagent_trajectories": {
+      "type": "array",
+      "items": { "$ref": "#" }
+    }
+  },
+  "$defs": {
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "model_name": { "type": "string" },
+        "tool_definitions": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "extra": { "type": "object" }
+      }
+    },
+    "final_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "total_prompt_tokens": { "type": "integer", "minimum": 0 },
+        "total_completion_tokens": { "type": "integer", "minimum": 0 },
+        "total_cached_tokens": { "type": "integer", "minimum": 0 },
+        "total_cost_usd": { "type": "number", "minimum": 0 },
+        "total_steps": { "type": "integer", "minimum": 0 },
+        "extra": { "type": "object" }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prompt_tokens": { "type": "integer", "minimum": 0 },
+        "completion_tokens": { "type": "integer", "minimum": 0 },
+        "cached_tokens": { "type": "integer", "minimum": 0 },
+        "cost_usd": { "type": "number", "minimum": 0 },
+        "prompt_token_ids": {
+          "type": "array",
+          "items": { "type": "integer" }
+        },
+        "completion_token_ids": {
+          "type": "array",
+          "items": { "type": "integer" }
+        },
+        "logprobs": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "extra": { "type": "object" }
+      }
+    },
+    "tool_call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_call_id", "function_name", "arguments"],
+      "properties": {
+        "tool_call_id": { "type": "string" },
+        "function_name": { "type": "string" },
+        "arguments": { "type": "object" },
+        "extra": { "type": "object" }
+      }
+    },
+    "subagent_trajectory_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "trajectory_id": { "type": "string" },
+        "session_id": { "type": "string" },
+        "trajectory_path": { "type": "string" },
+        "extra": { "type": "object" }
+      },
+      "anyOf": [
+        { "required": ["trajectory_id"] },
+        { "required": ["trajectory_path"] }
+      ]
+    },
+    "image_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_type", "path"],
+      "properties": {
+        "media_type": {
+          "type": "string",
+          "enum": ["image/jpeg", "image/png", "image/gif", "image/webp"]
+        },
+        "path": { "type": "string" }
+      }
+    },
+    "audio_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_type", "path"],
+      "properties": {
+        "media_type": {
+          "type": "string",
+          "enum": [
+            "audio/wav",
+            "audio/mpeg",
+            "audio/mp4",
+            "audio/aac",
+            "audio/ogg",
+            "audio/flac",
+            "audio/webm",
+            "audio/aiff"
+          ]
+        },
+        "path": { "type": "string" },
+        "duration_sec": { "type": "number", "minimum": 0 }
+      }
+    },
+    "content_part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["text", "image", "audio"] },
+        "text": { "type": "string" },
+        "source": {
+          "oneOf": [
+            { "$ref": "#/$defs/image_source" },
+            { "$ref": "#/$defs/audio_source" }
+          ]
+        }
+      }
+    },
+    "observation_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_call_id": { "type": "string" },
+        "content": {
+          "oneOf": [
+            { "type": "string" },
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/content_part" }
+            }
+          ]
+        },
+        "subagent_trajectory_ref": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/subagent_trajectory_ref" }
+        },
+        "extra": { "type": "object" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["results"],
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/observation_result" }
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step_id", "source", "message"],
+      "properties": {
+        "step_id": { "type": "integer", "minimum": 1 },
+        "timestamp": { "type": "string" },
+        "source": { "type": "string", "enum": ["system", "user", "agent"] },
+        "model_name": { "type": "string" },
+        "reasoning_effort": {
+          "oneOf": [{ "type": "string" }, { "type": "number" }]
+        },
+        "message": {
+          "oneOf": [
+            { "type": "string" },
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/content_part" }
+            }
+          ]
+        },
+        "reasoning_content": { "type": "string" },
+        "tool_calls": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tool_call" }
+        },
+        "observation": { "$ref": "#/$defs/observation" },
+        "metrics": { "$ref": "#/$defs/metrics" },
+        "is_copied_context": { "type": "boolean" },
+        "llm_call_count": { "type": "integer", "minimum": 0 },
+        "extra": { "type": "object" }
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "task": "skills-2ol.10",
+  "requirement": "SE-EXPORT-001",
+  "observed_spec": "ATIF-v1.8",
+  "commit": "88fdbc9d42e907c0414654f041ece5eaf798f538",
+  "repository": "https://github.com/harbor-framework/harbor",
+  "source_rfc": "https://github.com/harbor-framework/harbor/blob/88fdbc9d42e907c0414654f041ece5eaf798f538/rfcs/0001-trajectory-format.md",
+  "license": {
+    "name": "Apache-2.0",
+    "url": "https://github.com/harbor-framework/harbor/blob/88fdbc9d42e907c0414654f041ece5eaf798f538/LICENSE",
+    "inspected": "Apache License Version 2.0, January 2004"
+  },
+  "reference_model_root": "src/harbor/models/trajectories/",
+  "inspected_files": [
+    "rfcs/0001-trajectory-format.md",
+    "LICENSE",
+    "src/harbor/models/trajectories/__init__.py",
+    "src/harbor/models/trajectories/trajectory.py",
+    "src/harbor/models/trajectories/agent.py",
+    "src/harbor/models/trajectories/step.py",
+    "src/harbor/models/trajectories/tool_call.py",
+    "src/harbor/models/trajectories/observation.py",
+    "src/harbor/models/trajectories/observation_result.py",
+    "src/harbor/models/trajectories/metrics.py",
+    "src/harbor/models/trajectories/final_metrics.py",
+    "src/harbor/models/trajectories/content.py",
+    "src/harbor/models/trajectories/subagent_trajectory_ref.py"
+  ],
+  "vendoring": "Independent JSON Schema and exporter. Harbor Pydantic sources are not copied and are not a runtime dependency. Field names, required flags, extra=forbid, sequential step_id, tool_call reference integrity, agent-only fields, and v1.7/v1.8 additions were read from the pinned RFC and models.",
+  "runtime_dependency": "none"
+}

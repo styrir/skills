@@ -12,7 +12,7 @@ Primary stream wins. Sidecars enrich. Never replace the stream with SQLite-only 
 
 Claude community parsers (study, do not become the skill): `kolkov/ccdiag` (MIT) and `simonw/claude-code-transcripts` (Apache-2.0).
 
-Optional export: after pairing, assemble **one ATIF-shaped JSON document per session** (Harbor RFC 0001: `schema_version`, `agent{name,version}`, `steps[]`). Do not map each JSONL line to an ATIF root. Pin schema version. OTel/OpenInference projection is a later optional lane.
+Optional export: after pairing, assemble **one ATIF-shaped JSON document per session** (Harbor RFC 0001: `schema_version`, `agent{name,version}`, `steps[]`). Do not map each JSONL line to an ATIF root. Pin schema version. OTel/OpenInference projection is a later optional lane. Implementation and pin status: [ATIF export](#atif-export-se-export-001).
 
 ## Adapter table
 
@@ -81,3 +81,37 @@ Usage and cost are evidence-bound. A missing field is `unknown`, never zero. Rec
 The skill registry records skill identity, path, content digest, and optional version. Activation evidence records source and confidence: Grok `prompt_context.json` and an explicit loaded path are stronger than a textual/tool-argument mention. A historical loaded digest is distinct from the current on-disk digest; never attribute current content to a past load without activation evidence. Missing or edited skills remain explicit evidence gaps.
 
 Unknown historical source fields (fields not recognized by the parser) may be retained in private source/normalized state for future adapter upgrades, but raw unknown values are not exported. Redact before serializing receipts or HTML: user/assistant text, tool arguments/results, `credential_pin` hashes, system prompts, terminal output, secrets, and any other sensitive payload. Store `source_path` plus line/ordinal/event range and sha256 of the raw line only when a check needs later audit. HTML gets escaped labels, structural links, and counts, not payloads. Do not POST raw session contents anywhere. Opt-in judges follow the `references/judge-contract.md` contract ([link](judge-contract.md)) and may receive only explicitly authorized redacted evidence references; provider disclosure requires explicit scope and recipient approval. Do not mutate source files.
+
+## ATIF export (SE-EXPORT-001)
+
+Status: implemented by the standalone exporter `../scripts/atif.py`. This is optional after ingest; it is not a core completion blocker and does not require Phoenix, OpenTelemetry, or a Harbor runtime.
+
+Pinned upstream schema: Harbor ATIF-v1.8 at commit `88fdbc9d42e907c0414654f041ece5eaf798f538`. RFC: `rfcs/0001-trajectory-format.md`. Reference models: `src/harbor/models/trajectories/`. License: Apache-2.0 (`LICENSE` at that commit). The independent JSON Schema and provenance live at `../schemas/atif-v1.8.schema.json` and `../schemas/atif-v1.8.provenance.json`. Harbor Python sources are not vendored.
+
+Contract:
+
+- One redacted ATIF document per normalized `styrir-session-eval/v0` run. Downstream modules consume the ingest receipt; this exporter does not invent a second session schema.
+- Preserve source chronology (`steps[].step_id` sequential from 1 in ingest turn order), native identity (`session_id` / `extra.source.native_identity`), observed lineage (`extra.lineage`), and paired `tool_calls[].tool_call_id` ↔ `observation.results[].source_call_id` structure.
+- `agent.name` is the harness; `agent.version` is the ingest parser version, never a SKILL.md semver.
+- Known usage/cost is copied into `final_metrics` only when numeric. Harbor `total_prompt_tokens` is all prompt tokens including cached: emit it only when `input`, `cache_read`, and `cache_create` are all known, summing those disjoint receipt fields, or using `input` alone when a harness total already includes cache (`total == input + output` and cache is a nonempty subset of input). If any prompt-side component is unknown, omit `total_prompt_tokens` rather than treating `input` as the Harbor total. `total_cached_tokens` is cache hits (`cache_read`) only. Unknown metrics are omitted and recorded under `final_metrics.extra.token_coverage` / `prompt_token_basis` / `extra.unknowns`; they are never zeroed.
+- Message text, tool arguments, and observation content are omitted. `message` is the empty string required by ATIF; `arguments` is `{}`; result `content` is absent. Each omission is marked in `extra.redaction`.
+- Repeat export of an unchanged receipt reuses the immutable writer and does not rewrite history.
+
+Public API:
+
+- `to_atif(run) -> dict`
+- `export_atif(receipt, out) -> (documents, manifest_path)`
+- `validate_atif(document) -> list[str]` (pinned official constraints; empty means pass)
+- `validate_with_harbor(document, harbor_src=None)` (optional official Pydantic `Trajectory` when a Harbor checkout at the pin is supplied)
+- CLI: `python3 session-eval/scripts/atif.py --receipt receipt.json --out DIR [--validate] [--harbor-src HARBOR_CHECKOUT]`
+
+Parent-runnable official validation:
+
+```bash
+python3 session-eval/scripts/atif.py --receipt receipt.json --out DIR --validate
+HARBOR_SRC=/path/to/harbor@88fdbc9d42e907c0414654f041ece5eaf798f538 \
+  python3 session-eval/scripts/atif.py --receipt receipt.json --out DIR --validate --harbor-src "$HARBOR_SRC"
+python3 session-eval/scripts/smoke_atif.py
+```
+
+The smoke exercises Claude and Grok synthetic samples through ingest then export. It fails if raw synthetic secrets/markup appear, if unknown metrics become zero, if step ids are unordered, or if a second export changes history.
