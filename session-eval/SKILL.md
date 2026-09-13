@@ -7,7 +7,7 @@ description: Portable contract for ingesting coding-agent session logs (Claude C
 
 Intended first-party Styrir skill. Local files in, redacted JSON receipts plus one self-contained HTML dossier out through a shared local CLI; no Phoenix server, no OTel collector, no cloud account, and no OMP-native workflow or Grok server prerequisite.
 
-The shared CLI and adapters are not implemented yet. This entry specifies their portable interface and behavior; it is not completion evidence. Optional host integrations may launch or discover the same local interface, but must not become a second evaluator.
+The portable ingest implementation is `python3 session-eval/scripts/ingest.py`. It is stdlib-only, reads explicit local `--path` inputs (or the documented host roots), accepts repeatable `--harness` filters and `--since`, and writes the normalized `styrir-session-eval/v0` receipt under `--out` (default `.styrir/runs/<date>-session-eval`). Ingest emits no report, evaluator, judge, ATIF, or history artifacts; downstream stages consume the same receipt.
 
 [Canonical index](docs/index.md) · [authoritative specification](docs/specification.md)
 
@@ -25,7 +25,17 @@ Do not use this to stand up Arize Phoenix, ship traces to a vendor, or score Wor
 
 ## Portable implementation interface
 
-The eventual implementation is one shared local CLI that accepts local session paths or a time window, harness filters, skill roots, check selection, and an output root (the defaults are below). It reads primary streams directly, enriches them with sidecars, and emits the redacted `receipt.json` plus self-contained `report.html` described by `references/report-contract.md`. The executable name is intentionally not fixed here; do not infer or invent one.
+Run the shared local ingest command from the skills repository (or pass absolute paths):
+
+```bash
+python3 session-eval/scripts/ingest.py \
+  --harness claude --path /path/to/session.jsonl \
+  --out /path/to/output
+```
+
+Repeat `--harness`/`--path` as needed, or omit both to use the canonical discovery roots and all five adapters. `--since` defaults to the last seven days by file mtime; pass `--since all` for an explicitly bounded historical fixture. The command never requires OMP native workflow or a Grok server and records missing requested harnesses as coverage gaps.
+
+The CLI accepts local session paths or a time window, harness filters, skill roots, and an output root. It reads primary streams directly, enriches them with sidecars, and emits the redacted `styrir-session-eval/v0` `receipt.json` described by `references/report-contract.md`; report, checks, judges, and history remain downstream stages. The executable is intentionally a small stdlib entry point so optional host integrations invoke this same interface rather than implementing a second evaluator.
 
 The portable path is an ordinary terminal invocation on local files. A missing requested harness is a coverage gap; a missing implementation dependency fails explicitly. OMP-native workflow and Grok server integrations are optional conveniences that may invoke this same interface, never prerequisites or alternate evaluator logic.
 
@@ -51,7 +61,7 @@ The first-party root in `SKILL_ROOTS` defaults to `~/Code/skills` and is configu
 5. **Report.** Write immutable `receipt.json` (machine) and `report.html` (human) per `references/report-contract.md`. Reuse workgraph-dossier rules: one self-contained HTML file, no CDN, no JS required, stable element ids, malformed events counted not dropped. Keep prior receipts in history; never overwrite a receipt for a changed source snapshot.
 6. **Correct.** For each failing skill or recurring check, propose a concrete SKILL.md or adapter change. Do not edit third-party skills in `~/.omp/agent/skills` or `.omp/skills`. First-party fixes belong in `~/Code/skills`.
 
-Implementation is pending. Until the shared CLI and adapters exist, manual source inspection with repo tools (Read/Grep/Glob) may inspect samples and record evidence gaps, but hand-authoring `receipt.json` and `report.html` is not equivalent runtime behavior and must not be reported as conformance.
+Implementation is present at `session-eval/scripts/ingest.py`; until downstream checks and rendering exist, manual source inspection with repo tools (Read/Grep/Glob) and the ingest CLI's redacted receipt are not conformance evidence for those later requirements.
 
 ## Normalized record
 

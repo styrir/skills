@@ -2,7 +2,7 @@
 
 [Canonical index](../docs/index.md) · [authoritative specification](../docs/specification.md) · [normalized record](../SKILL.md)
 
-This is the adapter/reference contract for the eventual portable shared local CLI. The implementation is pending; these format notes are not evidence that adapters or conformance runs exist. Claude, Codex, Pi, Oh My Pi, and Grok are input formats, not mandatory execution hosts. OMP-native workflow and a Grok server are optional integrations, never prerequisites or alternate evaluator logic.
+This is the adapter/reference contract for the portable shared local CLI at `../scripts/ingest.py`. Claude, Codex, Pi, Oh My Pi, and Grok are input formats, not mandatory execution hosts. OMP-native workflow and a Grok server are optional integrations, never prerequisites or alternate evaluator logic.
 
 The Required `SE-PORT-001`, `SE-INGEST-001`, `SE-INGEST-002`, `SE-EVIDENCE-001`, `SE-PRIVACY-001`, `SE-USAGE-001`, and `SE-SKILL-001` rows in [the specification](../docs/specification.md) are the source of truth. This reference refines those rows and the normalized record in [SKILL.md](../SKILL.md); it cannot silently override them.
 
