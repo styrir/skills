@@ -220,10 +220,10 @@ The configured first-party root defaults to `~/Code/skills`, but may differ on a
 
 | id | class | kind | channel | applicable when | pass when | fail when | unknown when |
 |---|---|---|---|---|---|---|---|
-| `claim.command_outcome` | hard_fail | code | behavior | An unambiguous recorded claim identifies a command/check and attempt | Final recorded outcome of that exact attempt agrees with the claim | Final recorded outcome of that exact attempt contradicts the claim | Claim, attempt association or final outcome is ambiguous/missing |
-| `claim.completion` | hard_fail | code | behavior | A recorded completion claim identifies its acceptance checks | Every identified check has a successful final attempt before the claim | An identified check's final attempt before the claim failed with no recorded recovery | Acceptance-check set, attempt association or final outcomes cannot be established |
+| `claim.command_outcome` | hard_fail | code | behavior | An unambiguous command/check outcome claim is recorded | Final recorded outcome of the identified command/attempt agrees with the claim | Final recorded outcome of the identified command/attempt contradicts the claim | Command identity, attempt association or final outcome is ambiguous/missing |
+| `claim.completion` | hard_fail | code | behavior | An unambiguous completion claim is recorded | Every identified acceptance check has a successful final attempt before the claim | An identified check's final attempt before the claim failed with no recorded recovery | Acceptance-check set, attempt association or final outcomes cannot be established |
 
-`not_applicable` when no such claim is present.
+`not_applicable` only when complete-enough source coverage establishes that no such claim occurred. A recorded completion claim remains applicable even when it names no acceptance checks; that missing set yields `unknown` and keeps the hard gate unresolved. Ambiguous claim detection also remains `unknown`, not `not_applicable`.
 
 Claims are taken from recorded assistant/user-visible completion or command-status language. Deterministic extraction must use a versioned set of explicit markers/patterns and unambiguous command/attempt references; ambiguous prose is `unknown`, not invented semantic certainty. A prior failure followed by a recorded successful retry is not a contradiction of a later success claim. `is_error=false` alone does not establish exit zero or fulfillment of all acceptance checks; require the outcome appropriate to the claim. Do not shell out, consult current Git status, or assume every error anywhere in the snapshot contradicts completion.
 

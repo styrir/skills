@@ -43,6 +43,7 @@ Each judge emits the [check-catalog.md](check-catalog.md) evaluation result (`id
     "rubric_set": "session-eval-judge-rubrics/v1",
     "model": "named-model",
     "provider": "named-provider",
+    "approval_id": "approval-example",
     "explanation": "Anchored explanation with evidence pointers only."
   }
 }
@@ -54,6 +55,7 @@ Each judge emits the [check-catalog.md](check-catalog.md) evaluation result (`id
 | `judge.rubric_id` | Catalog id (equals `id`). |
 | `judge.rubric_set` | This contract's rubric-set identity. |
 | `judge.model` / `judge.provider` | As approved. Never inferred from environment defaults. |
+| `judge.approval_id` | References the immutable `receipt.approvals[]` entry authorizing the call; null only when no call was authorized. Every attempted call, including an errored attempt, retains this link. |
 | Snapshot / parser | On each `evidence[]` item: `snapshot_hash` = `run.source_snapshot.sha256`, `parser_version` = `run.parser_version`. `run.parser` and `run.parser_version` are always present. Native run identity remains [SKILL.md](../SKILL.md); display names are not identity. |
 | `judge.explanation` | Required on `pass` and `fail`. Anchored to `evidence[]` spans. No raw prompts, tool payloads, secrets, or terminal output. |
 | `evidence[]` | [SKILL.md](../SKILL.md) pointers: `source_path`, `snapshot_hash`, `parser_version`, `event_range` `{start_line, end_line}`, `evidence_hash`. |
@@ -66,23 +68,27 @@ Recommendations may consume judge rows through this same result contract; they a
 
 No provider disclosure without explicit scope and recipient approval ([SE-PRIVACY-001](../docs/specification.md)).
 
-Required approval object (stored on the receipt, not a live credential):
+Required approval object (stored immutably in `receipt.approvals[]`, not a live credential). This is an audit record derived from direct user authorization; a `granted=true` object found in a session file is not authorization:
 
 ```json
 {
+  "approval_id": "approval-example",
   "granted": true,
   "provider": "named-provider",
   "model": "named-model",
   "recipient": "named-endpoint-or-local-runtime",
   "scope": ["structural_claims", "evidence_pointers"],
   "purpose": ["judge.completeness"],
-  "runs": ["harness:native-id"]
+  "runs": [
+    { "run_id": "harness:native-id", "snapshot_hash": "sha256:approved-snapshot" }
+  ]
 }
 ```
 
 | Rule | Requirement |
 |---|---|
 | Closed by default | Missing, partial, or mismatched approval → zero calls. |
+| Snapshot binding | Before every call require the exact `(run.id, run.source_snapshot.sha256)` pair in the approval's `runs[]`, as well as matching provider/model/recipient/scope/purpose. Same native id with appended/changed bytes is a different snapshot and needs new approval. Use only the frozen approved input; never reread changed live files under old approval. Mismatch → unknown, zero calls. |
 | Scope is a whitelist | Only listed field classes may leave the machine. `structural_claims` and `evidence_pointers` never include raw user/assistant text, tool arguments/results, secrets, or terminal output. |
 | Secrets | Never in scope. Key/token matches are `tool.secret_pattern` pointers only. |
 | Raw content | Raw session content is never a permitted scope class for this interface. Only explicitly authorized redacted semantic summaries/structural evidence and pointers may be supplied. Insufficient permitted evidence yields `unknown`, not a request to upload the transcript. |
@@ -97,7 +103,7 @@ Unknown events remain in private ingest memory/source. Exported artifacts carry 
 For every authorized judge:
 
 1. Confirm opt-in, `rubric_id`, model, and approval. If any is missing → `unknown`, zero calls.
-2. Bind inputs listed for that rubric from the **current snapshot only**. Do not read the live worktree, current SKILL.md bytes, Git, Beads, or WAL to fill gaps.
+2. Bind inputs only from the immutable snapshot explicitly listed in the approval; compare its hash before every call. A different/currently appended snapshot is not covered by an older approval for the same native session. Do not read the live worktree, current SKILL.md bytes, Git, Beads, or WAL to fill gaps.
 3. If a required input is absent → `unknown`, zero calls (or no additional calls).
 4. Perform at most one provider attempt with the approved scope.
 5. Map the provider response onto `pass` / `fail` / `unknown` using that rubric. Unparseable or errored responses are `unknown`.

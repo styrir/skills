@@ -85,6 +85,7 @@ Documented `styrir-session-eval/v0` shape (future implementation):
   "infra_ok": true,
   "feedback_outcome": null,
   "redaction": { "policy": "default-local", "applied": true },
+  "approvals": [],
   "runs": [],
   "skills": [],
   "checks": [],
@@ -110,6 +111,7 @@ Documented `styrir-session-eval/v0` shape (future implementation):
 | `proof_gaps[]` | Including `claim.historical_policy_unavailable` when SE-CHECK-002 cannot reconstruct Git/Beads/WAL policy. |
 | `provenance.snapshots[]` | `{native_identity, source_path, sha256, parser, parser_version}` for each consumed snapshot. |
 | `redaction.policy` | Comparison key. Default `default-local`. |
+| `approvals[]` | Immutable audit objects defined by [judge approval](judge-contract.md#approval-and-privacy): approval_id, granted, provider, model, recipient, scope, purpose and exact run_id/snapshot_hash pairs. Empty when no approval was granted. Every attempted judge call retains judge.approval_id pointing here, including provider failures; no credentials/raw payloads. A changed snapshot requires a new approval, not an edited historical entry. |
 
 Sort keys for determinism when emitting test fixtures. Do not read the wall clock inside a golden-file test; production reports may stamp `generated_at`.
 
@@ -124,6 +126,7 @@ A quality delta is allowed only when **all** compatibility gates pass. Otherwise
 | Catalog | `catalog_id` (and check-id set) equal on baseline and candidate |
 | Cohort | Explicit population: same harness filter or documented intersection; skill-revision comparisons name both digests |
 | Redaction | `redaction.policy` equal |
+| Measurement semantics | Receipt `schema` and per-harness `run.parser`/`run.parser_version` are equal for the compared population. Missing or mixed incompatible parser versions are unmeasurable. No implicit migration: re-evaluate both sides with the same semantics into new immutable receipts before comparing; preserve originals. |
 
 ```json
 {
@@ -137,6 +140,18 @@ A quality delta is allowed only when **all** compatibility gates pass. Otherwise
   "catalog": {
     "baseline": "session-eval-check-catalog/v1",
     "candidate": "session-eval-check-catalog/v1",
+    "compatible": true
+  },
+  "measurement": {
+    "baseline_schema": "styrir-session-eval/v0",
+    "candidate_schema": "styrir-session-eval/v0",
+    "parsers": [
+      {
+        "harness": "claude",
+        "baseline": { "name": "claude", "version": "v1" },
+        "candidate": { "name": "claude", "version": "v1" }
+      }
+    ],
     "compatible": true
   },
   "redaction_policy": {
@@ -159,7 +174,7 @@ A quality delta is allowed only when **all** compatibility gates pass. Otherwise
 | Denominator | Pair observations by explicit comparable subject/check identity; pass→fail is regressed, fail→pass improved, equal decided states equal. Unmatched or unknown observations are unmeasurable. Across different session populations show labeled aggregate rates/counts with coverage, not invented one-to-one outcomes. Infra failures are separate. |
 | Missing usage | Token/cost metrics are `unmeasurable`, never a zero delta. |
 | Two skill revisions | Compare by content digest, not display name. Historical loaded digest remains distinct from current on-disk digest. |
-| Incompatible catalogs or cohorts | `compatible=false`; `counts.unmeasurable` covers the attempted population; no silent quality delta. |
+| Incompatible catalogs, cohorts or measurement semantics | `compatible=false`; `counts.unmeasurable` covers the attempted population; no silent quality delta. A parser-only change is not evidence of skill improvement/regression. |
 
 ## Recommendations
 
