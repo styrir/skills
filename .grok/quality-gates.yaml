@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "gates": [
+    {
+      "id": "session-eval-compile",
+      "command": ["python3", "-m", "compileall", "-q", "session-eval"],
+      "mandatory": true,
+      "cwd": ".",
+      "timeout_sec": 120,
+      "when": {
+        "changed_globs": ["session-eval/**"]
+      }
+    }
+  ]
+}

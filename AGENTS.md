@@ -18,6 +18,7 @@ This repository is the source of truth for agent skills shared across Claude Cod
 | If you are working on... | Read |
 |---|---|
 | Beads, task planning, `.pipeline/` artifacts, shared Dolt operation, handoffs, or closeout | `docs/agent-guidance/planning-beads-and-handoffs.md` |
+| WorkGraph shipping Test / `.grok/quality-gates.yaml` | `.grok/quality-gates.yaml` (JSON-compatible YAML 1.2; `workgraph-quality-gates`) |
 | Adding, moving, or validating durable documentation | `docs/AGENTS.md` |
 | The Ask skill or provider/model routing | `ask/SKILL.md`, `ask/providers.json`, and the relevant files under `ask/scripts/` |
 | Setja runtime, CLI, package, adapters, or bundled skill | `setja/AGENTS.md`, then the relevant entry contract or source files |
