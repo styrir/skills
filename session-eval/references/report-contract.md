@@ -221,6 +221,8 @@ Each row:
 
 Judge rows MAY inform a recommendation through the shared check result; they are optional inputs, not required ([requirement-map.md](../docs/requirement-map.md)). Deterministic findings are sufficient.
 
+Implementation status (`skills-2ol.8` only): `session-eval/scripts/recommend.py` implements `recommend_receipt(receipt, *, out=None, first_party_root=None, adapter_root=None) -> (receipt, Path)` plus CLI `--receipt`/`--out`. Deterministic check rows are sufficient; judge rows are optional consumers of the same evaluation-result object and never trigger provider calls. Multiple unbound first-party activations are an explicit limitation, not list-order attribution. Recurrence counts distinct failed runs. Adapter actions require a recorded adapter path already present on the receipt; none is invented. Finding pointers must be complete and belong to the containing run; unknown material findings remain limitations; structural hashes that are not canonical 64-hex are rejected without reexport. Generating recommendations does not write sources, skills, or adapters. Focused smoke: `session-eval/scripts/smoke_recommend.py`. This paragraph does not record a passing run.
+
 ## report.html
 
 One self-contained offline file. Inline CSS. No network. No session prompt text, tool payloads, secrets, or terminal output. No JavaScript required. Openable as a `file:` document.
