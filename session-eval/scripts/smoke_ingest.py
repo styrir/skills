@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 import stat
 import subprocess
 import sys
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 SCRIPT = Path(__file__).with_name("ingest.py")
+EVALUATE = Path(__file__).with_name("evaluate.py")
 SECRET = "SMOKE_SECRET_7f4c9e"
 MARKUP = "<script>alert('smoke')</script>"
 
@@ -32,6 +34,26 @@ def write_jsonl(path: Path, rows: list[Any], malformed: bool = False) -> None:
                 handle.write(json.dumps(row, sort_keys=True) + "\n")
         if malformed:
             handle.write("{not-json\n")
+
+
+def write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def write_grok_dir(path: Path, files: dict[str, Any]) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    for name, payload in files.items():
+        target = path / name
+        if payload is None:
+            write_text(target, "")
+        elif isinstance(payload, list):
+            write_jsonl(target, payload)
+        elif isinstance(payload, (dict, list)):
+            write_text(target, json.dumps(payload))
+        else:
+            write_text(target, str(payload))
+    return path
 
 
 def invoke(
@@ -69,6 +91,46 @@ def one_run(receipt: dict[str, Any], harness: str, native_id: str | None = None)
     if len(candidates) != 1:
         raise AssertionError(f"expected one {harness} run {native_id!r}, got {len(candidates)}")
     return candidates[0]
+
+
+def omp_rows(session_id: str) -> list[Any]:
+    return [
+        {"type": "session", "version": 3, "id": session_id, "timestamp": "2026-09-13T10:03:00Z"},
+        {
+            "type": "message",
+            "id": f"{session_id}-message",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "toolCall", "id": f"{session_id}-call", "name": "shell", "arguments": {"cmd": "true"}}],
+            },
+        },
+        {
+            "type": "message",
+            "id": f"{session_id}-result",
+            "message": {"role": "toolResult", "toolCallId": f"{session_id}-call", "isError": False, "content": "ok"},
+        },
+        {"type": "custom", "customType": "session_end", "timestamp": "2026-09-13T10:03:02Z"},
+    ]
+
+
+def snapshot_path(out: Path, index: int, item: dict[str, Any]) -> Path:
+    path = str(item.get("path") or "")
+    role = str(item.get("role") or "primary")
+    digest = str(item.get("sha256") or "")
+    basename = Path(path).name or "source"
+    token = hashlib.sha256(f"{path}:{role}".encode("utf-8")).hexdigest()[:12]
+    return out / ".private" / "snapshots" / digest / f"{index:03d}-{token}-{basename}"
+
+
+def invoke_evaluate(receipt_path: Path, out: Path) -> dict[str, Any]:
+    command = [sys.executable, str(EVALUATE), "--receipt", str(receipt_path), "--out", str(out)]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise AssertionError(f"evaluate failed ({result.returncode}): {result.stderr.strip()}")
+    exported = out / "receipt.json"
+    if not exported.is_file():
+        raise AssertionError(f"evaluate did not write receipt: {result.stdout!r} {result.stderr!r}")
+    return json.loads(exported.read_text(encoding="utf-8"))
 
 
 def main() -> int:
@@ -281,6 +343,10 @@ def main() -> int:
         assert one_run(first, "codex", "codex-1")["lineage"]["children"] == ["codex-child"]
         assert one_run(first, "codex", "codex-1")["lineage"]["attempt"] == {"id": "attempt-1", "number": 2}
         assert one_run(first, "codex", "codex-1")["lineage"]["continuation_of"] == "codex-previous"
+        codex_run = one_run(first, "codex", "codex-1")
+        codex_kinds = [item["kind"] for item in codex_run["lifecycle"]["evidence"]]
+        assert "type:task_complete" in codex_kinds
+        assert not any("[REDACTED]" in str(kind) for kind in codex_kinds)
         assert one_run(first, "pi", "pi-1")["lifecycle"]["state"] == "unknown"
         assert one_run(first, "pi", "pi-1")["tokens"]["total"] == "unknown"
         ended = one_run(first, "omp", "omp-ended")
@@ -289,6 +355,8 @@ def main() -> int:
         assert ended["lifecycle"]["state"] == "terminal"
         ended_calls = [call for turn in ended["turns"] for call in turn["tool_calls"]]
         assert len(ended_calls) == 1 and ended_calls[0]["id"] == "omp-call" and ended_calls[0]["status"] == "ok"
+        assert ended["source_path"] == str(omp_ended.resolve())
+        assert ended["source_snapshot"]["files"][0]["path"] == str(omp_ended.resolve())
         assert not ended["checks"]
         assert unpaired["lifecycle"]["state"] == "terminal"
         pairing = next(check for check in unpaired["checks"] if check["id"] == "tool.unpaired")
@@ -299,6 +367,7 @@ def main() -> int:
         assert live["lifecycle"]["state"] == "live"
         assert not live["checks"]
         grok_run = one_run(first, "grok", "grok-primary")
+        assert grok_run["source_path"] == str((grok / "chat_history.jsonl").resolve())
         assert grok_run["model"] == "grok-model"
         assert grok_run["tokens"]["total"] == 30
         grok_calls = [call for turn in grok_run["turns"] for call in turn["tool_calls"]]
@@ -310,24 +379,65 @@ def main() -> int:
         assert skill["current_on_disk_digest"] != skill["digest"]
         assert skill["digest_relation"] == "historical_differs_from_current"
 
-        retained = Path(__file__).resolve().parents[2] / ".styrir" / "runs" / "session-eval-implementation" / "skills-2ol.2" / "round2-fixtures"
-        assert retained.is_dir()
-        _, stale_after = invoke(root / "round2-after-stale", [retained / "stale-sidecars"], ["grok"])
+        grok_cases = root / "grok-cases"
+        stale_dir = write_grok_dir(
+            grok_cases / "stale-sidecars",
+            {
+                "chat_history.jsonl": None,
+                "events.jsonl": [{"type": "turn_started", "params": {"sessionId": "primary-A"}}],
+                "updates.jsonl": None,
+                "summary.json": {"info": {"id": "stale-B", "ended_at": "2026-09-13T10:00:00Z"}},
+                "usage.json": {"sessionId": "stale-B", "session": {"totalTokens": 999}},
+            },
+        )
+        _, stale_after = invoke(root / "round2-after-stale", [stale_dir], ["grok"])
         stale_run = one_run(stale_after, "grok", "primary-A")
         assert stale_run["lifecycle"]["state"] == "unknown"
         assert stale_run["tokens"]["total"] == "unknown"
         assert len(stale_after["coverage"]["coverage_gaps"]) >= 2
-        _, overlap_after = invoke(root / "round2-after-overlap", [retained / "overlap"], ["grok"])
+        overlap_dir = write_grok_dir(
+            grok_cases / "overlap",
+            {
+                "chat_history.jsonl": [
+                    {"type": "assistant", "tool_calls": [{"id": "X", "name": "read", "arguments": {}}]},
+                    {"type": "tool_result", "tool_call_id": "X", "is_error": False},
+                ],
+                "events.jsonl": [{"type": "turn_started", "params": {"sessionId": "primary-A"}}],
+                "updates.jsonl": [
+                    {"method": "session/update", "params": {"sessionId": "primary-A", "update": {"sessionUpdate": {"type": "tool_call", "toolCallId": "X", "title": "read"}}}},
+                    {"method": "session/update", "params": {"sessionId": "primary-A", "update": {"sessionUpdate": {"type": "tool_call_update", "toolCallId": "X", "status": "completed"}}}},
+                ],
+            },
+        )
+        _, overlap_after = invoke(root / "round2-after-overlap", [overlap_dir], ["grok"])
         overlap_run = one_run(overlap_after, "grok", "primary-A")
         overlap_calls = [call for turn in overlap_run["turns"] for call in turn["tool_calls"]]
         assert len(overlap_calls) == 1 and overlap_calls[0]["id"] == "X" and overlap_calls[0]["status"] == "ok"
         assert len(overlap_calls[0]["evidence"]) >= 4 and not overlap_run["checks"]
-        _, order_after = invoke(root / "round2-after-order", [retained / "result-before-call"], ["grok"])
+        order_dir = write_grok_dir(
+            grok_cases / "result-before-call",
+            {
+                "chat_history.jsonl": [{"type": "tool_result", "tool_call_id": "X", "is_error": False}],
+                "events.jsonl": [{"type": "turn_started", "params": {"sessionId": "primary-A"}}],
+                "updates.jsonl": [{"method": "session/update", "params": {"sessionId": "primary-A", "update": {"sessionUpdate": {"type": "tool_call", "toolCallId": "X", "title": "read"}}}}],
+                "summary.json": {"info": {"id": "primary-A", "ended_at": "2026-09-13T10:00:00Z"}},
+            },
+        )
+        _, order_after = invoke(root / "round2-after-order", [order_dir], ["grok"])
         order_run = one_run(order_after, "grok", "primary-A")
         order_calls = [call for turn in order_run["turns"] for call in turn["tool_calls"]]
         assert len(order_calls) == 1 and order_calls[0]["id"] == "X" and order_calls[0]["status"] == "ok"
         assert not order_run["checks"] and not any(turn["errors"] for turn in order_run["turns"])
-        summary_cohort = retained / "summary-cohort-conflict"
+        summary_cohort = write_grok_dir(
+            grok_cases / "summary-cohort-conflict",
+            {
+                "chat_history.jsonl": [{"type": "user", "content": "Synthetic request"}],
+                "events.jsonl": None,
+                "updates.jsonl": None,
+                "summary.json": {"info": {"id": "summary-A"}},
+                "usage.json": {"sessionId": "usage-B", "session": {"totalTokens": 888}},
+            },
+        )
         _, summary_cohort_after = invoke(root / "round3-after-summary-cohort", [summary_cohort], ["grok"])
         summary_cohort_run = one_run(summary_cohort_after, "grok", "summary-A")
         assert summary_cohort_run["tokens"]["total"] == "unknown"
@@ -337,8 +447,14 @@ def main() -> int:
             and gap.get("reason") == "grok sidecar identity mismatch; sidecar ignored"
             for gap in summary_cohort_after["coverage"]["coverage_gaps"]
         )
-
-        primary_cohort = retained / "primary-cohort-conflict"
+        primary_cohort = write_grok_dir(
+            grok_cases / "primary-cohort-conflict",
+            {
+                "chat_history.jsonl": None,
+                "events.jsonl": [{"type": "turn_started", "params": {"sessionId": "primary-A"}}],
+                "updates.jsonl": [{"method": "session/update", "params": {"sessionId": "primary-B", "update": {"sessionUpdate": {"type": "tool_call", "toolCallId": "B-call", "title": "read"}}}}],
+            },
+        )
         _, primary_cohort_after = invoke(root / "round3-after-primary-cohort", [primary_cohort], ["grok"])
         primary_cohort_runs = runs_by_harness(primary_cohort_after, "grok")
         assert len(primary_cohort_runs) == 1
@@ -350,8 +466,14 @@ def main() -> int:
             and "primary identity conflict" in gap.get("reason", "")
             for gap in primary_cohort_after["coverage"]["coverage_gaps"]
         )
-
-        no_summary_conflict = retained / "no-summary-sidecar-conflict"
+        no_summary_conflict = write_grok_dir(
+            grok_cases / "no-summary-sidecar-conflict",
+            {
+                "chat_history.jsonl": [{"type": "user", "content": "Synthetic no-summary conflict"}],
+                "signals.json": {"sessionId": "sidecar-B", "status": "terminal"},
+                "usage.json": {"sessionId": "sidecar-A", "session": {"inputTokens": 100, "totalTokens": 111}},
+            },
+        )
         _, no_summary_conflict_after = invoke(root / "round3-after-no-summary-conflict", [no_summary_conflict], ["grok"])
         no_summary_conflict_run = runs_by_harness(no_summary_conflict_after, "grok")[0]
         assert no_summary_conflict_run["native_identity"] == "unknown"
@@ -363,14 +485,21 @@ def main() -> int:
             and "sidecar identity conflict" in gap.get("reason", "")
             for gap in no_summary_conflict_after["coverage"]["coverage_gaps"]
         )
-
-        no_summary_consistent = retained / "no-summary-sidecar-consistent"
+        no_summary_consistent = write_grok_dir(
+            grok_cases / "no-summary-sidecar-consistent",
+            {
+                "chat_history.jsonl": [{"type": "user", "content": "Synthetic no-summary consistent"}],
+                "signals.json": {"sessionId": "sidecar-A", "status": "live"},
+                "usage.json": {"sessionId": "sidecar-A", "session": {"inputTokens": 100, "totalTokens": 111}},
+            },
+        )
         _, no_summary_consistent_after = invoke(root / "round3-after-no-summary-consistent", [no_summary_consistent], ["grok"])
         no_summary_consistent_run = one_run(no_summary_consistent_after, "grok", "sidecar-A")
         assert no_summary_consistent_run["tokens"]["input"] == 100
         assert no_summary_consistent_run["tokens"]["total"] == 111
         assert no_summary_consistent_run["lifecycle"]["state"] == "live"
         assert not no_summary_consistent_after["coverage"]["coverage_gaps"]
+
 
         snapshots_first = {run["id"]: run["source_snapshot"]["sha256"] for run in first["runs"]}
         snapshots_repeated = {run["id"]: run["source_snapshot"]["sha256"] for run in repeated["runs"]}
@@ -451,6 +580,261 @@ def main() -> int:
         assert blocked_nested.returncode != 0
         assert not any(nested_escape.iterdir())
 
+        key_order = omp_dir / "loop-key-order.jsonl"
+        write_jsonl(
+            key_order,
+            [
+                {"type": "session", "version": 3, "id": "terminal-reset", "timestamp": "2026-09-14T03:00:00Z"},
+                {"type": "message", "id": "msg-0", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-0", "name": "read", "arguments": {"path": "synthetic.txt"}}]}},
+                {"type": "message", "id": "res-0", "message": {"role": "toolResult", "toolCallId": "call-0", "isError": True, "content": "synthetic missing file"}},
+                {"type": "message", "id": "msg-1", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-1", "name": "read", "arguments": {"path": "synthetic.txt"}}]}},
+                {"type": "message", "id": "res-1", "message": {"role": "toolResult", "toolCallId": "call-1", "isError": True, "content": "synthetic missing file"}},
+                {"type": "message", "id": "msg-2", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-2", "name": "read", "arguments": {"path": "synthetic.txt"}}]}},
+                {"type": "message", "id": "res-2", "message": {"role": "toolResult", "toolCallId": "call-2", "isError": True, "content": "synthetic missing file"}},
+                {"type": "custom", "customType": "session_end", "timestamp": "2026-09-14T03:01:00Z"},
+                {"type": "message", "id": "msg-3", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-3", "name": "read", "arguments": {"path": "synthetic.txt"}}]}},
+                {"type": "message", "id": "res-3", "message": {"role": "toolResult", "toolCallId": "call-3", "isError": True, "content": "synthetic missing file"}},
+            ],
+        )
+        key_out = root / "key-order-out"
+        key_summary, key_receipt = invoke(key_out, [key_order], ["omp"])
+        key_run = one_run(key_receipt, "omp", "terminal-reset")
+        key_public = (key_out / "receipt.json").read_text(encoding="utf-8")
+        assert "key-order" not in key_public
+        assert "[REDACTED]" in key_run["source_path"]
+        assert key_run["source_path"] != str(key_order.resolve())
+        key_files = key_run["source_snapshot"]["files"]
+        assert len(key_files) == 1 and key_files[0]["role"] == "primary"
+        key_snap = snapshot_path(key_out, 0, key_files[0])
+        assert key_snap.is_file() and key_snap.read_bytes() == key_order.read_bytes()
+        for turn in key_run["turns"]:
+            assert turn["source_path"] == key_run["source_path"]
+            for call in turn["tool_calls"]:
+                assert call["source_path"] == key_run["source_path"]
+                if call.get("result_source_path"):
+                    assert call["result_source_path"] == key_run["source_path"]
+        for item in key_run["lifecycle"]["evidence"]:
+            assert item["source_path"] == key_run["source_path"]
+        key_eval = invoke_evaluate(Path(key_summary["receipt"]), root / "key-order-eval")
+        key_eval_run = one_run(key_eval, "omp", "terminal-reset")
+        parse_check = next(check for check in key_eval_run["checks"] if check["id"] == "ingest.parse_error")
+        assert parse_check["status"] == "pass"
+        assert not any(
+            "unreadable frozen snapshot" in str(err)
+            for err in (key_eval.get("coverage") or {}).get("evaluation_errors") or []
+        )
+
+        collision_dir = root / "collision" / "omp"
+        collision_a = collision_dir / "loop-key-order.jsonl"
+        collision_b = collision_dir / "loop-key-other.jsonl"
+        write_jsonl(collision_a, omp_rows("collision-a"))
+        write_jsonl(collision_b, omp_rows("collision-b"))
+        collision_out = root / "collision-out"
+        _, collision_receipt = invoke(collision_out, [collision_dir], ["omp"])
+        collision_runs = runs_by_harness(collision_receipt, "omp")
+        assert len(collision_runs) == 2
+        collision_paths = {run["id"]: run["source_path"] for run in collision_runs}
+        assert len(set(collision_paths.values())) == 2
+        collision_public = (collision_out / "receipt.json").read_text(encoding="utf-8")
+        assert "key-order" not in collision_public and "key-other" not in collision_public
+        for run in collision_runs:
+            item = run["source_snapshot"]["files"][0]
+            snap = snapshot_path(collision_out, 0, item)
+            native = run["native_identity"]["id"]
+            source = collision_a if native == "collision-a" else collision_b
+            assert snap.is_file() and snap.read_bytes() == source.read_bytes()
+            assert item["role"] == "primary"
+
+        long_dir = root / "long" / "omp"
+        long_prefix = "N" * 240
+        long_a = long_dir / f"{long_prefix}ONE.jsonl"
+        long_b = long_dir / f"{long_prefix}TWO.jsonl"
+        write_jsonl(long_a, omp_rows("long-a"))
+        write_jsonl(long_b, omp_rows("long-b"))
+        long_out = root / "long-out"
+        _, long_receipt = invoke(long_out, [long_dir], ["omp"])
+        long_runs = runs_by_harness(long_receipt, "omp")
+        assert len(long_runs) == 2
+        long_paths = [run["source_path"] for run in long_runs]
+        assert len(set(long_paths)) == 2
+        for run in long_runs:
+            item = run["source_snapshot"]["files"][0]
+            snap = snapshot_path(long_out, 0, item)
+            native = run["native_identity"]["id"]
+            source = long_a if native == "long-a" else long_b
+            assert snap.is_file() and snap.read_bytes() == source.read_bytes()
+
+        sidecar_dir = root / "loop-key-order-session"
+        sidecar_dir.mkdir(parents=True)
+        write_jsonl(
+            sidecar_dir / "chat_history.jsonl",
+            [
+                {"type": "assistant", "id": "grok-redact-message", "content": "ok", "tool_calls": [{"id": "grok-redact-call", "name": "shell", "arguments": {"cmd": "true"}}]},
+                {"type": "tool_result", "tool_call_id": "grok-redact-call", "is_error": False, "content": "ok"},
+            ],
+        )
+        write_jsonl(
+            sidecar_dir / "events.jsonl",
+            [{"type": "turn_started", "ts": "2026-09-13T10:05:00Z", "params": {"sessionId": "grok-redact", "turnId": "t1", "modelId": "grok-model"}}],
+        )
+        write_jsonl(
+            sidecar_dir / "updates.jsonl",
+            [{"timestamp": 1726221903, "method": "session/update", "params": {"sessionId": "grok-redact", "update": {"sessionUpdate": {"type": "turn_completed", "inputTokens": 5, "outputTokens": 2, "totalTokens": 7, "turnId": "t1"}}}, "_meta": {"totalTokens": 7}}],
+        )
+        (sidecar_dir / "summary.json").write_text(json.dumps({"info": {"id": "grok-redact", "cwd": str(root), "current_model_id": "grok-model", "created_at": "2026-09-13T10:05:00Z"}}), encoding="utf-8")
+        (sidecar_dir / "usage.json").write_text(json.dumps({"sessionId": "grok-redact", "session": {"inputTokens": 5, "outputTokens": 2, "totalTokens": 7}}), encoding="utf-8")
+        sidecar_out = root / "sidecar-out"
+        sidecar_summary, sidecar_receipt = invoke(sidecar_out, [sidecar_dir], ["grok"])
+        sidecar_run = one_run(sidecar_receipt, "grok", "grok-redact")
+        sidecar_public = (sidecar_out / "receipt.json").read_text(encoding="utf-8")
+        assert "key-order" not in sidecar_public
+        roles = {item["role"] for item in sidecar_run["source_snapshot"]["files"]}
+        assert "primary" in roles and "sidecar" in roles
+        exported_paths = [item["path"] for item in sidecar_run["source_snapshot"]["files"]]
+        assert len(exported_paths) == len(set(exported_paths))
+        raw_by_digest = {
+            hashlib.sha256((sidecar_dir / name).read_bytes()).hexdigest(): sidecar_dir / name
+            for name in ("chat_history.jsonl", "events.jsonl", "updates.jsonl", "summary.json", "usage.json")
+        }
+        for index, item in enumerate(sidecar_run["source_snapshot"]["files"]):
+            snap = snapshot_path(sidecar_out, index, item)
+            assert snap.is_file()
+            assert snap.read_bytes() == raw_by_digest[item["sha256"]].read_bytes()
+            assert item["path"].endswith(raw_by_digest[item["sha256"]].suffix)
+        sidecar_eval = invoke_evaluate(Path(sidecar_summary["receipt"]), root / "sidecar-eval")
+        sidecar_eval_run = one_run(sidecar_eval, "grok", "grok-redact")
+        sidecar_parse = next(check for check in sidecar_eval_run["checks"] if check["id"] == "ingest.parse_error")
+        assert sidecar_parse["status"] == "pass"
+        assert not any(
+            "unreadable frozen snapshot" in str(err)
+            for err in (sidecar_eval.get("coverage") or {}).get("evaluation_errors") or []
+        )
+
+        assert "key-order" not in blocked.stderr and "key-order" not in blocked_nested.stderr
+
+        secret_title = "sk_completeABCDEF"
+        secret_claude = root / "secret-label" / "session.jsonl"
+        write_jsonl(
+            secret_claude,
+            [
+                {
+                    "sessionId": "claude-secret-label",
+                    "timestamp": "2026-09-13T10:00:00Z",
+                    "type": "assistant",
+                    "title": secret_title,
+                    "message": {"id": "secret-message", "role": "assistant", "content": []},
+                },
+                {
+                    "sessionId": "claude-secret-label",
+                    "timestamp": "2026-09-13T10:00:01Z",
+                    "type": "result",
+                    "result": "ok",
+                },
+            ],
+        )
+        secret_out = root / "secret-label-out"
+        _, secret_receipt = invoke(secret_out, [secret_claude], ["claude"])
+        secret_run = one_run(secret_receipt, "claude", "claude-secret-label")
+        secret_public = (secret_out / "receipt.json").read_text(encoding="utf-8")
+        assert secret_title not in secret_public
+        assert "[REDACTED]" in secret_run["display_name"]
+        secret_kinds = [item["kind"] for item in secret_run["lifecycle"]["evidence"]]
+        assert "type:result" in secret_kinds
+        assert not any("[REDACTED]" in str(kind) for kind in secret_kinds)
+
+        def canonical(value: Any) -> str:
+            return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+        raw_manifest = [
+            {
+                "path": str(key_order.resolve()),
+                "role": "primary",
+                "sha256": hashlib.sha256(key_order.read_bytes()).hexdigest(),
+            }
+        ]
+        raw_hash = hashlib.sha256(canonical(raw_manifest).encode("utf-8")).hexdigest()
+        assert key_run["source_snapshot"]["sha256"] == raw_hash
+        public_hash = hashlib.sha256(canonical(key_run["source_snapshot"]["files"]).encode("utf-8")).hexdigest()
+        assert public_hash != raw_hash
+
+        look_dir = root / "alias-omp" / "omp"
+        ordinary_alias = look_dir / "plain.jsonl"
+        lookalike = look_dir / "plain#0123456789ab.jsonl"
+        write_jsonl(ordinary_alias, omp_rows("alias-plain"))
+        write_jsonl(lookalike, omp_rows("alias-lookalike"))
+        _, alias_receipt = invoke(root / "alias-out", [look_dir], ["omp"])
+        alias_runs = runs_by_harness(alias_receipt, "omp")
+        assert len(alias_runs) == 2
+        by_native = {run["native_identity"]["id"]: run for run in alias_runs}
+        assert by_native["alias-plain"]["source_path"] == str(ordinary_alias.resolve())
+        assert by_native["alias-lookalike"]["source_path"] != str(lookalike.resolve())
+        assert len({run["source_path"] for run in alias_runs}) == 2
+
+        def claude_anonymous(text: str) -> list[Any]:
+            return [
+                {"timestamp": "2026-09-13T10:00:00Z", "type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": text}]}},
+                {"timestamp": "2026-09-13T10:00:01Z", "type": "result", "result": "ok"},
+            ]
+
+        missing_a = root / "missing-native-a" / "session.jsonl"
+        missing_b = root / "missing-native-b" / "session.jsonl"
+        write_jsonl(missing_a, claude_anonymous("aaa"))
+        write_jsonl(missing_b, claude_anonymous("bbb"))
+        _, missing_native = invoke(root / "missing-native-out", [missing_a, missing_b], ["claude"])
+        missing_runs = runs_by_harness(missing_native, "claude")
+        assert len(missing_runs) == 2
+        missing_ids = {run["id"] for run in missing_runs}
+        assert len(missing_ids) == 2
+        assert all(":path:" in run["id"] for run in missing_runs)
+        assert all(run["native_identity"] == "unknown" for run in missing_runs)
+        _, missing_again = invoke(root / "missing-native-out2", [missing_a], ["claude"])
+        again_run = runs_by_harness(missing_again, "claude")[0]
+        assert again_run["id"] in missing_ids
+        snap_a = again_run["source_snapshot"]["sha256"]
+
+        write_jsonl(missing_a, claude_anonymous("aaa-changed"))
+        _, missing_changed = invoke(root / "missing-native-out3", [missing_a], ["claude"])
+        changed_anon = runs_by_harness(missing_changed, "claude")[0]
+        assert changed_anon["id"] == again_run["id"]
+        assert changed_anon["source_snapshot"]["sha256"] != snap_a
+
+        _, wrong_claude_as_omp = invoke(root / "wrong-claude-as-omp", [missing_a, missing_b], ["omp"])
+        assert wrong_claude_as_omp["coverage"]["missing_requested_inputs"]
+        assert wrong_claude_as_omp["coverage"]["missing_requested_inputs"][0]["harness"] == "omp"
+        assert not runs_by_harness(wrong_claude_as_omp, "omp")
+        assert not runs_by_harness(wrong_claude_as_omp, "claude")
+
+        def omp_anonymous(text: str) -> list[Any]:
+            return [
+                {
+                    "type": "message",
+                    "version": 3,
+                    "timestamp": "2026-09-13T10:03:00Z",
+                    "message": {"role": "assistant", "content": [{"type": "text", "text": text}]},
+                },
+                {"type": "custom", "customType": "session_end", "timestamp": "2026-09-13T10:03:02Z"},
+            ]
+
+        anon_omp_a = root / "anon-cred" / "sk_live_aaa.jsonl"
+        anon_omp_b = root / "anon-cred" / "sk_live_bbb.jsonl"
+        write_jsonl(anon_omp_a, omp_anonymous("aaa"))
+        write_jsonl(anon_omp_b, omp_anonymous("bbb"))
+        _, anon_omp = invoke(root / "anon-omp-out", [anon_omp_a, anon_omp_b], ["omp"])
+        anon_omp_runs = runs_by_harness(anon_omp, "omp")
+        assert len(anon_omp_runs) == 2
+        anon_omp_ids = {run["id"] for run in anon_omp_runs}
+        assert len(anon_omp_ids) == 2
+        assert all(run["id"].startswith("omp:path:") for run in anon_omp_runs)
+        assert all(run["native_identity"] == "unknown" for run in anon_omp_runs)
+        _, wrong_omp_as_claude = invoke(root / "wrong-omp-as-claude", [anon_omp_a, anon_omp_b], ["claude"])
+        assert wrong_omp_as_claude["coverage"]["missing_requested_inputs"]
+        assert wrong_omp_as_claude["coverage"]["missing_requested_inputs"][0]["harness"] == "claude"
+        assert not runs_by_harness(wrong_omp_as_claude, "claude")
+        assert not runs_by_harness(wrong_omp_as_claude, "omp")
+
+
+
+
         result = {
             "status": "pass",
             "cases": [
@@ -476,10 +860,27 @@ def main() -> int:
                 "usage deduplication and provenance",
                 "historical/current skill digest separation",
                 "redacted export with owner-only private state",
+                "credential-like-path loop-key-order.jsonl ingest and evaluate",
+                "path-redaction-collision distinct frozen bytes",
+                "long-path truncated identities stay distinct",
+                "ordinary unredacted source paths unchanged",
+                "downstream evaluate opens redacted primary and sidecar snapshots",
+                "private-guard symlink errors omit credential-like names",
+                "codex type:task_complete lifecycle kind preserved",
+                "untrusted sk_complete label redacts without a task_complete exception",
+                "raw snapshot hash independent of public path labels",
+                "alias-lookalike raw path does not collide with generated alias",
+                "missing-native path-hash ids stay distinct and survive byte change",
+                "clean-worktree synthetic grok fixtures without .styrir",
+                "wrong requested harness on Claude files is missing_requested_inputs",
+                "anonymous OMP credential-stem path-hash ids stay distinct",
+                "wrong requested harness on OMP files is missing_requested_inputs",
             ],
             "runs": len(first["runs"]),
             "malformed": first["coverage"]["malformed_count"],
         }
+        result["scenario_rows"] = [{"row": index + 1, "scenario": name} for index, name in enumerate(result["cases"])]
+        result["original_ingest_rows"] = 37
         print(json.dumps(result, sort_keys=True))
         return 0
 

@@ -26,7 +26,14 @@ from typing import Any, Iterable, Iterator, Sequence
 from urllib.parse import unquote
 
 UNKNOWN = "unknown"
+
+
+class AuthoredToken(str):
+    """Bounded ingester-authored metadata, not untrusted payload text."""
+
 PARSER_VERSION = "1.0.0"
+
+
 RECEIPT_SCHEMA = "session-eval-ingest/v1"
 PRIVATE_SCHEMA = "session-eval-private/v1"
 HARNESSES = ("claude", "codex", "pi", "omp", "grok")
@@ -217,6 +224,62 @@ def _safe_label(value: Any, limit: int = 240) -> str:
     text = re.sub(r"(?i)(?:sk|pk|token|secret|key)[-_][A-Za-z0-9._=-]{6,}", "[REDACTED]", text)
     text = re.sub(r"(?i)bearer\s+[A-Za-z0-9._=-]{8,}", "Bearer [REDACTED]", text)
     return text[:limit] if text else UNKNOWN
+
+
+_SOURCE_PATH_FINGERPRINT = 12
+_EXPORTED_ALIAS_RE = re.compile(r"#[0-9a-f]{" + str(_SOURCE_PATH_FINGERPRINT) + r"}")
+
+
+def _source_path_fingerprint(raw_path: str) -> str:
+    return sha256_text("source-path:" + raw_path)[:_SOURCE_PATH_FINGERPRINT]
+
+
+def _looks_like_exported_alias(path: str) -> bool:
+    return bool(_EXPORTED_ALIAS_RE.search(Path(path).name))
+
+
+def _export_source_path(raw_path: str) -> str:
+    """Public evidence pointer for one opened source path.
+
+    Ordinary paths that survive ``_safe_label`` and do not match the reserved
+    alias form are returned as-is.  Redacted, truncated, or alias-lookalike
+    raw paths receive a fingerprint of the canonical raw path.  A raw path
+    that already looks exported is never treated as a trusted alias.
+    """
+
+    labeled = _safe_label(raw_path)
+    if labeled == raw_path and not _looks_like_exported_alias(raw_path):
+        return raw_path
+    fingerprint = _source_path_fingerprint(raw_path)
+    original_suffix = Path(raw_path).suffix
+    extra = f"#{fingerprint}{original_suffix}"
+    stem = labeled
+    if original_suffix and stem.endswith(original_suffix):
+        stem = stem[: -len(original_suffix)]
+    budget = 240 - len(extra)
+    if budget < 1:
+        budget = 1
+    if len(stem) > budget:
+        stem = stem[:budget]
+    return f"{stem}{extra}"
+
+
+def _source_path_export_map(paths: Iterable[str]) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for raw in paths:
+        if raw not in mapping:
+            mapping[raw] = _export_source_path(raw)
+    return mapping
+
+
+def _rewrite_exported_paths(value: Any, mapping: dict[str, str]) -> Any:
+    if isinstance(value, str):
+        return mapping.get(value, value)
+    if isinstance(value, list):
+        return [_rewrite_exported_paths(item, mapping) for item in value]
+    if isinstance(value, dict):
+        return {key: _rewrite_exported_paths(item, mapping) for key, item in value.items()}
+    return value
 
 
 def _string(value: Any) -> str | None:
@@ -445,14 +508,14 @@ def _marker(data: dict[str, Any], scope: str = "generic") -> tuple[str | None, s
     terminal_markers = _SCOPED_TERMINAL_MARKERS.get(scope, _TERMINAL_MARKERS)
     for key, value in candidates:
         if value in terminal_markers:
-            return "terminal", f"{key}:{value}"
+            return "terminal", AuthoredToken(f"{key}:{value}")
     if data.get("ended") is True or data.get("is_ended") is True or data.get("isEnded") is True:
-        return "terminal", "ended.metadata"
+        return "terminal", AuthoredToken("ended.metadata")
     if any(data.get(key) not in (None, "") for key in ("ended_at", "endedAt", "end_time", "endTime")):
-        return "terminal", "ended.metadata"
+        return "terminal", AuthoredToken("ended.metadata")
     for key, value in candidates:
         if value in _LIVE_MARKERS:
-            return "live", f"{key}:{value}"
+            return "live", AuthoredToken(f"{key}:{value}")
     return None, None
 
 
@@ -874,7 +937,7 @@ def _add_lifecycle(state: dict[str, Any], record: SourceRecord, lifecycle_state:
     state["lifecycle"].append(
         {
             "state": lifecycle_state,
-            "kind": _safe_label(kind),
+            "kind": kind if isinstance(kind, AuthoredToken) else _safe_label(kind),
             "source_path": str(record.path),
             "line": record.line,
             "evidence_hash": record.raw_hash,
@@ -1225,7 +1288,7 @@ def _build_lifecycle(state: dict[str, Any], snapshot_hash: str) -> dict[str, Any
                 "snapshot_hash": snapshot_hash,
                 "parser_version": PARSER_VERSION,
                 "event_range": _event_range(last.line),
-                "kind": "eof_without_terminal",
+                "kind": AuthoredToken("eof_without_terminal"),
                 "evidence_hash": last.raw_hash,
             }
         )
@@ -1235,6 +1298,8 @@ def _build_lifecycle(state: dict[str, Any], snapshot_hash: str) -> dict[str, Any
 def _redact_structural(value: Any) -> Any:
     """Defensive final pass: only approved structural containers leave ingest."""
 
+    if isinstance(value, AuthoredToken):
+        return str(value)
     if isinstance(value, str):
         return _safe_label(value)
     if isinstance(value, list):
@@ -1245,14 +1310,20 @@ def _redact_structural(value: Any) -> Any:
 
 
 def _finalize_run(state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    snapshot_hash, manifest = _snapshot_manifest(state)
+    snapshot_hash, raw_manifest = _snapshot_manifest(state)
+    export_map = _source_path_export_map(item["path"] for item in raw_manifest)
+    public_manifest = [
+        {"path": export_map[item["path"]], "role": item["role"], "sha256": item["sha256"]}
+        for item in raw_manifest
+    ]
     lifecycle_state = _lifecycle_state(state)
     _finish_pairing(state, lifecycle_state == "terminal", snapshot_hash)
     tokens, usage_provenance = _usage_result(state)
+    primary_raw = str(next(path for path, role in state["files"] if role == "primary"))
     native_identity: Any
     if state["native_id"] is None:
         native_identity = UNKNOWN
-        local_id = f"{state['harness']}:{Path(next(iter(state['files']))[0]).stem}"
+        local_id = f"{state['harness']}:path:{sha256_text('run-path:' + primary_raw)[:16]}"
     else:
         native_identity = {
             "id": state["native_id"],
@@ -1273,11 +1344,15 @@ def _finalize_run(state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]
         "id": local_id,
         "harness": state["harness"],
         "native_identity": native_identity,
-        "display_name": _safe_label(state["display_name"] or Path(next(iter(state["files"]))[0]).stem),
+        "display_name": (
+            _safe_label(state["display_name"])
+            if state["display_name"]
+            else Path(export_map[primary_raw]).stem
+        ),
         "parser": state["parser"],
         "parser_version": PARSER_VERSION,
-        "source_path": str(next(path for path, role in state["files"] if role == "primary")),
-        "source_snapshot": {"sha256": snapshot_hash, "files": manifest},
+        "source_path": primary_raw,
+        "source_snapshot": {"sha256": snapshot_hash, "files": public_manifest},
         "started_at": state["started_at"] or UNKNOWN,
         "ended_at": state["ended_at"] or UNKNOWN,
         "cwd": _safe_label(state["cwd"] or UNKNOWN),
@@ -1305,16 +1380,19 @@ def _finalize_run(state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]
     cost_values = [candidate.value for candidate in state["cost"]]
     if cost_values:
         run["cost_usd"] = max(cost_values)
+    run = _rewrite_exported_paths(run, export_map)
     private = {
         "run_id": local_id,
         "snapshot_hash": snapshot_hash,
         "unknown_fields": state["unknowns"],
-        "source_manifest": manifest,
+        "source_manifest": public_manifest,
         # Kept only in memory until the exact opened bytes are persisted; the
         # ingest orchestrator removes this non-JSON field before ledger write.
+        # Tuples are keyed by the public pointer that the receipt exposes, not
+        # by looking up raw-path state with a display label.
         "source_blobs": [
-            (item["path"], item["role"], state["files"][(item["path"], item["role"])]["spool"])
-            for item in manifest
+            (export_map[item["path"]], item["role"], state["files"][(item["path"], item["role"])]["spool"])
+            for item in raw_manifest
         ],
     }
     return _redact_structural(run), private
@@ -2006,7 +2084,13 @@ def _grok_process_nested(state: dict[str, Any], record: SourceRecord) -> None:
         lifecycle_state, lifecycle_kind = _marker(payload, "grok")
         if lifecycle_state:
             suffix = f"{prefix}.{kind}" if prefix else kind
-            _add_lifecycle(state, record, lifecycle_state, f"primary.{suffix or 'marker'}:{lifecycle_kind}")
+            composed = f"primary.{suffix or 'marker'}:{lifecycle_kind}"
+            _add_lifecycle(
+                state,
+                record,
+                lifecycle_state,
+                AuthoredToken(composed) if isinstance(lifecycle_kind, AuthoredToken) else composed,
+            )
 
         meta = payload.get("_meta") if isinstance(payload.get("_meta"), dict) else payload.get("meta")
         if isinstance(meta, dict):
@@ -2102,7 +2186,7 @@ def _parse_grok(group: InputGroup) -> tuple[dict[str, Any], dict[str, Any]]:
         summary_record = _grok_sidecar_record(state, group, "summary.json", summary)
         if ended is not None:
             state["ended_at"] = _timestamp(ended)
-            _add_lifecycle(state, summary_record, "terminal", "summary.ended_metadata")
+            _add_lifecycle(state, summary_record, "terminal", AuthoredToken("summary.ended_metadata"))
         status = _first(info, "status", "state")
         if isinstance(status, str) and status.casefold() in {"live", "active", "running"}:
             _add_lifecycle(state, summary_record, "live", f"summary.status:{status.casefold()}")
@@ -2310,7 +2394,11 @@ def infer_harness(path: str | Path) -> str | None:
                         saw_omp_marker = True
                     if value.get("sessionId") or value.get("result"):
                         return "claude"
-                    if value.get("type") in {"assistant", "user", "system", "tool_result"}:
+                    record_type = value.get("type")
+                    message = value.get("message")
+                    if isinstance(message, dict) and record_type in {"assistant", "user", "system", "tool_result", "result"}:
+                        return "claude"
+                    if record_type in {"assistant", "user", "system", "tool_result", "reasoning"}:
                         return "grok"
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
             return None
@@ -2416,7 +2504,12 @@ def discover_groups(
         for inferred, candidate in candidates:
             if _under(candidate, exclude_path):
                 continue
-            harness_candidates = [inferred] if inferred in harnesses else list(harnesses) if not inferred else []
+            if inferred in harnesses:
+                harness_candidates = [inferred]
+            elif not inferred:
+                harness_candidates = list(harnesses)
+            else:
+                harness_candidates = []
             for harness in harness_candidates:
                 if harness == "grok":
                     group = _grok_group(candidate, since, exclude_path)
@@ -2671,12 +2764,19 @@ def _write_private_snapshot(
     root = private_root / "snapshots"
     _secure_dir(private_root)
     _secure_dir(root)
-    blobs = {(path, role): spool for path, role, spool in source_blobs}
+    blobs: dict[tuple[str, str], Any] = {}
+    for path, role, spool in source_blobs:
+        key = (path, role)
+        if key in blobs:
+            raise IngestError("opened source spool association mismatch")
+        blobs[key] = spool
+    consumed: set[tuple[str, str]] = set()
     for index, item in enumerate(manifest):
         key = (item["path"], item["role"])
         spool = blobs.get(key)
         if spool is None or getattr(spool, "closed", False):
             raise IngestError(f"opened source spool unavailable for {item['path']}")
+        consumed.add(key)
         snapshot_dir = root / item["sha256"]
         _secure_dir(snapshot_dir)
         parent_fd = _open_secure_dir(snapshot_dir)
@@ -2695,6 +2795,9 @@ def _write_private_snapshot(
                 raise IngestError(f"immutable snapshot collision: {item['path']}")
         finally:
             os.close(parent_fd)
+    if consumed != set(blobs):
+        raise IngestError("opened source spool association mismatch")
+
 
 
 def _write_private_file(path: Path, value: Any) -> None:
