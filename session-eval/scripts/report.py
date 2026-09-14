@@ -25,7 +25,7 @@ from urllib.parse import quote, unquote, urlparse
 RECEIPT_SCHEMA = "styrir-session-eval/v0"
 CATALOG_ID = "session-eval-check-catalog/v1"
 GENERATOR = "session-eval-report"
-GENERATOR_VERSION = "1.0.0"
+GENERATOR_VERSION = "1.1.0"
 SESSIONS_PER_PAGE = 40
 UNKNOWN = "unknown"
 REQUIRED_SECTION_IDS = (
@@ -168,8 +168,23 @@ td.mono,th.mono,code,.mono{
   gap:1rem;
   align-items:flex-start;
 }
+.charts figure{min-width:min(100%,22rem);flex:1 1 22rem}
+.kpis{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));
+  gap:.55rem;
+  margin:.2rem 0 .75rem;
+}
+.kpi{
+  border:1px solid var(--line);
+  padding:.55rem .65rem .5rem;
+  background:var(--th);
+  min-width:0;
+}
+.kpi-value{font-size:1.35rem;font-weight:700;letter-spacing:-0.03em;line-height:1.1}
+.kpi-label{font-size:11px;color:var(--muted);margin-top:.2rem;text-transform:uppercase;letter-spacing:.04em}
 figure{margin:0;max-width:100%}
-figcaption{font-size:12px;color:var(--muted);margin:.25rem 0 0;max-width:36ch}
+figcaption{font-size:12px;color:var(--muted);margin:.25rem 0 0;max-width:44ch}
 svg{max-width:100%;height:auto}
 svg text{fill:var(--ink);font:11px ui-sans-serif,system-ui,sans-serif}
 details{margin:.4rem 0 0;border-top:1px solid var(--line);padding-top:.35rem}
@@ -743,7 +758,7 @@ def _lifecycle_block(run: dict[str, Any]) -> str:
 
 
 def _svg_chart(title: str, points: Sequence[tuple[str, float | None]], unit: str) -> str:
-    width, height = 320, 148
+    width, height = 440, 180
     left, right, top, bottom = 36, 12, 18, 36
     plot_w = width - left - right
     plot_h = height - top - bottom
@@ -817,6 +832,91 @@ def _svg_chart(title: str, points: Sequence[tuple[str, float | None]], unit: str
     return f"<figure>{body}<figcaption>{note}</figcaption></figure>"
 
 
+def _hbar_chart(title: str, items: Sequence[tuple[str, float]], unit: str) -> str:
+    ranked = [(label, float(value)) for label, value in items if value is not None][:12]
+    width = 460
+    row_h = 22
+    left, right, top, bottom = 132, 36, 10, 8
+    height = top + bottom + max(len(ranked), 1) * row_h
+    caption = _esc(title)
+    if not ranked:
+        body = (
+            f'<svg viewBox="0 0 {width} 80" width="{width}" height="80" role="img" '
+            f'aria-label="{caption}: no observations">'
+            f'<rect x="0" y="0" width="{width}" height="80" fill="#fffcf6" stroke="#d7d0c3"/>'
+            f'<text x="{width/2:.0f}" y="44" text-anchor="middle">No observations</text></svg>'
+        )
+        return f"<figure>{body}<figcaption>{caption}. No observations.</figcaption></figure>"
+    scale = max(value for _, value in ranked) or 1.0
+    plot_w = width - left - right
+    bars: list[str] = []
+    for index, (label, value) in enumerate(ranked):
+        y = top + index * row_h
+        bar_w = max((value / scale) * plot_w, 1)
+        tick = _esc(label, 28)
+        bars.append(
+            f'<text x="{left - 6}" y="{y + 13}" text-anchor="end">{tick}</text>'
+            f'<rect x="{left}" y="{y + 4}" width="{bar_w:.1f}" height="14" fill="#143a6b"/>'
+            f'<text x="{left + bar_w + 4:.1f}" y="{y + 15}">{_esc(f"{value:g}")}</text>'
+        )
+    body = (
+        f'<svg viewBox="0 0 {width} {height}" width="{width}" height="{height}" role="img" '
+        f'aria-label="{caption}">'
+        f'<rect x="0" y="0" width="{width}" height="{height}" fill="#fffcf6" stroke="#d7d0c3"/>'
+        f"{''.join(bars)}</svg>"
+    )
+    return f"<figure>{body}<figcaption>{caption} ({_esc(unit)}).</figcaption></figure>"
+
+
+def _kpis(cells: Sequence[tuple[str, Any, str]]) -> str:
+    parts = []
+    for label, value, kind in cells:
+        klass = kind if kind in {"pass", "fail", "warn", "info"} else "info"
+        parts.append(
+            f'<div class="kpi {klass}"><div class="kpi-value">{_esc(value)}</div>'
+            f'<div class="kpi-label">{_esc(label)}</div></div>'
+        )
+    return f'<div class="kpis">{"".join(parts)}</div>'
+
+
+def _harness_counts(runs: Sequence[dict[str, Any]]) -> list[tuple[str, float]]:
+    counts: dict[str, int] = {}
+    for run in runs:
+        if not isinstance(run, dict):
+            continue
+        key = str(run.get("harness") or UNKNOWN)
+        counts[key] = counts.get(key, 0) + 1
+    return sorted(((key, float(value)) for key, value in counts.items()), key=lambda item: (-item[1], item[0]))
+
+
+def _check_fail_counts(receipt: dict[str, Any]) -> list[tuple[str, float]]:
+    counts: dict[str, int] = {}
+    for run in _as_list(receipt.get("runs")):
+        if not isinstance(run, dict):
+            continue
+        for check in _failed_checks(run):
+            key = str(check.get("id") or UNKNOWN)
+            counts[key] = counts.get(key, 0) + 1
+    return sorted(((key, float(value)) for key, value in counts.items()), key=lambda item: (-item[1], item[0]))
+
+
+def _skill_fail_counts(receipt: dict[str, Any]) -> list[tuple[str, float]]:
+    ranked: list[tuple[str, float]] = []
+    for entry in _as_list(receipt.get("skills")):
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or UNKNOWN)
+        value = entry.get("hard_fail_count", 0)
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if number:
+            ranked.append((name, number))
+    ranked.sort(key=lambda item: (-item[1], item[0]))
+    return ranked
+
+
 def _trend_points(runs: Sequence[dict[str, Any]]) -> tuple[list[tuple[str, float | None]], list[tuple[str, float | None]], list[tuple[str, float | None]]]:
     days: dict[str, dict[str, Any]] = {}
     undated = 0
@@ -887,25 +987,21 @@ def _section_verdict(receipt: dict[str, Any]) -> str:
     coverage = _as_dict(receipt.get("coverage"))
     runs = [item for item in _as_list(receipt.get("runs")) if isinstance(item, dict)]
     banner = _verdict_text(receipt)
+    hard_pass = _bool(receipt.get("hard_pass"))
+    infra_ok = _bool(receipt.get("infra_ok"))
+    empty = _bool(coverage.get("empty"))
     return (
         '<section id="verdict">'
         "<h2>Verdict</h2>"
         f'<p class="banner {_verdict_class(receipt)}">{_esc(banner, 480)}</p>'
-        + _facts(
+        + _kpis(
             [
-                ("hard_pass", _bool(receipt.get("hard_pass"))),
-                ("coverage.empty", _bool(coverage.get("empty"))),
-                ("infra_ok", _bool(receipt.get("infra_ok"))),
-                ("run count", len(runs)),
-                ("parse_errors", _int(receipt.get("parse_errors"))),
-                (
-                    "behavioral decided",
-                    coverage.get("applicable_hard_fail_decided", UNKNOWN),
-                ),
-                (
-                    "hard gates unknown",
-                    coverage.get("applicable_hard_fail_unknown", UNKNOWN),
-                ),
+                ("hard_pass", str(hard_pass).lower(), "pass" if hard_pass else "fail"),
+                ("infra_ok", str(infra_ok).lower(), "pass" if infra_ok else "fail"),
+                ("sessions", len(runs), "warn" if empty else "info"),
+                ("parse_errors", _int(receipt.get("parse_errors")), "warn" if _int(receipt.get("parse_errors")) else "info"),
+                ("decided gates", coverage.get("applicable_hard_fail_decided", UNKNOWN), "info"),
+                ("unknown gates", coverage.get("applicable_hard_fail_unknown", UNKNOWN), "warn"),
             ]
         )
         + "</section>"
@@ -933,19 +1029,21 @@ def _section_coverage(receipt: dict[str, Any]) -> str:
     usage_note = "Usage/cost is unknown for at least one run and is not treated as zero." if usage_unknown else "No unknown usage flagged on ingested runs."
     if _bool(coverage.get("empty")):
         usage_note = "Coverage is empty. Unknown usage stays unknown; no totals were invented."
+    runs = [item for item in _as_list(receipt.get("runs")) if isinstance(item, dict)]
     return (
         '<section id="coverage">'
         "<h2>Coverage</h2>"
-        + _facts(
+        + _kpis(
             [
-                ("harnesses requested", ", ".join(requested) if requested else UNKNOWN),
-                ("harnesses found", ", ".join(found) if found else UNKNOWN),
-                ("sessions ingested", coverage.get("sessions_ingested", len(_as_list(receipt.get("runs"))))),
-                ("sessions malformed", coverage.get("sessions_malformed", receipt.get("parse_errors"))),
-                ("missing requested inputs", ", ".join(gap_labels) if gap_labels else "none"),
-                ("empty", _bool(coverage.get("empty"))),
+                ("requested", ", ".join(requested) if requested else UNKNOWN, "info"),
+                ("found", ", ".join(found) if found else UNKNOWN, "info"),
+                ("ingested", coverage.get("sessions_ingested", len(runs)), "info"),
+                ("malformed sessions", coverage.get("sessions_malformed", receipt.get("parse_errors")), "warn"),
+                ("missing inputs", ", ".join(gap_labels) if gap_labels else "none", "warn" if gap_labels else "pass"),
+                ("empty", str(_bool(coverage.get("empty"))).lower(), "fail" if _bool(coverage.get("empty")) else "pass"),
             ]
         )
+        + f'<div class="charts">{_hbar_chart("Sessions by harness", _harness_counts(runs), "sessions")}</div>'
         + f'<p class="note">{_esc(usage_note, 400)}</p>'
         + "</section>"
     )
@@ -969,9 +1067,16 @@ def _section_trends(receipt: dict[str, Any]) -> str:
         )
         note = '<p class="note">Run timestamps are unknown. Token usage is marked unmeasurable, never zero.</p>'
     else:
+        pass_rate = []
+        for (day, session_count), (_, fail_count) in zip(sessions, hard_fail):
+            if session_count:
+                pass_rate.append((day, 100.0 * (1.0 - float(fail_count or 0) / float(session_count))))
+            else:
+                pass_rate.append((day, None))
         charts = (
             _svg_chart("Sessions / day", sessions, "sessions")
             + _svg_chart("Hard-fail / day", hard_fail, "runs")
+            + _svg_chart("Pass rate / day", pass_rate, "percent")
             + _svg_chart("Tokens / day", tokens, "tokens")
         )
         note = '<p class="note">Token series omit unknown observations. Unmeasurable days are marked, not plotted as zero.</p>'
@@ -1040,7 +1145,19 @@ def _section_skills(receipt: dict[str, Any]) -> str:
     note = '<p class="note">Historical loaded digest is distinct from current on-disk digest. Display names are not identity.</p>'
     if not rows:
         note = '<p class="note">No skill registry rows. Section remains for empty evaluations.</p>' + note
-    return f'<section id="skills"><h2>Skills</h2>{_table(headers, rows, row_ids=ids)}{note}</section>'
+    ranking = _hbar_chart("Skill hard-fail ranking", _skill_fail_counts(receipt), "fails")
+    visible = list(zip(ids, rows))
+    head = visible[:15]
+    rest = visible[15:]
+    table = _table(headers, [row for _, row in head], row_ids=[ident for ident, _ in head])
+    extra = ""
+    if rest:
+        extra = (
+            f'<details><summary>{len(rest)} more skill rows</summary>'
+            + _table(headers, [row for _, row in rest], row_ids=[ident for ident, _ in rest])
+            + "</details>"
+        )
+    return f'<section id="skills"><h2>Skills</h2><div class="charts">{ranking}</div>{table}{extra}{note}</section>'
 
 
 def _session_pages(runs: list[Any]) -> list[list[dict[str, Any]]]:
@@ -1123,10 +1240,18 @@ def _section_sessions(receipt: dict[str, Any], *, runs: list[dict[str, Any]] | N
         parse_note = f'<p class="note">parse_errors={_esc(parse_errors)} counted, not dropped.</p>'
     if not rows:
         parse_note += '<p class="note">No sessions ingested.</p>'
+    mix = _hbar_chart("Sessions by harness", _harness_counts(runs if runs is not None else _as_list(receipt.get("runs"))), "sessions")
     return (
         f'<section id="sessions"><h2>Sessions</h2>{pager}'
+        + f'<div class="charts">{mix}</div>'
         + _table(headers, rows, row_ids=ids)
-        + "".join(details)
+        + (
+            f'<details><summary>Structural drilldown for {len(details)} sessions on this page</summary>'
+            + "".join(details)
+            + "</details>"
+            if details
+            else ""
+        )
         + parse_note
         + "</section>"
     )
@@ -1146,34 +1271,36 @@ def _section_failures(receipt: dict[str, Any]) -> str:
         check_id = str(check.get("id") or UNKNOWN)
         grouped.setdefault(check_id, [])
     parts = ['<section id="failures"><h2>Failures</h2>']
+    ranking = _check_fail_counts(receipt)
+    parts.append(f'<div class="charts">{_hbar_chart("Failures by check", ranking, "runs")}</div>')
     if not grouped:
         parts.append('<p class="note">No failing checks recorded.</p>')
-    for check_id in sorted(grouped):
+    else:
+        summary_rows = [[_esc(check_id), _esc(int(count))] for check_id, count in ranking]
+        parts.append(_table(["check", "failing runs"], summary_rows))
+    for check_id in [item[0] for item in ranking] or sorted(grouped):
         ident = _html_id("check", check_id)
-        items = grouped[check_id]
+        items = grouped.get(check_id) or []
         rows = []
         row_ids = []
-        for offset, item in enumerate(items):
+        for offset, item in enumerate(items[:8]):
             run = _as_dict(item.get("run"))
             check = _as_dict(item.get("check"))
-            pointers = [_pointer_cell(ptr) for ptr in _as_list(check.get("evidence")) if isinstance(ptr, dict)]
+            pointers = [_pointer_cell(ptr) for ptr in _as_list(check.get("evidence")) if isinstance(ptr, dict)][:2]
             rows.append(
                 [
                     f'<span class="mono">{_esc(run.get("id") or UNKNOWN)}</span>',
-                    _esc(check.get("class") or UNKNOWN),
-                    _esc(check.get("channel") or UNKNOWN),
                     _esc(check.get("observed") or UNKNOWN),
                     "<br>".join(pointers) if pointers else _esc("none"),
                 ]
             )
             row_ids.append(f"{ident}-{offset}")
-        parts.append(f'<h3 id="{_attr(ident)}">{_esc(check_id)}</h3>')
+        extra = f" Showing {len(rows)} of {len(items)}." if len(items) > len(rows) else ""
         parts.append(
-            _table(
-                ["run", "class", "channel", "observed", "evidence"],
-                rows,
-                row_ids=row_ids,
-            )
+            f'<details id="{_attr(ident)}"><summary>{_esc(check_id)} · {len(items)} runs</summary>'
+            f'<p class="note">Evidence pointers only.{extra}</p>'
+            + _table(["run", "observed", "evidence"], rows, row_ids=row_ids)
+            + "</details>"
         )
     parts.append("</section>")
     return "".join(parts)
@@ -1254,6 +1381,13 @@ def _section_comparisons(receipt: dict[str, Any]) -> str:
             )
         )
         if allowed:
+            delta = [
+                ("improved", float(counts.get("improved") or 0)),
+                ("regressed", float(counts.get("regressed") or 0)),
+                ("equal", float(counts.get("equal") or 0)),
+                ("unmeasurable", float(counts.get("unmeasurable") or 0)),
+            ]
+            parts.append(f'<div class="charts">{_hbar_chart("Baseline vs candidate", delta, "counts")}</div>')
             parts.append(
                 _table(
                     ["improved", "regressed", "equal", "unmeasurable"],
@@ -1292,6 +1426,7 @@ def _section_recommendations(receipt: dict[str, Any]) -> str:
         parts.append("</section>")
         return "".join(parts)
     used: set[str] = set()
+    articles: list[str] = []
     for index, item in enumerate(rows, start=1):
         raw_id = str(item.get("id") or f"{index:03d}")
         slug = raw_id[4:] if raw_id.startswith("rec-") else raw_id
@@ -1316,14 +1451,14 @@ def _section_recommendations(receipt: dict[str, Any]) -> str:
             for ptr in _as_list(item.get("evidence"))
             if isinstance(ptr, dict)
         ]
-        parts.append(f'<article id="{_attr(contract_id)}">')
+        chunk = [f'<article id="{_attr(contract_id)}">']
         if limitation and item.get("action") in (None, UNKNOWN):
-            parts.append(f"<h3>Limitation {_esc(item.get('id') or index)}</h3>")
-            parts.append(_facts([("limitation", limitation), ("confidence", item.get("confidence") or "none")]))
-            parts.append('<p class="note">Insufficient evidence. No invented patch.</p>')
+            chunk.append(f"<h3>Limitation {_esc(item.get('id') or index)}</h3>")
+            chunk.append(_facts([("limitation", limitation), ("confidence", item.get("confidence") or "none")]))
+            chunk.append('<p class="note">Insufficient evidence. No invented patch.</p>')
         else:
-            parts.append(f"<h3>{_esc(item.get('id') or f'rec-{index:03d}')}</h3>")
-            parts.append(
+            chunk.append(f"<h3>{_esc(item.get('id') or f'rec-{index:03d}')}</h3>")
+            chunk.append(
                 _facts(
                     [
                         ("target", target_label),
@@ -1335,8 +1470,16 @@ def _section_recommendations(receipt: dict[str, Any]) -> str:
                 )
             )
         if evidence:
-            parts.append("<p>" + "<br>".join(evidence) + "</p>")
-        parts.append("</article>")
+            chunk.append("<details><summary>Evidence pointers</summary><p>" + "<br>".join(evidence[:6]) + "</p></details>")
+        chunk.append("</article>")
+        articles.append("".join(chunk))
+    parts.extend(articles[:8])
+    if len(articles) > 8:
+        parts.append(
+            f"<details><summary>{len(articles) - 8} more recommendation rows</summary>"
+            + "".join(articles[8:])
+            + "</details>"
+        )
     parts.append("</section>")
     return "".join(parts)
 
@@ -1427,7 +1570,9 @@ def _section_provenance(receipt: dict[str, Any]) -> str:
     return (
         '<section id="provenance"><h2>Provenance</h2>'
         + _facts(_provenance_pairs(receipt))
+        + f"<details><summary>{len(snapshots)} snapshot identities (full hashes)</summary>"
         + table
+        + "</details>"
         + f'<p class="note">{_esc(notice, 480)}</p>'
         + "</section>"
     )
@@ -1480,7 +1625,7 @@ def render_html(
         "<body>\n"
         '<a class="skip" href="#verdict">Skip to verdict</a>\n'
         "<header><h1>Session evaluation</h1>"
-        '<p class="lede">Compact verdict and coverage, then table-led evidence. Structural drilldown only.</p>'
+        '<p class="lede">Charts first: volume, fail ranking, pass rate, skill ranking, comparison counts. Tables stay compact. Drilldown is collapsed and structural only.</p>'
         "</header>\n"
         + "\n".join(sections)
         + "\n</body>\n</html>\n"
