@@ -9,6 +9,8 @@ actual ``ingest.py`` command, and prints a machine-readable result.
 from __future__ import annotations
 
 import json
+import time
+
 import os
 import hashlib
 import stat
@@ -133,7 +135,30 @@ def invoke_evaluate(receipt_path: Path, out: Path) -> dict[str, Any]:
     return json.loads(exported.read_text(encoding="utf-8"))
 
 
+
+def assert_skill_path_scan_is_linear() -> None:
+    """ccdiag-style: large SKILL.md mentions must stay linear, not skipped."""
+
+    scripts_dir = str(Path(__file__).resolve().parent)
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import ingest as ingest_mod
+
+    blob = ("x" * 80_000) + " mentions SKILL.md and ~/Code/skills/demo/SKILL.md"
+    started = time.perf_counter()
+    found = ingest_mod._skill_path_candidates({"content": blob})
+    elapsed = time.perf_counter() - started
+    if elapsed >= 0.5:
+        raise AssertionError(f"skill path scan took {elapsed:.3f}s on 80k blob")
+    if "SKILL.md" not in found:
+        raise AssertionError(f"bare SKILL.md mention dropped: {found!r}")
+    if not any(item.endswith("demo/SKILL.md") for item in found):
+        raise AssertionError(f"path token missing from large payload: {found!r}")
+
+
 def main() -> int:
+    assert_skill_path_scan_is_linear()
+
     with tempfile.TemporaryDirectory(prefix="session-eval-smoke-") as temporary:
         root = Path(temporary)
         claude = root / "claude" / "session.jsonl"
@@ -838,6 +863,8 @@ def main() -> int:
         result = {
             "status": "pass",
             "cases": [
+                "linear SKILL.md scan on large payloads",
+
                 "five primary harness adapters",
                 "malformed rows and unknown fields",
                 "nested parent lineage",

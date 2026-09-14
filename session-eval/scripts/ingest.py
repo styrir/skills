@@ -44,6 +44,11 @@ PARSER_NAMES = {
     "omp": "omp-v3-adapter",
     "grok": "grok-session-adapter",
 }
+_SKILL_MD = "SKILL.md"
+_SKILL_PATH_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~/.%@+_:-\\"
+)
+
 
 _TOKEN_FIELDS = ("input", "output", "cache_read", "cache_create", "total")
 _TOKEN_ALIASES = {
@@ -566,19 +571,33 @@ def _iter_strings(value: Any) -> Iterator[str]:
 
 
 def _skill_path_candidates(value: Any) -> list[str]:
+    """Extract SKILL.md path tokens without scanning payloads via backtracking regex.
+
+    ccdiag (MIT) and claude-dashboard walk JSONL line-by-line and keep only
+    structured fields. Large tool-result strings that mention SKILL.md must
+    still yield path tokens; they must not hang ingest.
+    """
+
     result: list[str] = []
     for text in _iter_strings(value):
-        if "SKILL.md" not in text and "/skills/" not in text and "\\skills\\" not in text:
-            continue
-        # Prefer complete path-looking tokens; no prompt text is copied.
-        matches = re.findall(r"(?:[~/.A-Za-z0-9_%@+:-]+[/\\])?[A-Za-z0-9_.@+:-]+[/\\]SKILL\.md", text)
-        if not matches and "SKILL.md" in text:
-            matches = ["SKILL.md"]
-        for match in matches:
-            candidate = match.replace("\\", "/")
+        start = 0
+        while True:
+            pos = text.find(_SKILL_MD, start)
+            if pos < 0:
+                break
+            index = pos
+            while index > 0 and text[index - 1] in _SKILL_PATH_CHARS:
+                index -= 1
+            candidate = text[index : pos + len(_SKILL_MD)].replace("\\", "/")
+            if "/" not in candidate:
+                candidate = _SKILL_MD
             if candidate not in result:
                 result.append(candidate)
+
+            start = pos + len(_SKILL_MD)
+
     return result
+
 
 
 def _skill_name(path: str) -> str:

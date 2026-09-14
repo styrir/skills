@@ -1501,22 +1501,58 @@ def _loop_uncertain(sequence: list[dict[str, Any]]) -> tuple[str, list[dict[str,
     return "unknown", evidence, max_streak
 
 
+def _strict_timestamp_merge(streams: list[list[dict[str, Any]]]) -> list[dict[str, Any]] | None:
+    """Merge streams when timestamps totally order heads. Cross-stream ties stay unordered."""
+
+    heads = [0] * len(streams)
+    merged: list[dict[str, Any]] = []
+    while True:
+        available = [
+            (index, streams[index][heads[index]])
+            for index in range(len(streams))
+            if heads[index] < len(streams[index])
+        ]
+        if not available:
+            return merged
+        if any(event.get("time") is None for _index, event in available):
+            return None
+        min_time = min(event["time"] for _index, event in available)
+        at_min = [(index, event) for index, event in available if event["time"] == min_time]
+        if len(at_min) > 1:
+            return None
+        index, event = at_min[0]
+        merged.append(event)
+        heads[index] += 1
+
+
 def _loop_merge_streams(streams: list[list[dict[str, Any]]]) -> tuple[str, list[dict[str, Any]], int]:
+    nonempty = [list(stream) for stream in streams if stream]
+    if not nonempty:
+        return "pass", [], 0
+    if len(nonempty) == 1:
+        return _loop_uncertain(nonempty[0])
+
+    ordered = _strict_timestamp_merge(nonempty)
+    if ordered is not None:
+        return _loop_uncertain(ordered)
+    if sum(len(stream) for stream in nonempty) > 32:
+        return "unknown", [], 0
+
     outcomes: set[str] = set()
     evidence: list[dict[str, Any]] = []
     max_streak = 0
     truncated = False
     generated = 0
-
-    def merge(prefix: list[dict[str, Any]], remaining: list[list[dict[str, Any]]]) -> None:
-        nonlocal truncated, generated, max_streak, evidence
+    stack: list[tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]] = [([], nonempty)]
+    while stack:
         if truncated or ("pass" in outcomes and "fail" in outcomes):
-            return
+            break
+        prefix, remaining = stack.pop()
         if not any(remaining):
             generated += 1
             if generated > _LOOP_ENUMERATION_CAP:
                 truncated = True
-                return
+                continue
             status, items, streak = _loop_uncertain(prefix)
             outcomes.add(status)
             if streak > max_streak:
@@ -1525,7 +1561,8 @@ def _loop_merge_streams(streams: list[list[dict[str, Any]]]) -> tuple[str, list[
                 evidence = items
             elif not evidence:
                 evidence = items
-            return
+            continue
+        candidates: list[tuple[int, dict[str, Any]]] = []
         for index, stream in enumerate(remaining):
             if not stream:
                 continue
@@ -1537,18 +1574,19 @@ def _loop_merge_streams(streams: list[list[dict[str, Any]]]) -> tuple[str, list[
                 for other in items
             ):
                 continue
+            candidates.append((index, event))
+        if not candidates:
+            continue
+        for index, event in reversed(candidates):
             next_remaining = [list(items) for items in remaining]
-            next_remaining[index] = stream[1:]
-            merge(prefix + [event], next_remaining)
+            next_remaining[index] = remaining[index][1:]
+            stack.append((prefix + [event], next_remaining))
 
-    merge([], streams)
     if truncated or len(outcomes) != 1:
-        if len(outcomes) == 1 and not truncated:
-            return next(iter(outcomes)), evidence, max_streak
-        if truncated:
-            return "unknown", evidence, max_streak
         return "unknown", evidence, max_streak
     return next(iter(outcomes)), evidence, max_streak
+
+
 
 
 def _loop_streams(events: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
