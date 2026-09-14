@@ -6,7 +6,7 @@ This is the adapter/reference contract for the portable shared local CLI at `../
 
 The Required `SE-PORT-001`, `SE-INGEST-001`, `SE-INGEST-002`, `SE-EVIDENCE-001`, `SE-PRIVACY-001`, `SE-USAGE-001`, and `SE-SKILL-001` rows in [the specification](../docs/specification.md) are the source of truth. This reference refines those rows and the normalized record in [SKILL.md](../SKILL.md); it cannot silently override them.
 
-Observed 2026-09-13 on this machine. Sampled records, not a full dump. Treat schema drift as unknown fields, not parse failure. A requested but absent harness is an explicit coverage gap, not a zero; malformed records are counted and retained as parse evidence.
+Observed 2026-09-13 on this machine. Sampled records, not a full dump. Treat schema drift as unknown fields, not parse failure. A requested but absent harness is an explicit coverage gap, not a zero; malformed records are counted and retained as parse evidence. Session files are not skipped by filesize. A single JSONL line larger than 10 MiB is `ingest.parse_error` for that line (`oversized_jsonl_line`); neighboring records still ingest and EOF is still not terminal.
 
 Primary stream wins. Sidecars enrich. Never replace the stream with SQLite-only views.
 

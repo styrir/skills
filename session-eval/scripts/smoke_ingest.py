@@ -430,6 +430,18 @@ def main() -> int:
         assert not any("7|" in path for path in junk_paths)
         assert not any(path.endswith("./SKILL.md") for path in junk_paths)
 
+        oversize = root / "oversize-line.jsonl"
+        keep_a = json.dumps({"type": "session", "version": 3, "id": "oversize-keep", "timestamp": "2026-09-13T10:00:00Z"})
+        keep_b = json.dumps({"type": "custom", "customType": "session_end", "timestamp": "2026-09-13T10:09:00Z"})
+        huge = '{"type":"message","id":"oversize","blob":"' + ("x" * (10 * 1024 * 1024)) + '"}'
+        oversize.write_text(keep_a + "\n" + huge + "\n" + keep_b + "\n", encoding="utf-8")
+        _, oversize_receipt = invoke(root / "oversize-out", [oversize], ["omp"])
+        assert oversize_receipt["coverage"]["malformed_count"] >= 1
+        assert oversize_receipt["coverage"]["sessions_ingested"] == 1
+        oversize_run = one_run(oversize_receipt, "omp", "oversize-keep")
+        assert oversize_run["native_identity"]["id"] == "oversize-keep"
+        assert any(item.get("kind") == "oversized_jsonl_line" for item in oversize_run.get("parse_errors") or [])
+
         grok_cases = root / "grok-cases"
         stale_dir = write_grok_dir(
             grok_cases / "stale-sidecars",
@@ -891,6 +903,7 @@ def main() -> int:
             "cases": [
                 "linear SKILL.md scan on large payloads",
                 "junk SKILL.md tokens do not join the registry",
+                "oversized JSONL line is parse_error and neighbors remain",
 
                 "five primary harness adapters",
                 "malformed rows and unknown fields",

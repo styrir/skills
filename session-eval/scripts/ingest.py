@@ -143,6 +143,8 @@ _SCOPED_TERMINAL_MARKERS = {
     "grok": {"session_end", "session_ended", "session_complete", "session_completed", "run_complete", "run_completed", "agent_end", "agent_ended"},
 }
 _MAX_SIDECAR_BYTES = 16 * 1024 * 1024
+_MAX_JSONL_LINE_BYTES = 10 * 1024 * 1024
+_JSONL_LINE_CHUNK = 64 * 1024
 
 
 @dataclass
@@ -832,19 +834,58 @@ def _add_issue(state: dict[str, Any], issue: dict[str, Any]) -> None:
     state["issues"].append(issue)
 
 
+def _read_jsonl_physical_line(spool: Any) -> tuple[bytes | None, bool]:
+    """Read one JSONL line. Oversized lines are truncated after the ceiling and skipped to newline."""
+
+    buf = bytearray()
+    oversized = False
+    while True:
+        piece = spool.read(_JSONL_LINE_CHUNK)
+        if not piece:
+            if not buf:
+                return None, False
+            return bytes(buf), oversized
+        newline = piece.find(b"\n")
+        take = piece if newline < 0 else piece[: newline + 1]
+        if not oversized:
+            room = _MAX_JSONL_LINE_BYTES - len(buf)
+            if len(take) > room:
+                buf.extend(take[:room])
+                oversized = True
+            else:
+                buf.extend(take)
+        if newline >= 0:
+            rest = piece[newline + 1 :]
+            if rest:
+                spool.seek(spool.tell() - len(rest))
+            break
+    return bytes(buf), oversized
+
+
 def _read_jsonl(state: dict[str, Any], path: Path, role: str = "primary") -> Iterator[SourceRecord]:
     path = _absolute(path)
     spool = _register_file(state, path, role)
     spool.seek(0)
     line_number = 0
     while True:
-        raw_line = spool.readline()
-        if not raw_line:
+        raw_line, oversized = _read_jsonl_physical_line(spool)
+        if raw_line is None:
             break
         line_number += 1
         if not raw_line.strip():
             continue
         raw_hash = sha256_bytes(raw_line)
+        if oversized:
+            _add_issue(
+                state,
+                {
+                    "source_path": str(path),
+                    "line": line_number,
+                    "kind": "oversized_jsonl_line",
+                    "evidence_hash": raw_hash,
+                },
+            )
+            continue
         try:
             text = raw_line.decode("utf-8")
             value = json.loads(text)

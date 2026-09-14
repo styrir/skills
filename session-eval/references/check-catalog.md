@@ -264,6 +264,7 @@ These remain documentation-level scenarios. `smoke_evaluate.py` is the executabl
 | Scenario | Expected catalog outcome |
 |---|---|
 | Malformed JSONL line among otherwise valid records | `ingest.parse_error` `fail` (infra); malformed counted; behavioral checks on that record not `pass`; suite `infra_ok=false` |
+| JSONL line larger than 10 MiB among valid neighbors | `ingest.parse_error` `fail` (infra) for that line; valid neighbors kept; file remains in coverage |
 | Four consecutive same-tool same-normalized-args failures with no progress marker | `tool.repeat_loop` `fail`; `tool.result_error` also `fail` (expected_behavior, counted only) |
 | A single ordinary `is_error` tool result | `tool.result_error` `fail`; `tool.repeat_loop` `pass` or `not_applicable`; does not falsify `hard_pass` |
 | Applicable hard_fail whose required evidence is absent | that check `unknown`, not a proven behavior failure; `hard_pass=false` even when another hard gate passed |

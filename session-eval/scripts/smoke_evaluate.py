@@ -1446,6 +1446,18 @@ def main() -> int:
         assert check(junk_skill_run, "skill.registry_unreadable")["status"] == "not_applicable"
         cases.append("junk SKILL.md mention tokens do not join the registry")
 
+        oversize = root / "oversize-line.jsonl"
+        keep_a = json.dumps({"type": "session", "version": 3, "id": "oversize-keep", "timestamp": "2026-09-13T10:00:00Z"})
+        keep_b = json.dumps({"type": "custom", "customType": "session_end", "timestamp": "2026-09-13T10:09:00Z"})
+        huge = '{"type":"message","id":"oversize","blob":"' + ("x" * (10 * 1024 * 1024)) + '"}'
+        oversize.write_text(keep_a + "\n" + huge + "\n" + keep_b + "\n", encoding="utf-8")
+        oversize_receipt = ingest_and_evaluate(root, "oversize-line", oversize, "omp")
+        oversize_run = one_run(oversize_receipt)
+        assert check(oversize_run, "ingest.parse_error")["status"] == "fail"
+        assert oversize_receipt["infra_ok"] is False
+        assert oversize_receipt["coverage"]["sessions_ingested"] == 1
+        cases.append("oversized JSONL line is parse_error; neighbors kept")
+
         unrequested = unknown_receipt.get("provenance", {}).get("workgraph") or {}
         assert unrequested.get("invoked") is False
         assert not unrequested.get("argv")
