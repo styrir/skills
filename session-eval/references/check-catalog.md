@@ -6,13 +6,17 @@ read_when:
 
 # Check catalog
 
-Future contract. This document specifies intended check behavior for later implementation. It does not assert that a runtime catalog exists or that any check has been executed.
+Runtime owner: `session-eval/scripts/evaluate.py` (`skills-2ol.6`). This catalog remains the sole owner of named checks, applicability, observation predicates, and suite `hard_pass` arithmetic. Presence of that runtime is not evidence that acceptance scenarios have been executed.
 
 Authority: [canonical store](../docs/index.md), [specification](../docs/specification.md), and [requirement map](../docs/requirement-map.md) (`skills-2ol.6` for SE-CHECK-001/002 and SE-WORKGRAPH-001; `skills-2ol.7` for named judges). This file is the sole owner of named checks, applicability, observation predicates, and suite `hard_pass` arithmetic. It does not own the normalized run record ([SKILL.md](../SKILL.md)), ingest adapters ([ingest-formats.md](ingest-formats.md)), judge rubrics ([judge-contract.md](judge-contract.md)), or receipt/HTML layout ([report-contract.md](report-contract.md)).
 
 Catalog identity: `session-eval-check-catalog/v1`. Receipt schema remains `styrir-session-eval/v0` ([report-contract.md](report-contract.md)). Incompatible catalog identities cannot produce a quality delta. Judges consume this evaluation-result contract; they do not define a second result type.
 
 Inspired by Phoenix evaluator *categories* and WorkGraph `hard_fail` / `expected_behavior` split. Independent wording and independent implementation. Do not copy Phoenix prompt YAMLs or evaluator source. Historical observations: [Phoenix dossier](../docs/sources/phoenix/index.md), [competitors dossier](../docs/sources/competitors/index.md).
+
+## Implementation status
+
+`skills-2ol.6` implements every `kind=code` row against ingest `styrir-session-eval/v0` receipts and hash-verified frozen snapshots (`out/.private/snapshots/<file-sha256>/...`). Public API: `evaluate_receipt(...)` plus standalone `python3 session-eval/scripts/evaluate.py --receipt ...`. Claim extraction uses versioned `CLAIM_LANGUAGE_VERSION` markers; skill registry rows consume supplied registry evidence or report `unknown`/`registry_unavailable` and do not reimplement history. Requested WorkGraph scoring invokes existing `/Users/brooks/Code/agent-ops/bin/workgraph-eval-score score --evidence --manifest --allowlist`; unrequested invocations are zero. Focused CLI smoke: `session-eval/scripts/smoke_evaluate.py`. This section does not record a passing run.
 
 ## Requirement coverage
 
@@ -81,7 +85,7 @@ Every check emits one [SKILL.md](../SKILL.md) `run.checks[]` object. Catalog sem
 |---|---|
 | `id` | Catalog id. Stable; never recycle. |
 | `status`, `kind`, `class`, `channel`, `observed`, `error`, `evidence[]` | [SKILL.md](../SKILL.md) `run.checks[]`. `observed` is a short machine token (not prose, not raw payloads). |
-| `evidence[]` items | `source_path`, `snapshot_hash`, `parser_version`, `event_range.start_line`/`end_line`, `evidence_hash`. `snapshot_hash` is `run.source_snapshot.sha256`. `parser_version` is `run.parser_version`. `run.parser` and `run.parser_version` are always present (adapter-owned). |
+| `evidence[]` items | `source_path`, `snapshot_hash`, `parser_version`, `event_range.start_line`/`end_line`, `evidence_hash`. `snapshot_hash` is the aggregate `run.source_snapshot.sha256` of the consumed path/role/content-hash manifest and is identical for every file in that snapshot ([SE-EVIDENCE-001](../docs/specification.md), [judge-contract.md](judge-contract.md)). Per-file content digests live only in `run.source_snapshot.files[].sha256`. `source_path` must name a member of that manifest. `evidence_hash` is the SHA-256 of the verified frozen snapshot bytes covering `event_range`. `parser_version` is `run.parser_version`. `run.parser` and `run.parser_version` are always present (adapter-owned). |
 | `error` | Null on a clean behavioral observation. Infra/parse/provider failures set `error` and must not be stored as a behavioral `pass`. |
 
 `error` object when present:
@@ -139,6 +143,8 @@ Do not reconstruct historical Git index, Beads, or WAL contents to normalize arg
 **Not progress:** identical error payloads; retries with the same normalized args; clock advancing; EOF; unpaired calls; current checkout diffs.
 
 **Fail when** the consecutive count is ≥ 4 with no progress marker. Ordinary single (or few) tool errors are `tool.result_error` only; they do not satisfy this fail predicate.
+
+**Unknown evidence or order.** A missing successful result hash, unavailable arguments, or unresolved cross-stream order is decided by every permitted concrete completion: all fail → `fail`; all pass → `pass`; mixed → `unknown`. A possible reset cannot be assumed absent. A proven independent failure is not erased by earlier or irrelevant uncertainty. Same-stream source order is authoritative; cross-stream order uses timestamps or native links only, never filename, global line, or mtime order. Equal timestamps across streams remain unordered.
 
 ## Claim checks (SE-CHECK-002)
 
@@ -253,7 +259,7 @@ Default: `not_applicable`, zero provider calls. They never set suite `hard_pass`
 
 ## Future acceptance scenarios
 
-These are documentation-level scenarios for later implementation. None is claimed executed.
+These remain documentation-level scenarios. `smoke_evaluate.py` is the executable proof path; it is not claimed executed here.
 
 | Scenario | Expected catalog outcome |
 |---|---|
