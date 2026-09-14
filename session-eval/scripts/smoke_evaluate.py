@@ -1351,6 +1351,101 @@ def main() -> int:
         cases.append("Grok agent_message_chunk completion with no evidence is unknown")
 
 
+        secret_fail = root / "secret-field.jsonl"
+        write_jsonl(
+            secret_fail,
+            omp_session(
+                "secret-field",
+                [
+                    tool_call("sec-1", "env", {"api_key": "sk-livegga3REALSECRET99abcd"}),
+                    session_end(),
+                ],
+            ),
+        )
+        secret_fail_receipt = ingest_and_evaluate(root, "secret-field", secret_fail, "omp")
+        secret_fail_run = one_run(secret_fail_receipt)
+        secret_check = check(secret_fail_run, "tool.secret_pattern")
+        assert secret_check["status"] == "fail"
+        dumped = json.dumps(secret_fail_receipt)
+        assert "sk-livegga3REALSECRET99abcd" not in dumped
+        assert secret_check["evidence"][0]["evidence_hash"]
+        assert secret_check["evidence"][0]["event_range"]
+        cases.append("credential-field secret fails with redacted evidence")
+
+        secret_payload = root / "secret-payload.jsonl"
+        write_jsonl(
+            secret_payload,
+            [
+                {
+                    "timestamp": "2026-09-13T10:00:00Z",
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": "see demo/SKILL.md and sk-abcdefghijklmnopqrstuvwxyz012345 in the transcript",
+                    },
+                },
+                {"timestamp": "2026-09-13T10:00:01Z", "type": "event_msg", "payload": {"type": "task_complete"}},
+            ],
+        )
+        secret_payload_receipt = ingest_and_evaluate(root, "secret-payload", secret_payload, "codex")
+        assert check(one_run(secret_payload_receipt), "tool.secret_pattern")["status"] == "not_applicable"
+        cases.append("non-credential Codex payload does not fail secret_pattern")
+
+        secret_allow = root / "secret-allow.jsonl"
+        write_jsonl(
+            secret_allow,
+            omp_session(
+                "secret-allow",
+                [
+                    tool_call("sec-ex", "env", {"api_key": "sk-examplePLACEHOLDERtokenxx"}),
+                    session_end(),
+                ],
+            ),
+        )
+        assert check(one_run(ingest_and_evaluate(root, "secret-allow", secret_allow, "omp")), "tool.secret_pattern")["status"] == "pass"
+        cases.append("allowlisted example token does not fail secret_pattern")
+
+        missing_skill = root / "missing-skill.jsonl"
+        write_jsonl(
+            missing_skill,
+            omp_session(
+                "missing-skill",
+                [
+                    tool_call("sk-miss", "read", {"path": "/tmp/gga4-missing-skill/SKILL.md"}),
+                    session_end(),
+                ],
+            ),
+        )
+        missing_skill_run = one_run(ingest_and_evaluate(root, "missing-skill", missing_skill, "omp"))
+        assert any(item.get("path", "").endswith("gga4-missing-skill/SKILL.md") for item in missing_skill_run.get("skills") or [])
+        assert check(missing_skill_run, "skill.registry_unreadable")["status"] == "fail"
+        cases.append("missing real SKILL.md still fails registry_unreadable")
+
+        junk_skill = root / "junk-skill.jsonl"
+        write_jsonl(
+            junk_skill,
+            omp_session(
+                "junk-skill",
+                [
+                    {
+                        "type": "message",
+                        "message": {
+                            "role": "assistant",
+                            "content": "mentions 7|SKILL.md ./SKILL.md ~/Code/x/SKILL.md ../other/SKILL.md",
+                        },
+                    },
+                    session_end(),
+                ],
+            ),
+        )
+        junk_skill_run = one_run(ingest_and_evaluate(root, "junk-skill", junk_skill, "omp"))
+        junk_paths = [str(item.get("path") or "") for item in junk_skill_run.get("skills") or []]
+        assert not any("7|" in path or path.endswith("/SKILL.md") and (".." in path or path.startswith("./")) for path in junk_paths)
+        assert all("7|" not in path and not path.endswith("./SKILL.md") for path in junk_paths)
+        assert check(junk_skill_run, "skill.registry_unreadable")["status"] == "not_applicable"
+        cases.append("junk SKILL.md mention tokens do not join the registry")
+
         unrequested = unknown_receipt.get("provenance", {}).get("workgraph") or {}
         assert unrequested.get("invoked") is False
         assert not unrequested.get("argv")

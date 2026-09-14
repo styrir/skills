@@ -131,6 +131,30 @@ SECRET_PATTERN = re.compile(
     r"|sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}"
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----)"
 )
+_SECRET_ALLOWLIST = re.compile(
+    r"(?i)(example|placeholder|dummy|changeme|redacted|your[_-]?api|xxx{3,}|not[_-]?a[_-]?secret|conformance|skill\.md)"
+)
+_CREDENTIAL_KEYS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "secret",
+        "secret_key",
+        "password",
+        "passwd",
+        "passphrase",
+        "access_token",
+        "auth_token",
+        "authorization",
+        "private_key",
+        "privatekey",
+        "client_secret",
+        "token",
+        "bearer",
+        "aws_secret_access_key",
+        "aws_access_key_id",
+    }
+)
 
 CATALOG_META: dict[str, dict[str, str]] = {
     "ingest.parse_error": {"class": "hard_fail", "kind": "code", "channel": "infra"},
@@ -1632,17 +1656,53 @@ def check_tool_repeat_loop(
 
 
 
+def _credential_key(key: Any) -> bool:
+    return str(key).casefold().replace("-", "_") in _CREDENTIAL_KEYS
+
+
+def _secret_allowlisted(text: str) -> bool:
+    return _SECRET_ALLOWLIST.search(text) is not None
+
+
+def _iter_credential_texts(value: Any) -> Iterable[str]:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if _credential_key(key):
+                yield from _iter_strings(child)
+            else:
+                yield from _iter_credential_texts(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _iter_credential_texts(child)
+
+
+def _iter_strings(value: Any) -> Iterable[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from _iter_strings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _iter_strings(child)
+
+
 def check_tool_secret_pattern(run: dict[str, Any], frozen: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     matches: list[dict[str, Any]] = []
     scanned = False
+    readable = False
     for record in _iter_frozen_records(frozen):
-        text = record.get("text")
-        if text is None:
+        if record.get("text") is not None or record.get("object") is not None:
+            readable = True
+        obj = record.get("object")
+        if not isinstance(obj, dict):
             continue
-        scanned = True
-        if SECRET_PATTERN.search(text):
-            matches.append(record)
-    if not scanned:
+        for text in _iter_credential_texts(obj):
+            scanned = True
+            if SECRET_PATTERN.search(text) and not _secret_allowlisted(text):
+                matches.append(record)
+                break
+    if not readable:
         return _check(
             "tool.secret_pattern",
             "unknown",
@@ -1650,6 +1710,8 @@ def check_tool_secret_pattern(run: dict[str, Any], frozen: dict[str, list[dict[s
             [_run_pointer(run)],
             _error("io", "frozen source lines unavailable"),
         )
+    if not scanned:
+        return _check("tool.secret_pattern", "not_applicable", "no_credential_field", [_run_pointer(run)])
     if matches:
         evidence = [
             _pointer(run, item.get("source_path"), item.get("line"), item.get("raw_hash"))
@@ -1716,6 +1778,19 @@ def check_tokens_accounting_present(run: dict[str, Any], frozen: dict[str, list[
     return _check("tokens.accounting_present", "pass", "usage_consistent", [_run_pointer(run)])
 
 
+def _skill_frontmatter_name(path: str) -> str | None:
+    try:
+        text = Path(path).expanduser().read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines()[:40]:
+        stripped = line.strip()
+        if stripped.startswith("name:"):
+            name = stripped.split(":", 1)[1].strip().strip("\"'")
+            return name or None
+    return None
+
+
 def check_skill_registry_unreadable(
     run: dict[str, Any],
     registry: dict[str, Any] | None,
@@ -1723,31 +1798,30 @@ def check_skill_registry_unreadable(
     session_skills = [item for item in (run.get("skills") or []) if isinstance(item, dict) and item.get("path")]
     if not session_skills:
         return _check("skill.registry_unreadable", "not_applicable", "no_skill_path_in_context", [_run_pointer(run)])
-    if registry is None:
-        return _check(
-            "skill.registry_unreadable",
-            "unknown",
-            "registry_unavailable",
-            [_run_pointer(run)],
-        )
-    entries = registry.get("skills") if isinstance(registry.get("skills"), list) else []
-    by_path = {
-        str(item.get("path")): item
-        for item in entries
-        if isinstance(item, dict) and item.get("path")
-    }
     evidence = [_pointer(run, run.get("source_path"), 1)]
     missing = False
-    for skill in session_skills:
-        path = str(skill.get("path"))
-        entry = by_path.get(path)
-        if entry is None:
-            missing = True
-            continue
-        readable = entry.get("readable")
-        name = entry.get("name") or entry.get("frontmatter_name")
-        if readable is False or not name or name == UNKNOWN:
-            missing = True
+    if registry is None:
+        for skill in session_skills:
+            if not _skill_frontmatter_name(str(skill.get("path"))):
+                missing = True
+                break
+    else:
+        entries = registry.get("skills") if isinstance(registry.get("skills"), list) else []
+        by_path = {
+            str(item.get("path")): item
+            for item in entries
+            if isinstance(item, dict) and item.get("path")
+        }
+        for skill in session_skills:
+            path = str(skill.get("path"))
+            entry = by_path.get(path)
+            if entry is None:
+                missing = True
+                continue
+            readable = entry.get("readable")
+            name = entry.get("name") or entry.get("frontmatter_name")
+            if readable is False or not name or name == UNKNOWN:
+                missing = True
     if missing:
         return _check("skill.registry_unreadable", "fail", "skill_missing_or_unnamed", evidence)
     return _check("skill.registry_unreadable", "pass", "skill_frontmatter_name_present", evidence)

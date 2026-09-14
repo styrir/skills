@@ -48,6 +48,7 @@ _SKILL_MD = "SKILL.md"
 _SKILL_PATH_CHARS = frozenset(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789~/.%@+_:-\\"
 )
+_SKILL_PATH_KEYS = frozenset({"path", "skill_path", "skillpath"})
 
 
 _TOKEN_FIELDS = ("input", "output", "cache_read", "cache_create", "total")
@@ -599,6 +600,41 @@ def _skill_path_candidates(value: Any) -> list[str]:
     return result
 
 
+def _skill_path_is_joinable(path: str) -> bool:
+    """Named path keys may join the registry; junk mention tokens must not."""
+
+    text = path.replace("\\", "/").strip()
+    if not text or "|" in text:
+        return False
+    if text.startswith("~/") or text.startswith("../") or text.startswith("./"):
+        return False
+    parts = [part for part in text.split("/") if part]
+    if len(parts) < 2 or parts[-1].casefold() != "skill.md":
+        return False
+    if any(part == ".." for part in parts):
+        return False
+    return True
+
+
+def _named_skill_paths(value: Any, keys: frozenset[str]) -> list[str]:
+    """Collect SKILL.md paths only from named path keys, never from payload blobs."""
+
+    result: list[str] = []
+    for _prefix, item in _iter_dicts(value):
+        for key, child in item.items():
+            normalized = str(key).casefold().replace("-", "")
+            if normalized not in keys:
+                continue
+            texts = [child] if isinstance(child, str) else list(_iter_strings(child))
+            for text in texts:
+                candidates = _skill_path_candidates(text)
+                if not candidates and isinstance(text, str) and "skill.md" in text.casefold():
+                    candidates = [text]
+                for candidate in candidates:
+                    if _skill_path_is_joinable(candidate) and candidate not in result:
+                        result.append(candidate)
+    return result
+
 
 def _skill_name(path: str) -> str:
     parts = [part for part in path.replace("\\", "/").split("/") if part]
@@ -678,7 +714,7 @@ def _add_skill(state: dict[str, Any], entry: dict[str, Any]) -> None:
 
 
 def _observe_skills(state: dict[str, Any], data: Any, source: str, confidence: str = "low") -> None:
-    for path in _skill_path_candidates(data):
+    for path in _named_skill_paths(data, _SKILL_PATH_KEYS):
         _add_skill(state, _skill_entry(path, source, confidence))
 
 
@@ -2219,12 +2255,18 @@ def _parse_grok(group: InputGroup) -> tuple[dict[str, Any], dict[str, Any]]:
 
     context = summaries.get("prompt_context.json")
     if context is not None:
-        for path in _skill_path_candidates(context):
-            _add_skill(state, _skill_entry(path, "grok.prompt_context", "high"))
         for _, item in _iter_dicts(context):
             path_value = _first(item, "path", "file", "skill_path", "skillPath")
-            if isinstance(path_value, str) and "SKILL.md" in path_value:
-                _add_skill(state, _skill_entry(path_value, "grok.prompt_context", "high", _first(item, "digest", "sha256", "hash")))
+            if isinstance(path_value, str) and _skill_path_is_joinable(path_value):
+                _add_skill(
+                    state,
+                    _skill_entry(
+                        path_value,
+                        "grok.prompt_context",
+                        "high",
+                        _first(item, "digest", "sha256", "hash"),
+                    ),
+                )
 
     usage = summaries.get("usage.json")
     if isinstance(usage, dict):

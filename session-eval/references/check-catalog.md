@@ -192,13 +192,13 @@ Malformed records are counted. They do not become behavioral `pass`. Unknown fie
 | `tool.unpaired` | hard_fail | code | behavior | Session state is `terminal` | Every `tool_use` has a paired result | A `tool_use` has no paired result after explicit terminal evidence |
 | `tool.result_error` | expected_behavior | code | behavior | At least one tool result is present | No result has `is_error`/`isError` true | A result has `is_error`/`isError` true (count; does not enter `D`) |
 | `tool.repeat_loop` | hard_fail | code | behavior | The agent sequence contains at least one tool call | Consecutive same-tool+normalized-args run is &lt; 4 or a progress marker reset it | Consecutive count ≥ 4 with no progress marker |
-| `tool.secret_pattern` | hard_fail | code | behavior | A source line is scanned | No key/token regex match | A source line matches the key/token regex |
+| `tool.secret_pattern` | hard_fail | code | behavior | A structured credential-bearing field is present | No key/token regex match in those field values, or the match is allowlisted | A credential-bearing field value matches the key/token regex and is not allowlisted |
 
 `tool.unpaired` is `not_applicable` when state is `live`, and `unknown` when state is `unknown` (EOF is not terminal). Do not drop unpaired events.
 
 `tool.result_error` counts ordinary tool errors. Repeated failing calls with the same normalized args are `tool.repeat_loop`.
 
-`tool.secret_pattern` records `evidence_hash` + `event_range`. Never write the secret, raw line, or payload into the result, receipt, or HTML.
+`tool.secret_pattern` scans named credential fields (`api_key`, `secret`, `password`, `token`, and aliases), not every JSONL line. Allowlisted example/placeholder values and SKILL.md path fragments do not fail. Records `evidence_hash` + `event_range`. Never write the secret, raw line, or payload into the result, receipt, or HTML. Not applicable when no credential field is present.
 
 ### Tokens and cost
 
@@ -213,7 +213,7 @@ Absence of usage is `not_applicable` for `tokens.accounting_present` and must re
 
 | id | class | kind | channel | applicable when | pass when | fail when |
 |---|---|---|---|---|---|---|
-| `skill.registry_unreadable` | hard_fail | code | behavior | A SKILL.md path is listed in session context | File exists and has `name:` frontmatter | File missing or no `name:` frontmatter |
+| `skill.registry_unreadable` | hard_fail | code | behavior | A joinable SKILL.md path is listed from a named path key (`path`, `skill_path`) | File exists and has `name:` frontmatter | File missing or no `name:` frontmatter |
 | `skill.digest_drift` | expected_behavior | code | behavior | Two comparable registry snapshots for the same skill identity exist | Snapshot content digests are equal | Content digest changed between those snapshots |
 | `skill.opaque_third_party` | expected_behavior | code | behavior | An activation path and resolvable ownership are present | Resolved source is under the configured first-party root | Resolved source is outside the configured first-party root |
 | `skill.activation_untracked` | expected_behavior | code | behavior | Session used a skill-like tool or path mention | A digestable SKILL.md exists for that activation | No digestable SKILL.md |

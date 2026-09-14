@@ -404,6 +404,32 @@ def main() -> int:
         assert skill["current_on_disk_digest"] != skill["digest"]
         assert skill["digest_relation"] == "historical_differs_from_current"
 
+        junk_dir = write_grok_dir(
+            root / "junk-skill-mentions",
+            {
+                "chat_history.jsonl": [
+                    {
+                        "type": "assistant",
+                        "content": "mentions 7|SKILL.md ./SKILL.md ~/Code/x/SKILL.md ../other/SKILL.md",
+                    }
+                ],
+                "events.jsonl": [{"type": "turn_started", "params": {"sessionId": "junk-skill"}}],
+                "prompt_context.json": {
+                    "skills": [
+                        {"path": "7|SKILL.md"},
+                        {"path": "./SKILL.md"},
+                        {"path": "demo/SKILL.md", "digest": "sha256:historical"},
+                    ]
+                },
+                "summary.json": {"info": {"id": "junk-skill"}},
+            },
+        )
+        _, junk_receipt = invoke(root / "junk-skill-out", [junk_dir], ["grok"], [skill_root])
+        junk_paths = [str(item.get("path") or "") for item in junk_receipt.get("skills") or []]
+        assert any(path.endswith("demo/SKILL.md") or "demo/SKILL.md" in path for path in junk_paths)
+        assert not any("7|" in path for path in junk_paths)
+        assert not any(path.endswith("./SKILL.md") for path in junk_paths)
+
         grok_cases = root / "grok-cases"
         stale_dir = write_grok_dir(
             grok_cases / "stale-sidecars",
@@ -864,6 +890,7 @@ def main() -> int:
             "status": "pass",
             "cases": [
                 "linear SKILL.md scan on large payloads",
+                "junk SKILL.md tokens do not join the registry",
 
                 "five primary harness adapters",
                 "malformed rows and unknown fields",
