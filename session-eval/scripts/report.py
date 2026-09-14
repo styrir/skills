@@ -26,6 +26,7 @@ RECEIPT_SCHEMA = "styrir-session-eval/v0"
 CATALOG_ID = "session-eval-check-catalog/v1"
 GENERATOR = "session-eval-report"
 GENERATOR_VERSION = "1.0.0"
+SESSIONS_PER_PAGE = 40
 UNKNOWN = "unknown"
 REQUIRED_SECTION_IDS = (
     "verdict",
@@ -1042,13 +1043,39 @@ def _section_skills(receipt: dict[str, Any]) -> str:
     return f'<section id="skills"><h2>Skills</h2>{_table(headers, rows, row_ids=ids)}{note}</section>'
 
 
-def _section_sessions(receipt: dict[str, Any]) -> str:
+def _session_pages(runs: list[Any]) -> list[list[dict[str, Any]]]:
+    valid = [run for run in runs if isinstance(run, dict)]
+    if len(valid) <= SESSIONS_PER_PAGE:
+        return [valid]
+    return [valid[index : index + SESSIONS_PER_PAGE] for index in range(0, len(valid), SESSIONS_PER_PAGE)]
+
+
+def _report_page_names(page_count: int) -> list[str]:
+    if page_count <= 1:
+        return ["report.html"]
+    return ["report.html"] + [f"report-page-{index:02d}.html" for index in range(2, page_count + 1)]
+
+
+def _pager(page_index: int, names: list[str]) -> str:
+    if len(names) <= 1:
+        return ""
+    links: list[str] = []
+    for index, name in enumerate(names):
+        label = f"page {index + 1}"
+        if index == page_index:
+            links.append(f"<strong>{_esc(label)}</strong>")
+        else:
+            links.append(f'<a href="{_esc(name)}">{_esc(label)}</a>')
+    return '<nav class="pager" aria-label="Session pages">' + " · ".join(links) + "</nav>"
+
+
+def _section_sessions(receipt: dict[str, Any], *, runs: list[dict[str, Any]] | None = None, pager: str = "") -> str:
     headers = ["run.id", "harness", "native id", "display name", "model", "tokens", "checks failed", "source"]
     rows: list[list[str]] = []
     ids: list[str] = []
     details: list[str] = []
     used: set[str] = set()
-    for index, run in enumerate(_as_list(receipt.get("runs"))):
+    for index, run in enumerate(runs if runs is not None else _as_list(receipt.get("runs"))):
         if not isinstance(run, dict):
             continue
         run_id = run.get("id") or f"run-{index}"
@@ -1097,7 +1124,8 @@ def _section_sessions(receipt: dict[str, Any]) -> str:
     if not rows:
         parse_note += '<p class="note">No sessions ingested.</p>'
     return (
-        f'<section id="sessions"><h2>Sessions</h2>{_table(headers, rows, row_ids=ids)}'
+        f'<section id="sessions"><h2>Sessions</h2>{pager}'
+        + _table(headers, rows, row_ids=ids)
         + "".join(details)
         + parse_note
         + "</section>"
@@ -1415,7 +1443,12 @@ def _section_footer(receipt: dict[str, Any]) -> str:
     )
 
 
-def render_html(receipt: Any) -> str:
+def render_html(
+    receipt: Any,
+    *,
+    session_runs: list[dict[str, Any]] | None = None,
+    pager: str = "",
+) -> str:
     document = coerce_receipt(receipt)
     title = "Session evaluation"
     coverage = _as_dict(document.get("coverage"))
@@ -1428,7 +1461,7 @@ def render_html(receipt: Any) -> str:
         _section_coverage(document),
         _section_trends(document),
         _section_skills(document),
-        _section_sessions(document),
+        _section_sessions(document, runs=session_runs, pager=pager),
         _section_failures(document),
         _section_comparisons(document),
         _section_recommendations(document),
@@ -1455,18 +1488,29 @@ def render_html(receipt: Any) -> str:
 
 
 def render_report(receipt: Any, *, out: str | Path) -> Path:
-    """Write an immutable standalone ``report.html``. Returns the actual path."""
+    """Write immutable offline HTML. Returns the index ``report.html`` path."""
 
     if out is None:
         raise ReportError("out is required")
-    html_text = render_html(receipt)
-    payload = html_text.encode("utf-8")
-    out_dir = _output_root(out)
-    if out_dir.suffix.lower() == ".html":
-        requested = out_dir
+    document = coerce_receipt(receipt)
+    pages = _session_pages(_as_list(document.get("runs")))
+    names = _report_page_names(len(pages))
+    target = _output_root(out)
+    if target.suffix.lower() == ".html":
+        index_path = target
+        page_dir = target.parent
+        names = [index_path.name] + [f"{index_path.stem}-page-{index:02d}.html" for index in range(2, len(pages) + 1)]
     else:
-        requested = out_dir / "report.html"
-    return _write_immutable(requested, payload)
+        page_dir = target
+        index_path = page_dir / "report.html"
+    written = index_path
+    for index, session_runs in enumerate(pages):
+        html_text = render_html(document, session_runs=session_runs, pager=_pager(index, names))
+        path = page_dir / names[index]
+        actual = _write_immutable(path, html_text.encode("utf-8"))
+        if index == 0:
+            written = actual
+    return written
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1497,7 +1541,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ReportError as exc:
         parser.error(str(exc))
         return 2
-    print(json.dumps({"report": str(written)}, ensure_ascii=False, sort_keys=True))
+    pages = [written]
+    if written.name == "report.html":
+        pages.extend(sorted(written.parent.glob("report-page-*.html")))
+    else:
+        pages.extend(sorted(written.parent.glob(f"{written.stem}-page-*.html")))
+    print(
+        json.dumps(
+            {"report": str(written), "pages": [str(path) for path in pages]},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
     return 0
 
 

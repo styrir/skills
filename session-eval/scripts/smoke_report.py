@@ -713,6 +713,22 @@ def main() -> int:
         if "#provenance" not in footer_html and "not exhaustive" not in footer_html:
             raise AssertionError("footer omitted provenance pointer after compacting")
 
+        paged_receipt = receipt(
+            [run_record(f"p{index}", snapshot=f"{index + 200:064x}") for index in range(45)],
+            hard_pass=False,
+        )
+        paged_dir = root / "paged"
+        paged_path = report_mod.render_report(paged_receipt, out=paged_dir)
+        page2 = paged_dir / "report-page-02.html"
+        if paged_path.name != "report.html" or not page2.is_file():
+            raise AssertionError(f"expected paginated report files, got {paged_path} {page2.exists()}")
+        for path in (paged_path, page2):
+            text = path.read_text(encoding="utf-8")
+            required_ids_present(text)
+            assert_no_active_content(text, path.name)
+            if "page 1" not in text or "page 2" not in text:
+                raise AssertionError(f"{path.name} missing pager")
+
         # CLI path: malformed file still renders.
         cli_dir = root / "cli-malformed"
         cli_dir.mkdir()

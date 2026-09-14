@@ -7,7 +7,7 @@ description: Portable contract for ingesting coding-agent session logs (Claude C
 
 Intended first-party Styrir skill. Local files in, redacted JSON receipts plus one self-contained HTML dossier out through a shared local CLI; no Phoenix server, no OTel collector, no cloud account, and no OMP-native workflow or Grok server prerequisite.
 
-The portable shared CLI is `python3 session-eval/scripts/session_eval.py`. It reads explicit local `--path` inputs (or the documented host roots), accepts repeatable `--harness` filters and `--since`, and writes an immutable `styrir-session-eval/v0` receipt plus standalone `report.html` under `--out`. Pipeline: ingest → registry enrich → evaluate → optional explicitly approved judge → recommendations → history → optional ATIF → render. Judge code is imported only when judge flags are selected; the default path makes no provider calls.
+The portable shared CLI is `python3 session-eval/scripts/session_eval.py`. It reads explicit local `--path` inputs (or the documented host roots), accepts repeatable `--harness` filters and `--since`, and writes an immutable `styrir-session-eval/v0` receipt plus standalone `report.html` under `--out` (additional `report-page-NN.html` when sessions paginate). Pipeline: ingest → registry enrich → evaluate → optional explicitly approved judge → recommendations → history → optional ATIF → render. Judge code is imported only when judge flags are selected; the default path makes no provider calls.
 
 [Canonical index](docs/index.md) · [authoritative specification](docs/specification.md)
 

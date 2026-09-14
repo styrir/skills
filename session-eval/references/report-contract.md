@@ -15,7 +15,7 @@ Two artifacts per evaluation, written under `OUT`:
 | file | audience |
 |---|---|
 | `receipt.json` | machines, trend store, later diffs |
-| `report.html` | humans |
+| `report.html` | humans (index; additional `report-page-NN.html` when sessions exceed 40) |
 
 Phoenix's UI is a live React/GraphQL SPA with no static HTML export in source. Do not copy it. Pattern to reimplement: `~/Code/agent-ops/bin/workgraph-dossier` (inline CSS, no CDN, no JS required, stable ids, malformed lines counted). Chart ideas to reimplement independently: time bars, pass-rate lines, skill ranking, baseline vs candidate counts. Render charts as inline SVG. Historical observations: [Phoenix dossier](../docs/sources/phoenix/index.md), [competitors dossier](../docs/sources/competitors/index.md).
 
@@ -225,7 +225,7 @@ Implementation status (`skills-2ol.8` only): `session-eval/scripts/recommend.py`
 
 ## report.html
 
-One self-contained offline file. Inline CSS. No network. No session prompt text, tool payloads, secrets, or terminal output. No JavaScript required. Openable as a `file:` document.
+Self-contained offline HTML. Inline CSS. No network. No session prompt text, tool payloads, secrets, or terminal output. No JavaScript required. Openable as a `file:` document. The index is always `report.html`. When a receipt has more than 40 sessions, session rows paginate into `report-page-02.html` and following; every page keeps the required sections. CLI stdout lists every written path. Receipt.json remains the machine artifact; HTML never reopens raw session files.
 
 Required sections and ids:
 
