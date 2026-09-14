@@ -1,13 +1,13 @@
 ---
 name: session-eval
-description: Portable contract for ingesting coding-agent session logs (Claude Code, Codex, Pi, Grok, Oh My Pi), tracking Styrir skill activations, running a code-first check catalog, and eventually emitting a self-contained HTML trend report without standing up Phoenix or any SaaS.
+description: Portable contract for ingesting coding-agent session logs (Claude Code, Codex, Pi, Grok, Oh My Pi), tracking Styrir skill activations, running a code-first check catalog, and emitting a self-contained offline HTML trend report without standing up Phoenix or any SaaS.
 ---
 
 # Session Eval
 
 Intended first-party Styrir skill. Local files in, redacted JSON receipts plus one self-contained HTML dossier out through a shared local CLI; no Phoenix server, no OTel collector, no cloud account, and no OMP-native workflow or Grok server prerequisite.
 
-The portable ingest implementation is `python3 session-eval/scripts/ingest.py`. It is stdlib-only, reads explicit local `--path` inputs (or the documented host roots), accepts repeatable `--harness` filters and `--since`, and writes the normalized `styrir-session-eval/v0` receipt under `--out` (default `.styrir/runs/<date>-session-eval`). Ingest emits no report, evaluator, judge, ATIF, or history artifacts; downstream stages consume the same receipt.
+The portable shared CLI is `python3 session-eval/scripts/session_eval.py`. It reads explicit local `--path` inputs (or the documented host roots), accepts repeatable `--harness` filters and `--since`, and writes an immutable `styrir-session-eval/v0` receipt plus standalone `report.html` under `--out`. Pipeline: ingest → registry enrich → evaluate → optional explicitly approved judge → recommendations → history → optional ATIF → render. Judge code is imported only when judge flags are selected; the default path makes no provider calls.
 
 [Canonical index](docs/index.md) · [authoritative specification](docs/specification.md)
 
@@ -25,19 +25,19 @@ Do not use this to stand up Arize Phoenix, ship traces to a vendor, or score Wor
 
 ## Portable implementation interface
 
-Run the shared local ingest command from the skills repository (or pass absolute paths):
+Run the shared local command from the skills repository (or pass absolute paths):
 
 ```bash
-python3 session-eval/scripts/ingest.py \
+python3 session-eval/scripts/session_eval.py \
   --harness claude --path /path/to/session.jsonl \
-  --out /path/to/output
+  --since all --out /path/to/output
 ```
 
-Repeat `--harness`/`--path` as needed, or omit both to use the canonical discovery roots and all five adapters. `--since` defaults to the last seven days by file mtime; pass `--since all` for an explicitly bounded historical fixture. The command never requires OMP native workflow or a Grok server and records missing requested harnesses as coverage gaps.
+Repeat `--harness`/`--path` as needed, or omit both to use the canonical discovery roots and all five adapters. `--since` defaults to the last seven days by file mtime; pass `--since all` for an explicitly bounded historical fixture. Optional `--skill-root`, `--first-party-root`, `--history-root`, `--baseline`, `--atif`, and `--workgraph*` flags are on the CLI. Judge flags (`--judge-rubric`, `--judge-provider`, `--judge-model`, `--judge-recipient`, optional `--judge-evidence` / `--judge-auth-env`) are opt-in together.
 
-The CLI accepts local session paths or a time window, harness filters, skill roots, and an output root. It reads primary streams directly, enriches them with sidecars, and emits the redacted `styrir-session-eval/v0` `receipt.json` described by `references/report-contract.md`; report, checks, judges, and history remain downstream stages. The executable is intentionally a small stdlib entry point so optional host integrations invoke this same interface rather than implementing a second evaluator.
+Stdout is one JSON object with the actual immutable `receipt` path, actual `report` HTML path, `hard_pass`, `infra_ok`, and `coverage`. Empty and malformed inputs still produce a receipt and HTML with an honest verdict. A missing requested harness is a coverage gap; a missing implementation dependency fails explicitly. OMP-native workflow and Grok server integrations are optional conveniences that may invoke this same interface, never prerequisites or alternate evaluator logic.
 
-The portable path is an ordinary terminal invocation on local files. A missing requested harness is a coverage gap; a missing implementation dependency fails explicitly. OMP-native workflow and Grok server integrations are optional conveniences that may invoke this same interface, never prerequisites or alternate evaluator logic.
+Individual stages remain invocable (`ingest.py`, `evaluate.py`, `history.py`, `report.py`) for debugging. Host integrations must call this shared CLI or `session_eval.evaluate_sessions(...)` rather than implementing a second evaluator. The HTML renderer consumes the redacted receipt only and never opens raw session files or WorkGraph `stages/**/full.md`.
 
 ## Inputs
 
@@ -55,13 +55,13 @@ The first-party root in `SKILL_ROOTS` defaults to `~/Code/skills` and is configu
 ## Workflow
 
 1. **Discover.** Enumerate session files from `references/ingest-formats.md`. Record glob, count, oldest/newest mtime, parse errors, native identity, and an immutable source snapshot. Missing harness = explicit gap, not a zero score.
-2. **Ingest.** Stream JSONL/JSON. One adapter per harness. Normalize to the record below, including parser/version, lifecycle evidence, lineage, and usage provenance. Preserve unknown fields privately. Pair tool calls by id; classify unpaired as `tool.unpaired`; EOF alone is never terminal.
+2. **Ingest.** Stream JSONL/JSON. One adapter per harness. Normalize to the record below, including parser/version, lifecycle evidence, lineage, and usage provenance. Preserve unknown fields privately. Pair tool calls by id. Resolved calls keep `status=ok|error` plus `result_source_line`/`result_source_path`. Live pending calls stay unresolved; unpaired after explicit terminal evidence is missing. EOF alone is never terminal.
 3. **Skills.** Build a registry from `SKILL.md` frontmatter plus content digest. Join activations from Grok `prompt_context.json`, Claude skill paths, and tool-argument mentions (low confidence). Compare digest to previous snapshot; historical loaded digest is distinct from the current on-disk digest.
 4. **Check.** Run deterministic checks first (`references/check-catalog.md`). LLM judges are opt-in under [`references/judge-contract.md`](references/judge-contract.md) and must name model, rubric id, and evidence spans; only explicitly authorized redacted evidence references may be supplied.
-5. **Report.** Write immutable `receipt.json` (machine) and `report.html` (human) per `references/report-contract.md`. Reuse workgraph-dossier rules: one self-contained HTML file, no CDN, no JS required, stable element ids, malformed events counted not dropped. Keep prior receipts in history; never overwrite a receipt for a changed source snapshot.
+5. **Report.** Write immutable `receipt.json` (machine) and `report.html` (human) per `references/report-contract.md`. Reuse workgraph-dossier rules: one self-contained HTML file, no CDN, no JS required, stable element ids, malformed events counted not dropped. Source evidence links only encoded local `file:` URLs; javascript/data/http remain non-clickable labels. Provenance lists each snapshot hash in full. Keep prior receipts in history; never overwrite a receipt for a changed source snapshot.
 6. **Correct.** For each failing skill or recurring check, propose a concrete SKILL.md or adapter change. Do not edit third-party skills in `~/.omp/agent/skills` or `.omp/skills`. First-party fixes belong in `~/Code/skills`.
 
-Implementation is present at `session-eval/scripts/ingest.py`; until downstream checks and rendering exist, manual source inspection with repo tools (Read/Grep/Glob) and the ingest CLI's redacted receipt are not conformance evidence for those later requirements.
+The shared CLI implements this pipeline. Stage scripts may be invoked independently; missing sibling implementations fail explicitly rather than emitting a fake result. The HTML report is self-contained (inline CSS, no CDN, no JavaScript) with stable section ids from `references/report-contract.md`.
 
 ## Normalized record
 
