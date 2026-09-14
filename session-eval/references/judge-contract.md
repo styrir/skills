@@ -6,11 +6,16 @@ read_when:
 
 # Judge contract
 
-Future contract. This document specifies intended opt-in judge behavior. It does not assert that any provider was called, that any rubric was scored, or that a runtime judge exists. No calls are authorized by the existence of this file.
+This document specifies opt-in judge behavior. Presence of `session-eval/scripts/judge.py` is not evidence that a provider was called or that any rubric was scored against a live model. No calls are authorized by the existence of this file.
 
 Authority: [canonical store](../docs/index.md), [specification](../docs/specification.md), and [requirement map](../docs/requirement-map.md) (`skills-2ol.7` owns [SE-JUDGE-001](../docs/specification.md); provider boundary also [SE-PRIVACY-001](../docs/specification.md)). Named judge ids live in [check-catalog.md](check-catalog.md). Results use that catalog's evaluation-result object (same `run.checks[]` record as [SKILL.md](../SKILL.md)). This file owns rubric inputs, steps, pass/fail/unknown, evidence, approval, and identity. It does not own the normalized run record, the deterministic catalog, or receipt/HTML layout ([report-contract.md](report-contract.md)).
 
 Rubric set identity: `session-eval-judge-rubrics/v1`. Independent wording. Do not copy Phoenix classification YAML or evaluator source. Historical category observations only: [Phoenix dossier](../docs/sources/phoenix/index.md), [competitors dossier](../docs/sources/competitors/index.md).
+
+## Implementation status
+
+`skills-2ol.7` implements the four `kind=llm` rows against ingest `styrir-session-eval/v0` receipts and hash-verified frozen snapshots. Public API: `prepare_judge_request(...)`, `approve_interactively(preview)`, `judge_receipt(...)` plus standalone `python3 session-eval/scripts/judge.py --receipt ...`. Default remains zero provider calls. Live authority is an ephemeral in-process capability from direct interactive approval; `receipt.approvals[].granted=true` is audit only. Transport is one stdlib HTTP OpenAI-compatible chat-completions request with no redirects, retries, or tools. One rubric definition drives outbound predicates, allowed `status`/`observed` pairing, and response validation; the approved payload must carry that definition so the provider does not guess private tokens. Focused synthetic matrix: `session-eval/scripts/smoke_judge.py`. This section does not record a passing run and does not claim provider verification.
+
 
 ## Default: opt-out, zero calls
 
@@ -94,7 +99,7 @@ Required approval object (stored immutably in `receipt.approvals[]`, not a live 
 | Raw content | Raw session content is never a permitted scope class for this interface. Only explicitly authorized redacted semantic summaries/structural evidence and pointers may be supplied. Insufficient permitted evidence yields `unknown`, not a request to upload the transcript. |
 | Source mutation | Forbidden. Judges are read-only over the snapshot. |
 | Export | Receipts/HTML remain redacted regardless of what was approved for a provider call. |
-| Calls | Documentation only here. Implementation later must refuse to call when approval is absent. |
+| Calls | Implementation refuses to call when live interactive approval is absent. Stored `granted=true` is audit only. |
 
 Unknown events remain in private ingest memory/source. Exported artifacts carry pointers and redacted labels only.
 
@@ -106,12 +111,37 @@ For every authorized judge:
 2. Bind inputs only from the immutable snapshot explicitly listed in the approval; compare its hash before every call. A different/currently appended snapshot is not covered by an older approval for the same native session. Do not read the live worktree, current SKILL.md bytes, Git, Beads, or WAL to fill gaps.
 3. If a required input is absent → `unknown`, zero calls (or no additional calls).
 4. Perform at most one provider attempt with the approved scope.
-5. Map the provider response onto `pass` / `fail` / `unknown` using that rubric. Unparseable or errored responses are `unknown`.
+5. Map the provider response onto `pass` / `fail` / `unknown` using that rubric's pairing. Unparseable, unpaired, or errored responses are `unknown`.
 6. Attach `evidence[]` spans and an explanation that cites those spans. Do not embed payloads.
 
 Source hashes and tool names alone cannot establish semantic completeness, grounding or friction. Inputs may include locally prepared, redacted semantic summaries tied to exact source spans, only when the approved scope includes them. If extracting the relevant request/claim/outcome would require unsupported inference or disallowed payload disclosure, return `unknown`; do not invent pre-classified markers to make a judge callable.
 
 EOF is not terminal. Lifecycle and pairing follow [SKILL.md](../SKILL.md) and [check-catalog.md](check-catalog.md).
+
+## Request and response contract
+
+The four rubric sections below are the single definition of question, pass/fail/unknown predicates, and allowed `observed` tokens. The implementation MUST derive the outbound instruction, allowed `status`/`observed` pairing, and parser validation from that same definition. Do not keep a separate prompt vocabulary or a more-permissive parser enum.
+
+Each approved chat-completions request for a named rubric MUST include:
+
+- that rubric's question and pass/fail/unknown predicates
+- allowed `status` values `pass` \| `fail` \| `unknown`
+- the exact `status`/`observed` pairing listed in that rubric's Evidence paragraph
+
+The provider is not expected to guess private tokens. Parser validation remains strict: an HTTP 200 body whose `status`/`observed` pair is missing, unpaired, or outside the supplied tokens is not a pass and is not mapped onto a guessed verdict.
+
+Unaccepted transport or parse outcomes:
+
+- `status=unknown`
+- `observed=provider_error`
+- `error.kind=provider`
+- a bounded non-sensitive reject reason only (`http_error`, `transport_failure`, `invalid_json`, `malformed_output`, `unsupported_status`, `unsupported_evidence_reference`, `tools_not_allowed`, `redirect_refused`, `auth_missing`)
+- never the raw provider body, headers, or exception text
+- no retry, redirect follow, tool call, or fallback verdict
+
+A changed instruction or pairing changes `payload_hash` and requires a new explicit interactive approval of that exact payload. An older audit record is not authority. Aggregate `evidence[].snapshot_hash` remains `run.source_snapshot.sha256`.
+
+
 
 ## Rubric: `judge.completeness`
 
@@ -222,9 +252,9 @@ This rubric does not judge patch correctness against a mutable worktree and is n
 
 **Evidence.** User follow-up span + preceding assistant span. `observed`: `no_avoidable_reprompt` \| `avoidable_reprompt` \| `friction_unevaluable` \| `provider_error`.
 
-## Future acceptance scenarios
+## Acceptance scenarios
 
-Documentation-level only. None is claimed executed. No scenario here is permission to call a provider.
+Executable local paths live in `session-eval/scripts/smoke_judge.py`. None of those rows is claimed executed here. No scenario here is permission to call a provider.
 
 | Scenario | Expected judge outcome |
 |---|---|
@@ -232,13 +262,18 @@ Documentation-level only. None is claimed executed. No scenario here is permissi
 | User asks for judges but omits provider, model, recipient, or scope | `unknown`, `error.kind=internal`; zero calls |
 | Approval present, completeness authorized, snapshot has an undisclosed unmet request | After one authorized attempt: `judge.completeness` `fail` with request/disclosure evidence spans |
 | Approval present, required read evidence missing for a grounding claim | `judge.grounding` `unknown`; never `pass` |
-| Provider returns an error or unparseable body | `unknown`, `error.kind=provider`; no retry; never `pass` |
+| Provider returns an error or unparseable body | `unknown`, `error.kind=provider`; bounded reject reason only; no retry; never `pass`; no raw body retained |
+| Authorized call, HTTP 200 with `observed` outside the supplied pairing | `unknown`, `error.kind=provider`, bounded `unsupported_status`; never `pass`; no raw body retained |
+| Outbound preview for each of the four rubrics | Request carries that rubric's canonical predicates and allowed `status`/`observed` pairing; semantic evidence has no preclassified verdict labels |
 | Opt-in for completeness only | Other three judges remain `not_applicable`; no calls for them |
 | Judge `pass` on a run whose deterministic `hard_pass` is false | Not a contradiction; judge does not flip `hard_pass` unless promoted |
+| Real provider proof | Requires fresh interactive approval of the exact preview payload; not claimed executed by this implementation |
+
+
 
 ## Non-goals
 
-- Actual provider calls in this tranche
+- Builder-initiated provider calls or claimed live-model verification
 - Retries, sampling, admission control, or online settle loops
 - Automatic skill edits or prompt uploads
 - A second evaluation-result schema
