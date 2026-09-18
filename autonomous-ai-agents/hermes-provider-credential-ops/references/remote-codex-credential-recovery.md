@@ -26,6 +26,12 @@ Treat the remote CLI update and credential transfer as one maintenance transacti
    - a minimal `hermes chat -Q -q` smoke succeeds through `openai-codex`
 10. Restart the long-lived Hermes gateway, then verify its service is active and `hermes status --all` reports Codex logged in.
 
+## Telegram/headless operator alternative
+
+If the user is operating the remote Hermes instance through Telegram and cannot approve a local desktop/TUI secret-egress prompt, do not keep retrying SCP. Start a dedicated login on the remote host with `codex login --device-auth`, return the URL and one-time code to the user, and keep the process alive until authorization completes.
+
+A successful remote Codex device login updates `~/.codex/auth.json` only. Hermes still needs an explicit import with `_save_codex_tokens`, followed by a gateway restart. If `hermes auth list openai-codex` then shows both an expired old credential and the freshly imported one—with the selection arrow still on the old entry—back up `~/.hermes/auth.json`, remove only the stale entry by exact index or label, confirm the fresh entry remains selected, and restart again. Verify all three layers independently: remote `codex exec`, `hermes chat -Q -q`, and the fresh gateway PID's journal after restart. Old-PID 401 lines at the restart boundary do not prove the new gateway failed; scope the final log check to the new PID and activation timestamp.
+
 ## CLI compatibility contract
 
 Credential validity and CLI compatibility are separate failure surfaces but one operational workflow. Every credential transfer must include the scoped CLI update and post-update smoke. Model-catalog decode errors, including unknown newly introduced reasoning-effort enum variants, fail verification even when inference succeeds. Do not misdiagnose them as bad OAuth, and do not defer the update as optional follow-up.
