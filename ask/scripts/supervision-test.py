@@ -78,6 +78,31 @@ class SupervisionTests(unittest.TestCase):
             _, result, _ = self.run_case(code,adapter=adapter)
             self.assertEqual(result['status'],'complete')
 
+    def test_codex_config_warning_does_not_mask_failures(self):
+        warning = {"type": "error", "message": "Codex is ignoring 6 unrecognized configuration settings. Check for typos or deprecated settings.\n  user (/example/config.toml): `network_access` is ignored.\n  ... and 5 more ignored settings."}
+        answer = {"type": "item.completed", "item": {"type": "agent_message", "text": "source-anchored review"}}
+        terminal = {"type": "turn.completed"}
+        cases = [
+            ([warning, answer, terminal], "complete"),
+            ([warning, answer], "failed"),
+            ([warning, terminal], "failed"),
+            ([warning, answer, {"type": "error", "message": "authentication failed"}, terminal], "failed"),
+            ([warning, answer, {"type": "turn.failed"}, terminal], "failed"),
+            ([dict(warning, message=warning["message"] + "\nProvider request failed"), answer, terminal], "failed"),
+            ([{"type": "error", "message": "unknown warning"}, answer, terminal], "failed"),
+        ]
+        for events, expected in cases:
+            with self.subTest(events=events):
+                code = "print(" + repr("\n".join(json.dumps(e) for e in events)) + ")"
+                proc, result, out = self.run_case(code, adapter="codex-stream-surface.ts")
+                self.assertEqual(result["status"], expected, proc.stderr)
+                if warning in events:
+                    self.assertIn("unrecognized configuration", (out / "trace.jsonl").read_text())
+        item_warning = {"type": "item.completed", "item": {"type": "error", "message": warning["message"]}}
+        code = "print(" + repr("\n".join(json.dumps(e) for e in [item_warning, answer, terminal])) + ")"
+        _, result, _ = self.run_case(code, adapter="codex-stream-surface.ts")
+        self.assertEqual(result["status"], "complete")
+
     def test_signal_cancellation_and_child_drain(self):
         with tempfile.TemporaryDirectory() as d:
             out=Path(d); (out/'prompt.md').write_text('test')

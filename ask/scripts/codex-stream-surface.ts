@@ -15,6 +15,20 @@ import {
   type ProgressEvent,
 } from "./stream-core.ts";
 
+// Codex 0.156 emits this non-fatal startup diagnostic with type="error".
+// Admit only its exact header and diagnostic lines; unrelated errors still fail.
+function describeDiagnostic(message: string): ProgressEvent[] {
+  const lines = message.trim().split("\n");
+  const isConfigWarning = lines.length > 1
+    && /^Codex is ignoring [1-9]\d* unrecognized configuration settings\. Check for typos or deprecated settings\.$/.test(lines[0])
+    && lines.slice(1).every((line) =>
+      /^  (?:user|project|system) \(.+\): `[^`]+` is ignored\.$/.test(line)
+      || /^  \.\.\. and [1-9]\d* more ignored settings\.$/.test(line));
+  return isConfigWarning
+    ? [{ progressLine: `warning: ${compact(message)}` }]
+    : [{ progressLine: `error: ${compact(message)}`, failure: message }];
+}
+
 function describeItem(item: Record<string, unknown>, phase: string): ProgressEvent[] {
   const itemType = typeof item.type === "string" ? item.type : "item";
 
@@ -42,7 +56,7 @@ function describeItem(item: Record<string, unknown>, phase: string): ProgressEve
   }
   if (itemType === "error") {
     const message = typeof item.message === "string" ? item.message : JSON.stringify(item);
-    return [{ progressLine: `error: ${compact(message)}`, failure: message }];
+    return describeDiagnostic(message);
   }
   return [{ progressLine: `${itemType}: ${phase}` }];
 }
@@ -99,7 +113,7 @@ export function summarizeCodexStreamLine(line: string): ProgressEvent[] {
   }
   if (event.type === "error") {
     const message = typeof event.message === "string" ? event.message : JSON.stringify(event);
-    return [{ progressLine: `error: ${compact(message)}`, failure: message }];
+    return describeDiagnostic(message);
   }
   return [{ progressLine: `${event.type}: received` }];
 }
