@@ -14,6 +14,8 @@ Read this first. This file is the binding work contract for agents operating in 
 
 - Read the applicable root and child `AGENTS.md` chain before editing.
 - Use Beads for work that must survive the current session; read `agent-guidance/beads-and-dolt.md` first.
+- When work hits a new issue (a new failure mode, unfamiliar API behavior, or surprising live evidence), research it before briefing a fix: dispatch scouts using the `styrir-search-plus` skill and, when the issue is code-related, also fetch current library/API documentation with Context7. Fold the findings into the fix brief. Known, already-researched issues do not need a new pass.
+- When research or new evidence changes the approach, update the plan and the tracker in the same step, before any implementation brief is dispatched: amend the affected Beads (description, acceptance criteria, notes) or create new Beads and supersede the old ones with a reason, so the plan, Beads and briefs all describe the same approach. Never leave a Bead describing an abandoned approach; see `agent-guidance/beads-and-dolt.md`.
 - Read `agent-guidance/handoffs.md` when work crosses sessions, agents, or operators.
 - Read `agent-guidance/styrir-workspace.md` before creating generated artifacts.
 - Read `agent-guidance/gitnexus.md` before architecture exploration, flow tracing, or blast-radius analysis.
