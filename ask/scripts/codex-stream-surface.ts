@@ -42,7 +42,7 @@ function describeItem(item: Record<string, unknown>, phase: string): ProgressEve
   }
   if (itemType === "error") {
     const message = typeof item.message === "string" ? item.message : JSON.stringify(item);
-    return [{ progressLine: `error: ${compact(message)}` }];
+    return [{ progressLine: `error: ${compact(message)}`, failure: message }];
   }
   return [{ progressLine: `${itemType}: ${phase}` }];
 }
@@ -88,10 +88,10 @@ export function summarizeCodexStreamLine(line: string): ProgressEvent[] {
     return [{ progressLine: "turn: started" }];
   }
   if (event.type === "turn.completed") {
-    return [{ progressLine: formatUsage(event.usage) }];
+    return [{ progressLine: formatUsage(event.usage), completion: { ok: true, reason: "turn.completed" } }];
   }
   if (event.type === "turn.failed") {
-    return [{ progressLine: `error: turn failed — ${compact(JSON.stringify(event))}` }];
+    return [{ progressLine: `error: turn failed — ${compact(JSON.stringify(event))}`, failure: "turn.failed" }];
   }
   if (event.type.startsWith("item.") && isRecord(event.item)) {
     const phase = event.type.slice("item.".length);
@@ -99,7 +99,7 @@ export function summarizeCodexStreamLine(line: string): ProgressEvent[] {
   }
   if (event.type === "error") {
     const message = typeof event.message === "string" ? event.message : JSON.stringify(event);
-    return [{ progressLine: `error: ${compact(message)}` }];
+    return [{ progressLine: `error: ${compact(message)}`, failure: message }];
   }
   return [{ progressLine: `${event.type}: received` }];
 }

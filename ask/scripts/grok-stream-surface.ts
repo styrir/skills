@@ -32,7 +32,7 @@ export function createGrokSummarizer(): LineSummarizer {
 
   const flushThought = (events: ProgressEvent[]) => {
     if (pendingThought.trim()) {
-      events.push({ progressLine: `thinking: ${compact(pendingThought, 140)}` });
+      events.push({ progressLine: `reasoning activity: ${pendingThought.length} characters` });
     }
     pendingThought = "";
   };
@@ -89,6 +89,7 @@ export function createGrokSummarizer(): LineSummarizer {
       events.push({
         progressLine: `end: ${stopReason}${sessionId ? `, session ${sessionId} (resume: grok -r ${sessionId})` : ""}`,
         assistantText: answer.trim() || undefined,
+        completion: { ok: ["EndTurn", "end_turn", "stop"].includes(stopReason), reason: stopReason, sessionId, requestId: typeof event.requestId === "string" ? event.requestId : undefined },
       });
       return events;
     }
@@ -96,7 +97,15 @@ export function createGrokSummarizer(): LineSummarizer {
       flushThought(events);
       flushText(events);
       const message = typeof event.message === "string" ? event.message : JSON.stringify(event);
-      events.push({ progressLine: `error: ${compact(message)}` });
+      events.push({ progressLine: `error: ${compact(message)}`, failure: message });
+      return events;
+    }
+    if (event.type === "max_turns_reached" || event.type === "auto_compact_failed") {
+      events.push({ failure: event.type, progressLine: `${event.type}: incomplete` });
+      return events;
+    }
+    if (event.type === "tool_call" || event.type === "tool_call_update") {
+      events.push({ progressLine: `tool: ${typeof event.toolName === "string" ? event.toolName : "update"} ${typeof event.status === "string" ? event.status : "received"}` });
       return events;
     }
     // Unknown types include terminal events (max_turns_reached, auto_compact_*):

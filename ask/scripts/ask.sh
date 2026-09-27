@@ -4,12 +4,25 @@
 # Streams provider JSONL through the matching *-stream-surface.ts adapter:
 # raw trace lands in <outdir>/trace.jsonl (tail-able), compact progress goes to
 # stderr in realtime, and the final answer renders to <outdir>/artifact.md.
-# Providers without a streaming adapter fall back to `omc ask`.
+# Providers without qualified JSONL completion adapters cannot launch.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"
 REGISTRY="$SKILL_DIR/providers.json"
+
+# Freeze executing bytes. Editing the shared source must never change a live shell's continuation.
+if [ "${ASK_RUNTIME_SNAPSHOT:-}" != "1" ]; then
+  ASK_RUNTIME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ask-runtime.XXXXXX")"
+  cp -R "$SCRIPT_DIR" "$ASK_RUNTIME_DIR/scripts"
+  cp "$REGISTRY" "$ASK_RUNTIME_DIR/providers.json"
+  export ASK_RUNTIME_SNAPSHOT=1 ASK_RUNTIME_DIR ASK_CANONICAL_SKILL_ROOT="$SKILL_DIR"
+  exec bash "$ASK_RUNTIME_DIR/scripts/ask.sh" "$@"
+fi
+# Only remove the private runtime directory whose runner is actually executing.
+if [ "$SKILL_DIR" = "${ASK_RUNTIME_DIR:-}" ] && [[ "$SKILL_DIR" == */ask-runtime.* ]]; then
+  trap 'rm -rf -- "$ASK_RUNTIME_DIR"' EXIT
+fi
 
 usage() {
   echo 'Usage: ask.sh <provider> [-m model] [-d workdir] [-o outdir] [-b budget-usd] [--effort low|medium|high|xhigh] [--research] [--build] (-p prompt-file | "prompt text")' >&2
@@ -17,6 +30,9 @@ usage() {
   echo '  --research, --with-research-tools  Let the reviewer use bounded web search and Context7 when useful.' >&2
   echo '  --build, --write                   Write-enabled builder pass (grok only): full toolset, tool executions auto-approved.' >&2
   echo '  --effort LEVEL                     Codex/Claude reasoning effort when supported (default: unset / provider default).' >&2
+  echo '  --transport proxy                 Explicit tool-free loopback SSE review using the configured model route.' >&2
+  echo '  --first-output-seconds N --wall-seconds N  Watcher budgets (defaults 180/600).' >&2
+  echo '  --max-output-tokens N             Direct proxy output budget (default 16384).' >&2
   echo '  --route-status                     Print one JSON object describing the resolved route and its health; no consultation runs.' >&2
   echo "Providers: $(python3 -c "import json;print(' '.join(json.load(open('$REGISTRY'))['providers']))" 2>/dev/null || echo 'claude codex gemini antigravity grok cursor')" >&2
   exit 1
@@ -25,7 +41,7 @@ usage() {
 [ $# -ge 2 ] || usage
 PROVIDER="$1"; shift
 
-MODEL="" WORKDIR="$PWD" WORKDIR_SET=0 OUTDIR="" BUDGET="" PROMPT_FILE="" PROMPT_TEXT="" RESEARCH_TOOLS=0 BUILD_MODE=0 EFFORT="" ROUTE_STATUS=0
+MODEL="" WORKDIR="$PWD" WORKDIR_SET=0 OUTDIR="" BUDGET="" PROMPT_FILE="" PROMPT_TEXT="" RESEARCH_TOOLS=0 BUILD_MODE=0 EFFORT="" ROUTE_STATUS=0 TRANSPORT_OVERRIDE="" FIRST_OUTPUT="${ASK_FIRST_OUTPUT_SECONDS:-180}" WALL="${ASK_WALL_SECONDS:-600}" MAX_OUTPUT="${ASK_MAX_OUTPUT_TOKENS:-16384}"
 while [ $# -gt 0 ]; do
   case "$1" in
     -m) MODEL="$2"; shift 2 ;;
@@ -37,16 +53,25 @@ while [ $# -gt 0 ]; do
     --research|--with-research|--with-research-tools) RESEARCH_TOOLS=1; shift ;;
     --build|--write) BUILD_MODE=1; shift ;;
     --route-status) ROUTE_STATUS=1; shift ;;
+    --transport) TRANSPORT_OVERRIDE="$2"; shift 2 ;;
+    --first-output-seconds) FIRST_OUTPUT="$2"; shift 2 ;;
+    --wall-seconds) WALL="$2"; shift 2 ;;
+    --max-output-tokens) MAX_OUTPUT="$2"; shift 2 ;;
     -h|--help) usage ;;
     *) PROMPT_TEXT="$1"; shift ;;
   esac
 done
 
-field() { python3 -c "
-import json,sys
-p=json.load(open('$REGISTRY'))['providers'].get('$PROVIDER')
-sys.exit(1) if p is None else print(p.get('$1',''))
-"; }
+field() {
+  python3 - "$REGISTRY" "$PROVIDER" "$1" <<'PYFIELD'
+import json, sys
+with open(sys.argv[1]) as source:
+    provider = json.load(source)['providers'].get(sys.argv[2])
+if provider is None:
+    sys.exit(1)
+print(provider.get(sys.argv[3], ''))
+PYFIELD
+}
 
 # ops-ts4: models routed through the grok transport may be proxy-owned — the
 # grok CLI config declares a [model.*] section with a base_url pointing at a
@@ -55,17 +80,17 @@ sys.exit(1) if p is None else print(p.get('$1',''))
 # registry never duplicates it.
 GROK_ROUTE_CONFIG="${ASK_GROK_CONFIG:-$HOME/.grok/config.toml}"
 
-resolve_route_base_url() { # $1: requested model. Prints base_url ('' when the
+resolve_route_value() { # $1: requested model. Prints base_url ('' when the
   # model has no [model.*] section, i.e. a native xAI model). rc 1 on config
   # read/parse failure so callers can fall back with a warning.
-  python3 - "$GROK_ROUTE_CONFIG" "$1" 2>/dev/null <<'PY'
+  python3 - "$GROK_ROUTE_CONFIG" "$1" "${2:-base_url}" 2>/dev/null <<'PY'
 import sys, tomllib
 
 def strip_effort(name: str) -> str:
     head, sep, _ = name.partition("(")
     return head if sep else name
 
-cfg_path, requested = sys.argv[1], sys.argv[2]
+cfg_path, requested, field = sys.argv[1:]
 target = strip_effort(requested)
 try:
     with open(cfg_path, "rb") as fh:
@@ -78,10 +103,13 @@ if isinstance(models, dict):
         if not isinstance(section, dict):
             continue
         if target in (strip_effort(key), strip_effort(str(section.get("model", "")))):
-            print(section.get("base_url", ""))
+            print(section.get(field, requested if field == "model" else ""))
             break
 PY
 }
+
+resolve_route_base_url() { resolve_route_value "$1" base_url; }
+resolve_route_model() { resolve_route_value "$1" model; }
 
 model_listed() { # $1: /models JSON body, $2: bare model id. rc 0 when listed.
   printf '%s' "$1" | python3 -c '
@@ -98,11 +126,18 @@ TIER="$(field tier)" || { echo "ask.sh: unknown provider '$PROVIDER'" >&2; usage
 [ -n "$MODEL" ] || MODEL="$(field defaultModel)"
 TRANSPORT="$(field transport)"
 [ -n "$TRANSPORT" ] || TRANSPORT="$PROVIDER"
+if [ -n "$TRANSPORT_OVERRIDE" ]; then
+  [ "$TRANSPORT_OVERRIDE" = "proxy" ] || { echo 'ask: only explicit proxy transport override is supported' >&2; exit 2; }
+  TRANSPORT=proxy
+fi
 ADAPTER="$(field adapter)"
 
 # --route-status: report the resolved route and its health as one JSON object
 # on stdout (everything else stays on stderr), then exit. No consultation, no
 # outdir, no credential material.
+if [ "$ROUTE_STATUS" = "1" ] && [ "$TRANSPORT" = "proxy" ]; then
+  exec python3 "$SCRIPT_DIR/proxy-stream.py" --model "$MODEL" --status
+fi
 if [ "$ROUTE_STATUS" = "1" ]; then
   RS_AUTH_OWNER="$(field authOwner)"
   RS_ROLLBACK="$(field rollbackNote)"
@@ -113,7 +148,7 @@ if [ "$ROUTE_STATUS" = "1" ]; then
   if command -v "$RS_BIN" >/dev/null 2>&1; then RS_CLI_FOUND="true"; fi
   case "$TRANSPORT" in
     grok)
-      if [ "$RS_CLI_FOUND" = "true" ]; then
+      if [ "$RS_CLI_FOUND" = "true" ] && [ -z "$(resolve_route_base_url "$MODEL")" ]; then
         RS_AUTH_OUT="$(grok models 2>&1 || true)"
         if ! printf '%s' "$RS_AUTH_OUT" | grep -qi 'logged in'; then
           # same transient-OAuth-refresh retry as the consultation preflight
@@ -130,7 +165,8 @@ if [ "$ROUTE_STATUS" = "1" ]; then
         if [ -n "$RS_ENDPOINT" ]; then
           if RS_MODELS_JSON="$(curl -sf -m 5 "$RS_ENDPOINT/models")"; then
             RS_ENDPOINT_HEALTHY="true"
-            if model_listed "$RS_MODELS_JSON" "${MODEL%%\(*}"; then RS_MODEL_LISTED="true"; else RS_MODEL_LISTED="false"; fi
+            RS_RESOLVED="$(resolve_route_model "$MODEL")"
+            if model_listed "$RS_MODELS_JSON" "${RS_RESOLVED%%\(*}"; then RS_MODEL_LISTED="true"; else RS_MODEL_LISTED="false"; fi
           else
             RS_ENDPOINT_HEALTHY="false"
           fi
@@ -181,9 +217,12 @@ else
   SLUG="$(printf '%s' "$PROMPT_TEXT" | tr -cs 'a-zA-Z0-9' '-' | cut -c1-32 | sed 's/-$//')"
 fi
 [ -n "$OUTDIR" ] || OUTDIR=".ask/${PROVIDER}-${SLUG}-${STAMP}"
+umask 077
 mkdir -p "$OUTDIR"
-if [ -n "$PROMPT_FILE" ]; then if [ "$PROMPT_FILE" -ef "$OUTDIR/prompt.md" ]; then echo "ask: prompt file already at destination ($OUTDIR/prompt.md); using in place" >&2; else cp "$PROMPT_FILE" "$OUTDIR/prompt.md"; fi; else printf '%s\n' "$PROMPT_TEXT" > "$OUTDIR/prompt.md"; fi
 TRACE="$OUTDIR/trace.jsonl" ARTIFACT="$OUTDIR/artifact.md" SUMMARY="$OUTDIR/summary.md"
+[ ! -e "$OUTDIR/result.json" ] && [ ! -e "$TRACE" ] || { echo 'ask: output directory contains an earlier attempt; choose a fresh -o directory' >&2; exit 2; }
+if [ -n "$PROMPT_FILE" ]; then if [ "$PROMPT_FILE" -ef "$OUTDIR/prompt.md" ]; then echo "ask: prompt file already at destination ($OUTDIR/prompt.md); using in place" >&2; else cp "$PROMPT_FILE" "$OUTDIR/prompt.md"; fi; else printf '%s\n' "$PROMPT_TEXT" > "$OUTDIR/prompt.md"; fi
+
 
 # The research appendix is reviewer-shaped ("Do not edit files"), so build
 # passes skip it; grok build mode has web tools available by default anyway.
@@ -211,6 +250,12 @@ join_csv() {
 }
 
 blocker() { # $1 = reason text
+  if [ -f "$OUTDIR/result.json" ]; then
+    echo "blocked: $1" >&2
+    echo "artifact: $ARTIFACT"
+    exit 2
+  fi
+  if [ -f "$ARTIFACT" ]; then mv "$ARTIFACT" "$OUTDIR/partial.md"; fi
   {
     echo "# ${PROVIDER} consultation blocked"
     echo
@@ -239,9 +284,21 @@ fi
 echo "ask: provider=$PROVIDER transport=$TRANSPORT model=${MODEL:-<cli-default>} tier=$TIER" >&2
 echo "ask: tail -f $TRACE" >&2
 
+run_supervised() {
+  python3 "$SCRIPT_DIR/supervise.py" --outdir "$OUTDIR" --adapter "$SCRIPT_DIR/$ADAPTER" \
+    --model "$MODEL" --transport "$TRANSPORT" --first-output-seconds "$FIRST_OUTPUT" --wall-seconds "$WALL" -- "$@"
+}
+
 case "$TIER" in
   stream-json)
     case "$TRANSPORT" in
+      proxy)
+        [ "$BUILD_MODE" = "0" ] && [ "$RESEARCH_TOOLS" = "0" ] || blocker "Direct proxy mode is tool-free; build/research require a qualified CLI route"
+        [ -z "$BUDGET" ] || blocker "Direct proxy cost cap is not supported; use an enforced provider route"
+        ADAPTER=grok-stream-surface.ts
+        run_supervised python3 "$SCRIPT_DIR/proxy-stream.py" --model "$MODEL" --prompt "$OUTDIR/prompt.md" \
+          --effort "${EFFORT:-medium}" --max-output-tokens "$MAX_OUTPUT" || blocker "Proxy consultation incomplete; see result.json"
+        ;;
       claude)
         command -v claude >/dev/null || blocker "claude CLI not found on PATH"
         AUTH_OUT="$(claude auth status 2>&1 || true)"
@@ -261,14 +318,7 @@ case "$TIER" in
         if [ -n "$BUDGET" ]; then
           CLAUDE_ARGS+=(--max-budget-usd "$BUDGET")
         fi
-        set +e
-        # shellcheck disable=SC2094 # adapter receives the prompt path for metadata; it does not write it.
-        claude "${CLAUDE_ARGS[@]}" < "$OUTDIR/prompt.md" \
-          | node --experimental-strip-types "$SCRIPT_DIR/$ADAPTER" "$TRACE" "$ARTIFACT" "$OUTDIR/prompt.md"
-        STATUSES=("${PIPESTATUS[@]}")
-        set -e
-        [ "${STATUSES[0]}" -eq 0 ] || blocker "claude exited ${STATUSES[0]} — see $TRACE"
-        [ "${STATUSES[1]}" -eq 0 ] || blocker "stream adapter exited ${STATUSES[1]} — see $TRACE"
+        run_supervised claude "${CLAUDE_ARGS[@]}" < "$OUTDIR/prompt.md" || blocker "Claude consultation incomplete; see result.json"
         ;;
       codex)
         command -v codex >/dev/null || blocker "codex CLI not found on PATH"
@@ -282,24 +332,25 @@ case "$TIER" in
           CODEX_EFFORT_ARGS=(-c "model_reasoning_effort=\"$EFFORT\"")
           echo "ask: codex effort=$EFFORT" >&2
         fi
-        codex exec --json --sandbox read-only --skip-git-repo-check --disable multi_agent_v2 \
-          ${MODEL:+-m "$MODEL"} "${CODEX_EFFORT_ARGS[@]}" -C "$WORKDIR" "$(cat "$OUTDIR/prompt.md")" </dev/null \
-          | node --experimental-strip-types "$SCRIPT_DIR/$ADAPTER" "$TRACE" "$ARTIFACT" "$OUTDIR/prompt.md"
-        STATUSES=("${PIPESTATUS[@]}")
+        run_supervised codex exec --json --sandbox read-only --skip-git-repo-check --disable multi_agent_v2 \
+          ${MODEL:+-m "$MODEL"} "${CODEX_EFFORT_ARGS[@]}" -C "$WORKDIR" "$(cat "$OUTDIR/prompt.md")" </dev/null || blocker "Codex consultation incomplete; see result.json"
         set -e
-        [ "${STATUSES[0]}" -eq 0 ] || blocker "codex exited ${STATUSES[0]} — see $TRACE"
-        [ "${STATUSES[1]}" -eq 0 ] || blocker "stream adapter exited ${STATUSES[1]} — see $TRACE"
         ;;
       grok)
         command -v grok >/dev/null || blocker "grok CLI not found on PATH"
-        # `grok models` can transiently report unauthenticated while the cached
-        # OAuth token is mid-refresh (observed 2026-07-09); retry once.
-        AUTH_OUT="$(grok models 2>&1 || true)"
-        if ! printf '%s' "$AUTH_OUT" | grep -qi 'logged in'; then
-          sleep 2
+        # Proxy routes do not use xAI authentication. Native xAI still does.
+        AUTH_ENDPOINT="$(resolve_route_base_url "$MODEL")" || blocker "Cannot parse configured model route"
+        if [ -z "$AUTH_ENDPOINT" ] && [ "$PROVIDER" != "claude" ]; then
           AUTH_OUT="$(grok models 2>&1 || true)"
+          if ! printf '%s' "$AUTH_OUT" | grep -qi 'logged in'; then
+            sleep 2
+            AUTH_OUT="$(grok models 2>&1 || true)"
+          fi
+          printf '%s' "$AUTH_OUT" | grep -qi 'logged in' || blocker "grok not authenticated · run: grok login"$'\n'"$AUTH_OUT"
+          if [ -n "$MODEL" ]; then
+            printf '%s' "$AUTH_OUT" | python3 -c 'import re,sys; names={m.group(1) for line in sys.stdin for m in [re.match(r"^\s*[-*]\s+(\S+)",line)] if m}; sys.exit(0 if sys.argv[1] in names else 1)' "$MODEL" || blocker "Requested native model is not listed: $MODEL; no fallback permitted"
+          fi
         fi
-        printf '%s' "$AUTH_OUT" | grep -qi 'logged in' || blocker "grok not authenticated · run: grok login"$'\n'"$AUTH_OUT"
         # ops-ts4: `grok models` proves xAI auth only. Proxy-owned models
         # (claude-*, gpt-5.6-*) ride a local CLIProxyAPI declared as a
         # [model.*] base_url in the grok config; probe the endpoint the run
@@ -312,13 +363,17 @@ case "$TIER" in
             echo "ask: warning: cannot parse grok route config ($GROK_ROUTE_CONFIG); proxy probe skipped, grok auth gate still applies" >&2
           fi
         fi
+        if [ "$PROVIDER" = "claude" ] && [ -z "$ROUTE_BASE_URL" ]; then
+          blocker "Claude proxy model is not configured: $MODEL; no fallback permitted"
+        fi
         if [ -n "$ROUTE_BASE_URL" ]; then
           AUTH_OWNER="$(field authOwner)"
           ROLLBACK_NOTE="$(field rollbackNote)"
-          BARE_MODEL="${MODEL%%\(*}"
+          RESOLVED_MODEL="$(resolve_route_model "$MODEL")"
+          BARE_MODEL="${RESOLVED_MODEL%%\(*}"
           if PROXY_MODELS_JSON="$(curl -sf -m 5 "$ROUTE_BASE_URL/models")"; then
             if ! model_listed "$PROXY_MODELS_JSON" "$BARE_MODEL"; then
-              echo "ask: warning: $BARE_MODEL not listed at $ROUTE_BASE_URL/models (effort variants are often unlisted); continuing" >&2
+              blocker "$BARE_MODEL is not listed at $ROUTE_BASE_URL/models; no model substitution permitted"
             fi
           else
             blocker "proxy-owned model route unreachable: $MODEL is served by ${AUTH_OWNER:-vibeproxy} (CLIProxyAPI) at $ROUTE_BASE_URL, which did not answer.
@@ -355,35 +410,15 @@ Do NOT log in with the claude CLI ('auth login') — auth for this route is owne
           GROK_ARGS+=(--tools "read_file,grep,list_dir")
         fi
         if [ -n "$BUDGET" ]; then
-          echo "ask: grok transport has no budget flag; -b $BUDGET not enforced" >&2
+          blocker "Grok transport cannot enforce -b; no consultation launched"
         fi
-        set +e
-        grok "${GROK_ARGS[@]}" --prompt-file "$OUTDIR/prompt.md" \
-          | node --experimental-strip-types "$SCRIPT_DIR/$ADAPTER" "$TRACE" "$ARTIFACT" "$OUTDIR/prompt.md"
-        STATUSES=("${PIPESTATUS[@]}")
-        set -e
-        [ "${STATUSES[0]}" -eq 0 ] || blocker "grok exited ${STATUSES[0]} — see $TRACE"
-        [ "${STATUSES[1]}" -eq 0 ] || blocker "stream adapter exited ${STATUSES[1]} — see $TRACE"
+        run_supervised grok "${GROK_ARGS[@]}" --prompt-file "$OUTDIR/prompt.md" || blocker "Grok consultation incomplete; see result.json"
         ;;
       *) blocker "no streaming adapter wired for $PROVIDER" ;;
     esac
     ;;
   final-json|text-tee)
-    FALLBACK="$(field fallback)"
-    [ -n "$FALLBACK" ] || blocker "provider $PROVIDER has no adapter and no fallback"
-    echo "ask: no streaming adapter for $PROVIDER — falling back to: $FALLBACK (black-box until it finishes)" >&2
-    set +e
-    $FALLBACK "$(cat "$OUTDIR/prompt.md")" 2>&1 | tee "$TRACE"
-    STATUS=${PIPESTATUS[0]}
-    set -e
-    [ "$STATUS" -eq 0 ] || blocker "$FALLBACK exited $STATUS"
-    {
-      echo "# ${PROVIDER} consultation (fallback route)"
-      echo
-      echo "Ran via \`$FALLBACK\`; raw output captured in \`$TRACE\`."
-      echo "The provider's own artifact (if any) is under .omc/artifacts/ask/."
-    } > "$ARTIFACT"
-    cp "$ARTIFACT" "$SUMMARY"
+    blocker "Provider $PROVIDER has no qualified JSONL completion adapter/watcher route; no black-box fallback permitted"
     ;;
 esac
 

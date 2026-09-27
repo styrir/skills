@@ -9,7 +9,7 @@ One skill for consulting another model from either harness (Claude Code asking C
 
 ## Invocation
 
-Always go through the runner (it resolves defaults, preflight, adapters, artifacts):
+Always go through the runner (it resolves defaults, preflight, attached watcher, adapters and artifacts):
 
 ```bash
 <skill-dir>/scripts/ask.sh <provider> [-m model] [-d workdir] [-o outdir] [-b budget-usd] [--research] [--build] (-p prompt-file | "prompt text")
@@ -20,16 +20,30 @@ Examples:
 
 ```bash
 scripts/ask.sh codex -p brief-review.md                      # Codex review, default model, streamed
-scripts/ask.sh claude --effort high "Second opinion on this plan: …"  # Claude advisor via the Grok/VibeProxy transport
+scripts/ask.sh claude --effort high "Second opinion on this plan: …"  # Claude advisor via the default Grok/VibeProxy transport
 scripts/ask.sh codex -m gpt-5.6-sol -d ~/Code/gefa -o .pipeline/safelight/review -p build-review.md  # -m overrides the registry default
 scripts/ask.sh claude --research -p build-review.md          # Reviewer may use bounded web/Context7 research
 scripts/ask.sh grok -p brief-review.md                       # Grok review (read-only tools), streamed
 scripts/ask.sh grok --build -d ~/Code/gefa -p build-brief.md # Grok as builder: write-enabled, auto-approved
 ```
 
-While it runs: progress lines appear on stderr; the raw provider stream is at `<outdir>/trace.jsonl` (`tail -f` it from anywhere). The run ends by printing `artifact: <path>` and `summary: <path>`.
+Every consultation attaches a watcher before launching the provider and uses a frozen runtime snapshot. Read [the supervision contract](references/supervision.md) when launching, diagnosing, cancelling, or integrating a delegated run. `result.json` must say `complete` before treating output as a completed review. A partial/empty/truncated stream never passes. Plain-text fallback providers are refused until they have a qualified adapter.
+
+While it runs: progress lines and watcher state appear on stderr; the raw provider stream is at `<outdir>/trace.jsonl` (`tail -f` it from anywhere). The run ends by printing `artifact: <path>` and `summary: <path>`.
+
+Every supervised run also writes `<outdir>/status.jsonl`, `<outdir>/result.json` and private `<outdir>/stderr.log`. Use `--first-output-seconds` and `--wall-seconds` for explicit deadlines. Retry only in a fresh output directory. Failed output is retained in `partial.md`.
 
 Every run also writes `<outdir>/summary.md` next to `artifact.md` — **orchestrators should read summary.md, not the full artifact** (token discipline directive 2026-07-10). Review passes get the `VERDICT:` line plus the numbered findings only; scout/build passes get the trailing JSON/JSONL summary records (or the last assistant paragraph), capped at 50 lines. It is derived from the same stream data as artifact.md — no extra model calls — and artifact.md remains the full record. Blocked runs write the blocker reason to summary.md as well.
+
+## Self-contained proxy review
+
+For a prompt that already contains the complete material, explicitly select the tool-free streaming proxy route:
+
+```bash
+scripts/ask.sh claude --transport proxy -m claude-opus-5-5 --effort medium --max-output-tokens 16384 -p complete-review-prompt.md
+```
+
+This reads the existing configured loopback route and credential at runtime. It does not change defaults or expose secrets. No file-reading, web, send or mutation tools are available; research/build modes are refused. Its SSE is normalized to JSONL and supervised by the same watcher. See the supervision reference for route qualification and token limits.
 
 ## Providers and defaults
 
@@ -43,13 +57,13 @@ Defaults live in **`providers.json` — the single place to update as models imp
 | gemini | (CLI default) | final-json | `omc ask gemini` fallback |
 | antigravity / cursor | (CLI default) | text-tee | `omc ask <provider>` fallback |
 
-Tiers: **stream-json** = realtime adapter (trace + progress + artifact); **final-json** = structured output only at the end; **text-tee** = no structured output, raw tee. A new provider starts at the lowest honest tier and earns an adapter (`scripts/<provider>-stream-surface.ts` built on `stream-core.ts`).
+Tiers: **stream-json** = realtime adapter (trace + progress + artifact); **final-json** = structured output only at the end; **text-tee** = no structured output, raw tee. Unqualified tiers cannot launch. A new provider earns a JSONL completion adapter and watcher qualification (`scripts/<provider>-stream-surface.ts` built on `stream-core.ts`).
 
-**Proxy-owned claude route (ops-ts4):** the claude provider's models ride a local CLIProxyAPI whose endpoint is declared in the grok CLI config (`[model.claude-*]` `base_url`; override the config path with `ASK_GROK_CONFIG` for tests). Preflight resolves that route and hard-gates on `GET <base_url>/models`, so a dead proxy blocks up front with an artifact naming the owner (`authOwner: vibeproxy`), the exact endpoint, and the rollback route from the registry's `rollbackNote` (default `127.0.0.1:8319`, agent-ops:ops-ts4) — never remediate that blocker with a native claude login. Native xAI models (no `base_url`) skip the probe. `ask.sh <provider> --route-status` prints one JSON object — `{provider, transport, model, endpoint, authOwner, endpointHealthy, modelListed, cliFound, authCheckPassed, rollback}` — for checking the route without spending tokens.
+**Proxy-owned claude route (ops-ts4):** the claude provider's models ride a local CLIProxyAPI whose endpoint is declared in the grok CLI config (`[model.claude-*]` `base_url`; override the config path with `ASK_GROK_CONFIG` for tests). Preflight resolves that route and hard-gates on `GET <base_url>/models`, so a dead proxy blocks up front with an artifact naming the owner (`authOwner: vibeproxy`), the exact endpoint, and the rollback route from the registry's `rollbackNote` (default `127.0.0.1:8319`, agent-ops:ops-ts4) — never remediate that blocker with a native claude login. Native xAI models (no `base_url`) skip the proxy probe and require their own Grok auth. Configured proxy routes do not require unrelated xAI login. Unknown Claude proxy models fail before consultation; no fallback is permitted. `ask.sh <provider> --route-status` prints one JSON object — `{provider, transport, model, endpoint, authOwner, endpointHealthy, modelListed, cliFound, authCheckPassed, rollback}` — for checking the route without spending tokens.
 
 Codex specifics: **the registry default is GPT-6 Astra (`gpt-6-astra`; owner directive 2026-09-05 — faster, more thorough, cheaper than 5.6 Sol; slug verified with codex-cli 0.153.3 via `codex exec -m gpt-6-astra`).** Older note (verified 2026-07-09): GPT-5.6 ships as three tiers — **Sol** (flagship, the registry default), **Terra** (balanced), **Luna** (fast/cheap) — slugs `gpt-5.6-sol|terra|luna`. Sol requires codex CLI ≥ 0.144 and the runner passes `--disable multi_agent_v2` (its injected spawn_agent tool collides with Sol's reserved `collaboration.spawn_agent`; openai/codex#26753).
 
-Grok specifics (grok CLI 0.2.93, verified 2026-07-09): the model default lives in the grok CLI config (grok-4.5 at verification time), so leave `-m` off to use it; the stream carries only `thought`/`text` token deltas plus `end` — tool calls do not surface, so progress is coarser than codex/claude; `-b` budget caps are not enforced (no CLI flag); auth is the cached `grok login` OAuth (preflight runs `grok models` and blocks with instructions if signed out). Review passes run with a read-only tool allowlist (`read_file,grep,list_dir`). `--research` cannot extend that allowlist — naming `web_search`/`web_fetch` under `--tools` pulls `run_terminal_cmd` into the toolset with `enabled_background=false` + `auto_background_on_timeout=true` and session creation fails its params constraint (grok 0.2.93) — so the research pass instead runs the default toolset with `--disallowed-tools` stripping shell/edit/subagent/interactive tools: same read-only file surface plus `web_search`/`web_fetch` (verified 2026-07-10). The `end` progress line includes the session id and a ready-made `grok -r <id>` resume command for follow-ups.
+Grok specifics (grok CLI 0.2.93, verified 2026-07-09): the model default lives in the grok CLI config (grok-4.5 at verification time), so leave `-m` off to use it; the stream carries only `thought`/`text` token deltas plus `end` — tool calls do not surface, so progress is coarser than codex/claude; `-b` caps are refused on Grok/direct proxy routes because those transports cannot enforce them; auth is the cached `grok login` OAuth (preflight runs `grok models` and blocks with instructions if signed out). Review passes run with a read-only tool allowlist (`read_file,grep,list_dir`). `--research` cannot extend that allowlist — naming `web_search`/`web_fetch` under `--tools` pulls `run_terminal_cmd` into the toolset with `enabled_background=false` + `auto_background_on_timeout=true` and session creation fails its params constraint (grok 0.2.93) — so the research pass instead runs the default toolset with `--disallowed-tools` stripping shell/edit/subagent/interactive tools: same read-only file surface plus `web_search`/`web_fetch` (verified 2026-07-10). The `end` progress line includes the session id and a ready-made `grok -r <id>` resume command for follow-ups.
 
 ## Grok as builder (`--build`)
 
@@ -85,6 +99,7 @@ For brief and arch/code review gates, set `-o .pipeline/<topic>/review/<gate>` s
 
 ## Guardrails
 
+- Every subagent run requires JSONL events and an attached watcher. Ask enforces its own routes; native delegates require equivalent host supervision before admission (see the reference).
 - Get explicit user approval before sending local files to an external provider; never pass secrets in prompts.
 - Do not ask the consulted model to edit files during a review pass; ask for findings and concrete plan edits. Write-enabled runs go through `--build` only.
 - Do not enable `--research` by default; it expands network-facing capability and should be an explicit reviewer choice.

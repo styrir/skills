@@ -3,19 +3,23 @@
 // provider into normalized progress events; the core owns trace capture,
 // realtime stderr progress, and Markdown artifact rendering.
 
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export interface StreamSummary {
   progressLines: string[];
   finalAssistantText: string;
   parseErrors: string[];
+  terminal?: { ok: boolean; reason: string; sessionId?: string; requestId?: string };
+  failures: string[];
 }
 
 export interface ProgressEvent {
   progressLine?: string;
   assistantText?: string;
   parseError?: string;
+  completion?: { ok: boolean; reason: string; sessionId?: string; requestId?: string };
+  failure?: string;
 }
 
 export type LineSummarizer = (line: string) => ProgressEvent[];
@@ -39,7 +43,7 @@ export function compact(text: string, maxLength = 180): string {
 }
 
 export function makeSummary(): StreamSummary {
-  return { progressLines: [], finalAssistantText: "", parseErrors: [] };
+  return { progressLines: [], finalAssistantText: "", parseErrors: [], failures: [] };
 }
 
 export function consumeLine(
@@ -60,6 +64,8 @@ export function consumeLine(
     if (event.assistantText) {
       summary.finalAssistantText = event.assistantText;
     }
+    if (event.completion) summary.terminal = event.completion;
+    if (event.failure) summary.failures.push(event.failure);
     if (event.parseError) {
       summary.parseErrors.push(event.parseError);
     }
@@ -135,7 +141,7 @@ export function renderSummary(finalAssistantText: string): string {
     const kept: string[] = [verdictLine.trim()];
     let paragraph: string[] = [];
     const flushParagraph = () => {
-      const firstNumbered = paragraph.findIndex((l) => /^\s*\d+[.)]\s/.test(l));
+      const firstNumbered = paragraph.findIndex((l) => /^[\s>*_`]*\d+[.)]\s/.test(l));
       if (firstNumbered !== -1) {
         kept.push("", ...paragraph.slice(firstNumbered));
       }
@@ -202,8 +208,18 @@ export function runFileMode(
   markdownPath: string,
   promptPath?: string,
 ): void {
+  if (existsSync(join(dirname(markdownPath), "result.json"))) {
+    process.stderr.write("Replay refused: output is a recorded run; choose a fresh replay directory.\n");
+    process.exitCode = 2;
+    return;
+  }
   const jsonl = readFileSync(tracePath, "utf8");
   const summary = summarizeJsonl(summarizer, jsonl);
+  if (!summary.terminal?.ok || !summary.finalAssistantText.trim() || summary.parseErrors.length || summary.failures.length) {
+    process.stderr.write("Replay refused: source is empty, incomplete, or malformed; existing artifacts preserved.\n");
+    process.exitCode = 2;
+    return;
+  }
   ensureParentDir(markdownPath);
   writeFileSync(markdownPath, renderMarkdown(title, summary, { tracePath, promptPath }));
   writeFileSync(join(dirname(markdownPath), "summary.md"), renderSummary(summary.finalAssistantText));
@@ -218,14 +234,14 @@ export function runStreamMode(
 ): void {
   ensureParentDir(tracePath);
   ensureParentDir(markdownPath);
-  writeFileSync(tracePath, "");
+  if (process.env.ASK_TRACE_CAPTURED !== "true") writeFileSync(tracePath, "");
 
   let buffer = "";
   const summary = makeSummary();
 
   process.stdin.setEncoding("utf8");
   process.stdin.on("data", (chunk: string) => {
-    appendFileSync(tracePath, chunk);
+    if (process.env.ASK_TRACE_CAPTURED !== "true") appendFileSync(tracePath, chunk);
     buffer += chunk;
     const lines = buffer.split(/\r?\n/);
     buffer = lines.pop() ?? "";
@@ -235,12 +251,16 @@ export function runStreamMode(
   });
   process.stdin.on("end", () => {
     if (buffer.trim()) {
-      appendFileSync(tracePath, "\n");
+      if (process.env.ASK_TRACE_CAPTURED !== "true") appendFileSync(tracePath, "\n");
       consumeLine(summarizer, summary, buffer, true);
     }
     writeFileSync(markdownPath, renderMarkdown(title, summary, { tracePath, promptPath }));
     const summaryPath = join(dirname(markdownPath), "summary.md");
     writeFileSync(summaryPath, renderSummary(summary.finalAssistantText));
+    const complete = Boolean(summary.terminal?.ok && summary.finalAssistantText.trim() && !summary.parseErrors.length && !summary.failures.length);
+    const reason = summary.failures[0] || (summary.parseErrors.length ? "malformed_stream" : !summary.terminal ? "missing_completion" : !summary.terminal.ok ? summary.terminal.reason : !summary.finalAssistantText.trim() ? "empty_answer" : "completed");
+    writeFileSync(join(dirname(markdownPath), "stream-result.json"), JSON.stringify({complete, reason, terminal: summary.terminal, parseErrors: summary.parseErrors, failures: summary.failures}, null, 2) + "\n");
+    if (!complete) process.exitCode = 2;
     process.stderr.write(`artifact: ${markdownPath}\n`);
     process.stderr.write(`summary: ${summaryPath}\n`);
   });

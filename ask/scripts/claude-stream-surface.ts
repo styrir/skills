@@ -99,7 +99,9 @@ export function summarizeClaudeStreamLine(line: string): ProgressEvent[] {
     return [{ progressLine: `thinking: ${event.estimated_tokens} tokens` }];
   }
   if (event.type === "result") {
-    return [{ progressLine: formatResult(event) }];
+    return [{ progressLine: formatResult(event),
+      assistantText: typeof event.result === "string" ? event.result : undefined,
+      completion: { ok: event.subtype === "success" && event.is_error !== true, reason: String(event.subtype || "unknown"), sessionId: typeof event.session_id === "string" ? event.session_id : undefined } }];
   }
   if (typeof event.type === "string") {
     return [{ progressLine: `${event.type}: received` }];
