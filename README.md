@@ -7,6 +7,8 @@ Canonical source for Styrir-owned agent skills shared across Claude Code, Codex,
 | Skill | Purpose |
 |---|---|
 | `ask/` | Observable model-to-model consultation through provider-aware CLI adapters, JSONL traces, and Markdown artifacts. |
+| `jev/` | Jev (TypeSafe System One) decision-model client: typed yes/no, choice, and score judgments in ~0.4 s via Requesty/OpenRouter/TypeSafe; cheap reads over files, Level-10 composition, and threshold calibration. |
+| `jev-guard/` | Jev-backed Claude Code / Codex / Grok hooks: deny-only bash gate, hostile-output warning, opt-in family-scoped auto-approve, and a /compact advisory; observe mode by default. |
 | `devops/headscale-operations/` | Operate the Styrir Headscale control plane and safely join or approve clients. |
 | `productivity/meetcal-operations/` | Inspect and operate MeetCal database, audit-log, backup, and calendar-sync state. |
 | `red-teaming/macos-app-defender-lab/` | Authorized macOS application self-red-team and hardening workflow. |

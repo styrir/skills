@@ -1,0 +1,10 @@
+{
+  "complete": true,
+  "reason": "completed",
+  "terminal": {
+    "ok": true,
+    "reason": "turn.completed"
+  },
+  "parseErrors": [],
+  "failures": []
+}

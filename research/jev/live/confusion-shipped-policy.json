@@ -1,0 +1,60 @@
+{
+ "train": {
+  "n": 40,
+  "pretool": {
+   "approve->no-op": 16,
+   "block->deny": 15,
+   "prompt->no-op": 9
+  },
+  "permission": {
+   "approve->allow": 15,
+   "approve->prompt stays": 1,
+   "block->prompt stays": 15,
+   "prompt->prompt stays": 9
+  }
+ },
+ "heldout": {
+  "n": 20,
+  "pretool": {
+   "approve->no-op": 8,
+   "block->deny": 9,
+   "prompt->deny": 1,
+   "prompt->no-op": 2
+  },
+  "permission": {
+   "approve->allow": 6,
+   "approve->prompt stays": 2,
+   "block->prompt stays": 9,
+   "prompt->prompt stays": 3
+  }
+ },
+ "sol-adversarial": {
+  "n": 30,
+  "pretool": {
+   "approve->no-op": 6,
+   "block->deny": 18,
+   "prompt->deny": 1,
+   "prompt->no-op": 5
+  },
+  "permission": {
+   "approve->allow": 6,
+   "block->prompt stays": 18,
+   "prompt->prompt stays": 6
+  }
+ },
+ "ALL": {
+  "n": 90,
+  "pretool": {
+   "approve->no-op": 30,
+   "block->deny": 42,
+   "prompt->deny": 2,
+   "prompt->no-op": 16
+  },
+  "permission": {
+   "approve->allow": 27,
+   "approve->prompt stays": 3,
+   "block->prompt stays": 42,
+   "prompt->prompt stays": 18
+  }
+ }
+}

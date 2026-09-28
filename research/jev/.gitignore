@@ -9,3 +9,7 @@ live/sol-adversarial/stderr.log
 live/*/stderr.log
 live/*.log
 live/*/.watcher.lock
+review/*/stderr.log
+review/*/.watcher.lock
+review/*.log
+review/*/trace.jsonl
