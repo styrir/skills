@@ -211,7 +211,7 @@ def _key(route: str) -> str:
     import subprocess
     try:
         out = subprocess.run(["security", "find-generic-password", "-s", f"jev.{route}", "-w"],
-                             capture_output=True, text=True, timeout=3)
+                             capture_output=True, text=True, timeout=1)
         return out.stdout.strip() if out.returncode == 0 else ""
     except (OSError, subprocess.TimeoutExpired):
         return ""

@@ -30,12 +30,16 @@ Then check it with `python3 ~/Code/skills/jev/scripts/jev.py route-status`, whic
 {
   "PreToolUse":  [{"matcher": "Bash", "hooks": [{"type": "command", "timeout": 8,
       "command": "python3 ~/Code/skills/jev-guard/scripts/hook.py --harness claude --mode pretool"}]}],
-  "PostToolUse": [{"matcher": "WebFetch|WebSearch|Bash|Read|mcp__.*", "hooks": [{"type": "command", "timeout": 8,
+  "PostToolUse": [{"matcher": "WebFetch|WebSearch|Bash", "hooks": [{"type": "command", "timeout": 8,
       "command": "python3 ~/Code/skills/jev-guard/scripts/hook.py --harness claude --mode posttool"}]}],
   "UserPromptSubmit": [{"hooks": [{"type": "command", "timeout": 8,
       "command": "python3 ~/Code/skills/jev-guard/scripts/hook.py --harness claude --mode prompt"}]}]
 }
 ```
+
+PostToolUse screens only the untrusted-content tools by default. Adding `Read` or `mcp__.*` would send
+every file or MCP result the agent reads to a hosted model, costing ~0.45 s each, so leave them off until an
+approved-roots egress config exists (bead skills-6z3.3).
 
 Grok imports these by default and the adapter re-parses them as Grok. **Don't also add them to Grok**, or turn
 off `[compat.claude] hooks` and use step 4.
@@ -56,8 +60,8 @@ note that `~/.codex/hooks.json` currently registers each Xirp hook six times.
 
 ## 4. Grok (only if Claude-hook import is off)
 
-`~/.grok/hooks/jev-guard.json`, using the same `{"hooks": {...}}` shape with `--harness grok`. Grok's
-PreToolUse default timeout is 5 s. The adapter's Jev deadline is 3 s (`JEV_GUARD_TIMEOUT`).
+`~/.grok/hooks/jev-guard.json`, using the same `{"hooks": {...}}` shape with `--harness grok`. Grok's PreToolUse default timeout is 5 s. The worst case is a Keychain lookup (≤1 s) plus the Jev deadline (3 s,
+`JEV_GUARD_TIMEOUT`), which fits. If Grok logs hook timeouts, set `JEV_GUARD_TIMEOUT=2` in the hook's `env`.
 
 ## 5. Enforce, one mode at a time
 

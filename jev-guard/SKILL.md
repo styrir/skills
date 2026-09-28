@@ -14,7 +14,7 @@ the `jev` skill's client.
 | Mode | Event | May only… | Jev unreachable | Harnesses |
 |---|---|---|---|---|
 | `pretool` | PreToolUse (shell) | **deny** a command | static rules still deny; otherwise no decision | Claude Code, Codex, Grok |
-| `posttool` | PostToolUse | **add** a warning (`additionalContext`) | nothing added | Claude Code, Codex, Grok |
+| `posttool` | PostToolUse on untrusted-content tools (`WebFetch`, `WebSearch`, `Bash`) | **add** a warning (`additionalContext`) | nothing added | Claude Code, Codex, Grok |
 | `permission` | PermissionRequest | **allow** a prompt the harness was about to show, and only for commands matching `--allow-family` | prompt stays | Claude Code, Codex (Grok has no such event) |
 | `prompt` | UserPromptSubmit | **show the user** a /compact advisory | silent | Claude Code |
 
