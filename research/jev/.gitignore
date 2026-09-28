@@ -1,0 +1,11 @@
+repo/
+transcript.txt
+transcript.md
+video.*.vtt
+live/files-cases.json
+live/resp.json
+live/smoke.sh
+live/sol-adversarial/stderr.log
+live/*/stderr.log
+live/*.log
+live/*/.watcher.lock

@@ -1,0 +1,53 @@
+{
+  "runtime_sha256": {
+    "supervision-test.py": "1c5bdb503d709157702ad788b091956090b17c0a13a24620c68fe09c45d6b78d",
+    "stream-core.ts": "400a0bfa44a449221c2782d3fe1145fa2711efa0813ba8be1dd0b8b717e783d2",
+    "proxy-stream.py": "8c08c769db0eedc49901eed2aba69eb3feb1a34749d9dea8346ec07cabdb992e",
+    "grok-stream-surface.ts": "54b35a69f7459cc30f79b69ddc3695fed7c263de9cbf14eb382058feb29f868d",
+    "codex-stream-surface.ts": "5134c5b4df81f7a367978b782cf81df397d8884cf998e661cf1cedcc510ae149",
+    "ask-runner-self-test.sh": "3401881aa287ea87d612a017ccbc8832c4c3b520edeba19942aae1e6bdc170b1",
+    "ask.sh": "fa0005b1b66f6181d43b825828ccde06cfe2d7dde58270aaf23f0a42fb22952c",
+    "proxy-test.py": "7cc7ecc24422a5505148268e689abd7839fc80b065ff46d6ca0e97597b11c434",
+    "supervise.py": "f1a23c2dd5f642dceee85f308bca2127343b6585d89177cde6d0509c8a703dcf",
+    "child-guard.py": "cf12df36442f24eb273c63a71f738c205ff1ce1bc6563a68092f332032a69876",
+    "claude-stream-surface.ts": "1a24eee59df1bb919a72a8053f019d067e8443c83c2cc5f1947349a50b6161d1"
+  },
+  "artifact_sha256": {
+    "trace.jsonl": "7f58866677911ea2c848b28390c7ffed336a038a5b4060c95c896ade79064a14",
+    "artifact.md": "4fab9660f616783f218b57596be5bd3b5e2c33c8dbf78444333566583217223f",
+    "summary.md": "6e6a3e5085caf8a8b5b99845b04c363d23e1d47c5bce9c286e2235bb9b564439"
+  },
+  "schemaVersion": 1,
+  "run_id": "3173194f-b2e9-45fe-b104-898d677e0f3f",
+  "status": "complete",
+  "reason": "completed",
+  "requested_model": "gpt-6-sol",
+  "transport": "codex",
+  "route": {},
+  "skill_root": "/Users/brooks/Code/skills/ask",
+  "provider_exit": 0,
+  "adapter_exit": 0,
+  "stream": {
+    "complete": true,
+    "reason": "completed",
+    "terminal": {
+      "ok": true,
+      "reason": "turn.completed"
+    },
+    "parseErrors": [],
+    "failures": []
+  },
+  "elapsed_seconds": 81.23,
+  "first_model_output_seconds": 0.4581709999765735,
+  "last_provider_event": {
+    "type": "turn.completed",
+    "elapsed_seconds": 78.31
+  },
+  "artifacts": {
+    "trace.jsonl": "/Users/brooks/Code/skills/research/jev/live/sol-adversarial/trace.jsonl",
+    "status.jsonl": "/Users/brooks/Code/skills/research/jev/live/sol-adversarial/status.jsonl",
+    "stderr.log": "/Users/brooks/Code/skills/research/jev/live/sol-adversarial/stderr.log",
+    "artifact.md": "/Users/brooks/Code/skills/research/jev/live/sol-adversarial/artifact.md",
+    "summary.md": "/Users/brooks/Code/skills/research/jev/live/sol-adversarial/summary.md"
+  }
+}
