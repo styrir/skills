@@ -153,6 +153,38 @@ Preferred shape for this class of fix:
 
 Session-derived implementation/repair pattern: `references/anthropic-t3-claude-code-routing.md`.
 
+## Remote Claude Code long-lived token setup
+
+Use this for `claude setup-token` on a headless server. The command **prints the token once but does not install it**. Never run it through a tool without server-side capture, or redaction can make the generated token unrecoverable.
+
+1. Start a real remote TTY with keepalives and a root-only transcript:
+   ```bash
+   ssh -tt -o ServerAliveInterval=15 -o ServerAliveCountMax=20 root@HOST \
+     'umask 077; mkdir -p /root/.claude; rm -f /root/.claude/setup-token.capture; stty cols 500 rows 50; script -qefc "claude setup-token" /root/.claude/setup-token.capture'
+   ```
+2. Open the emitted authorization URL for the user. Paste the returned one-time code into the live PTY. Claude's prompt may need **one additional raw carriage return (`\r`)** after the masked code appears.
+3. After success, parse the single `sk-ant-...` value **on the server**. Do not print or return it through agent tools. Atomically write:
+   ```text
+   /root/.claude/oauth.env
+   CLAUDE_CODE_OAUTH_TOKEN=<token>
+   ```
+   Owner `root`, mode `0600`.
+4. For root shells, source the env file from `/root/.bashrc` using `set -a; . /root/.claude/oauth.env; set +a`. For Berlin Hermes, add this user-service drop-in:
+   ```ini
+   # /root/.config/systemd/user/hermes-gateway.service.d/10-claude-oauth.conf
+   [Service]
+   EnvironmentFile=/root/.claude/oauth.env
+   ```
+5. Delete `/root/.claude/setup-token.capture`, then run `systemctl --user daemon-reload` and restart `hermes-gateway.service`.
+6. Verify without exposing the token:
+   - env file owner/mode and token pattern/length only;
+   - `claude auth status` reports `loggedIn: true`, `authMethod: oauth_token`, `apiProvider: firstParty`;
+   - a real `claude --print` exact-output smoke succeeds;
+   - the live gateway process environment contains the exact variable;
+   - the gateway is active.
+
+Pitfalls: use `ssh -tt`, not merely a local PTY; enable SSH keepalives before asking the user to authorize; record output from the first run; and remember that successful token generation is not successful installation.
+
 ## Remote Codex recovery when a server gateway has an expired token
 
 When a remote Hermes gateway reports `openai-codex` HTTP 401 `token_expired`, distinguish the two credential stores:
