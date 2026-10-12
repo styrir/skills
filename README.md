@@ -25,20 +25,15 @@ Each skill uses `SKILL.md` as its entry contract. Inspect that file and its link
 
 ## Local installation
 
-Harnesses should link to this checkout instead of carrying divergent copies:
+Harnesses link to this checkout instead of carrying divergent copies. `harness-links.json` lists which skills each harness (Codex, Grok, Hermes) gets; Hermes links go into category directories. To add a skill to a harness, add one line there and run:
 
 ```bash
-ln -sfn ~/Code/skills/<name> ~/.claude/skills/<name>
-ln -sfn ~/Code/skills/<name> ~/.codex/skills/<name>
-ln -sfn ~/Code/skills/<name> ~/.grok/skills/<name>
+python3 scripts/link-harness-skills.py           # dry run: show the plan
+python3 scripts/link-harness-skills.py --apply   # create or repair links
+python3 scripts/link-harness-skills.py --check   # exit 1 if anything is not linked
 ```
 
-Hermes skills may link into a category directory, for example:
-
-```bash
-ln -sfn ~/Code/skills/repo-readiness-synthesis \
-  ~/.hermes/skills/software-development/repo-readiness-synthesis
-```
+A real directory in the way is moved to `~/.skill-link-backups/<timestamp>/`, never deleted. A copy that differs from the repo is refused until its edits are merged here (or `--replace-diverged` is passed).
 
 ## Repository workflow
 

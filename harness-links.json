@@ -1,0 +1,58 @@
+{
+  "_comment": "Which repo skills each harness gets. Keys are link paths relative to the harness skills dir; values are repo paths. Apply with: python3 scripts/link-harness-skills.py --apply",
+  "codex": {
+    "dir": "~/.codex/skills",
+    "links": {
+      "ask": "ask",
+      "jev": "jev",
+      "jev-guard": "jev-guard",
+      "repo-readiness-synthesis": "repo-readiness-synthesis",
+      "setja": "setja/skills/setja",
+      "styrir-search": "styrir-search",
+      "styrir-search-deep-aiq": "styrir-search-deep-aiq",
+      "styrir-search-deep-local": "styrir-search-deep-local",
+      "styrir-search-plus": "styrir-search-plus",
+      "styrir-search-simple": "styrir-search-simple"
+    }
+  },
+  "grok": {
+    "dir": "~/.grok/skills",
+    "links": {
+      "ask": "ask",
+      "jev": "jev",
+      "jev-guard": "jev-guard",
+      "repo-readiness-synthesis": "repo-readiness-synthesis",
+      "styrir-init": "styrir-init",
+      "styrir-search": "styrir-search",
+      "styrir-search-deep-aiq": "styrir-search-deep-aiq",
+      "styrir-search-deep-local": "styrir-search-deep-local",
+      "styrir-search-plus": "styrir-search-plus",
+      "styrir-search-simple": "styrir-search-simple",
+      "voice-preserving-humanizer": "voice-preserving-humanizer"
+    }
+  },
+  "hermes": {
+    "dir": "~/.hermes/skills",
+    "links": {
+      "autonomous-ai-agents/hermes-provider-credential-ops": "autonomous-ai-agents/hermes-provider-credential-ops",
+      "devops/headscale-operations": "devops/headscale-operations",
+      "productivity/meetcal-operations": "productivity/meetcal-operations",
+      "red-teaming/macos-app-defender-lab": "red-teaming/macos-app-defender-lab",
+      "research/context7-cli": "research/context7-cli",
+      "research/deep-search-cli": "research/deep-search-cli",
+      "research/deep-search-codebase-grounding": "research/deep-search-codebase-grounding",
+      "research/deep-search-mcp-boundary": "research/deep-search-mcp-boundary",
+      "research/deep-search-provider-setup": "research/deep-search-provider-setup",
+      "research/deep-search-report-delivery": "research/deep-search-report-delivery",
+      "research/ml-paper-writing": "research/ml-paper-writing",
+      "research/neuledge-context": "research/neuledge-context",
+      "research/news-intel-pipeline": "research/news-intel-pipeline",
+      "research/parallel-cli": "research/parallel-cli",
+      "research/research-and-recon": "research/research-and-recon",
+      "research/structured-search-agent": "research/structured-search-agent",
+      "research/tavily-cli": "research/tavily-cli",
+      "software-development/repo-readiness-synthesis": "repo-readiness-synthesis",
+      "voice-preserving-humanizer": "voice-preserving-humanizer"
+    }
+  }
+}
