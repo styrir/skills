@@ -25,7 +25,7 @@ Each skill uses `SKILL.md` as its entry contract. Inspect that file and its link
 
 ## Local installation
 
-Harnesses link to this checkout instead of carrying divergent copies. `harness-links.json` lists which skills each harness (Codex, Grok, Hermes) gets; Hermes links go into category directories. To add a skill to a harness, add one line there and run:
+Harnesses link to this checkout instead of carrying divergent copies. `harness-links.json` lists which skills each harness (Claude, Codex, Grok, Hermes) gets; Hermes links go into category directories. To add a skill to a harness, add one line there and run:
 
 ```bash
 python3 scripts/link-harness-skills.py           # dry run: show the plan

@@ -1,5 +1,23 @@
 {
   "_comment": "Which repo skills each harness gets. Keys are link paths relative to the harness skills dir; values are repo paths. Apply with: python3 scripts/link-harness-skills.py --apply",
+  "claude": {
+    "dir": "~/.claude/skills",
+    "links": {
+      "ask": "ask",
+      "context7-cli": "research/context7-cli",
+      "generate": "generate",
+      "jev": "jev",
+      "jev-guard": "jev-guard",
+      "repo-readiness-synthesis": "repo-readiness-synthesis",
+      "styrir-init": "styrir-init",
+      "styrir-search": "styrir-search",
+      "styrir-search-deep-aiq": "styrir-search-deep-aiq",
+      "styrir-search-deep-local": "styrir-search-deep-local",
+      "styrir-search-plus": "styrir-search-plus",
+      "styrir-search-simple": "styrir-search-simple",
+      "voice-preserving-humanizer": "voice-preserving-humanizer"
+    }
+  },
   "codex": {
     "dir": "~/.codex/skills",
     "links": {
