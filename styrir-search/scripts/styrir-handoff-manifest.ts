@@ -70,12 +70,15 @@ function validateAiqBaseUrl(baseUrl: string): string {
 
 function buildAiqRestCommands(baseUrl: string, question: string, sourceScope: string[]): string[] {
   const normalizedBaseUrl = validateAiqBaseUrl(baseUrl);
+  // AI-Q v2.2 REST contract (docs/source/integration/rest-api.md). data_sources takes AI-Q
+  // source IDs, not Styrir scope text, so scope rides along in the input.
+  const input = sourceScope.length > 0 ? `${question}\n\nSource scope: ${sourceScope.join("; ")}` : question;
+  const body = JSON.stringify({ agent_type: "deep_researcher", input }).replace(/'/g, "'\\''");
   return [
     `curl -sf ${normalizedBaseUrl}/health`,
-    `# Create <aiq-request.json> with query ${JSON.stringify(question)} and sourceScope ${JSON.stringify(sourceScope)}.`,
-    `curl -sS -X POST ${normalizedBaseUrl}/v1/jobs/async -H 'Content-Type: application/json' -d @<aiq-request.json>`,
-    `curl -sS ${normalizedBaseUrl}/v1/jobs/async/<job-id>/status`,
-    `curl -sS ${normalizedBaseUrl}/v1/jobs/async/<job-id>/report > <run-dir>/report.md`,
+    `curl -sS -X POST ${normalizedBaseUrl}/v1/jobs/async/submit -H 'Content-Type: application/json' -d '${body}'`,
+    `curl -sS ${normalizedBaseUrl}/v1/jobs/async/job/<job-id>  # poll until status is success or failure`,
+    `curl -sS ${normalizedBaseUrl}/v1/jobs/async/job/<job-id>/report | python3 -c 'import json,sys; print(json.load(sys.stdin)["report"])' > <run-dir>/report.md`,
   ];
 }
 

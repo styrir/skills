@@ -169,9 +169,9 @@ test("includes AI-Q REST health and async job commands when a local target is co
   assert.equal(manifest.nextSystem, "NVIDIA AI-Q");
   assert.ok(manifest.blockers.some((blocker) => blocker.includes("health is unverified")));
   assert.ok(manifest.commands.some((command) => command.includes("curl -sf http://127.0.0.1:8000/health")));
-  assert.ok(manifest.commands.some((command) => command.includes("/v1/jobs/async")));
-  assert.ok(manifest.commands.some((command) => command.includes("/v1/jobs/async/<job-id>/status")));
-  assert.ok(manifest.commands.some((command) => command.includes("/v1/jobs/async/<job-id>/report")));
+  assert.ok(manifest.commands.some((command) => command.includes("/v1/jobs/async/submit")));
+  assert.ok(manifest.commands.some((command) => command.includes("/v1/jobs/async/job/<job-id>  #")));
+  assert.ok(manifest.commands.some((command) => command.includes("/v1/jobs/async/job/<job-id>/report")));
   assert.ok(manifest.commands.some((command) => command.includes("Use the configured AI-Q server")));
 });
 
