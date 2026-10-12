@@ -49,7 +49,7 @@ Use this reference when constructing a ledger or debugging `scripts/styrir-searc
 }
 ```
 
-When citing sources in `deep_search_local` prose artifacts, use bracketed source IDs from the registry in the `s<number>` family, such as `[s1]` or `[s2]`. Other bracketed editorial markers, such as `[sic]` or `[TODO]`, are not treated as citations.
+`deep_search_local` does not use this ledger. Its `report.md` cites with `[claim:<claim_id>]` markers that must resolve to `claims.jsonl` in the deep-search-mcp run directory; see `aiq-borrowed-patterns.md`.
 
 ## Allowed Values
 
