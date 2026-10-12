@@ -70,7 +70,7 @@ Default budget:
 }
 ```
 
-Output should include the full local bundle described in `aiq-borrowed-patterns.md`: `plan.json`, `research-notes/*.md`, `source-registry.json`, substantive `consolidated-findings.md`, cited `report.md`, and `gate-result.json`.
+Output is a `deep-search-mcp` run directory described in `aiq-borrowed-patterns.md`: `run_manifest.json`, `sources.jsonl`, `claims.jsonl`, and a `report.md` promoted by `render-report-bundle --strict`.
 
 ### `nvidia_aiq_handoff`
 

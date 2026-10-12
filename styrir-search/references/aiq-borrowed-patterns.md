@@ -26,17 +26,16 @@ Use this reference when `styrir_plus` needs structured coverage or `deep_search_
 - `contradiction-sweep.md`.
 - `gate-result.json` with `gateStatus: "pass"`.
 
-## `deep_search_local` Minimum Bundle
+## `deep_search_local` Run Directory
 
-`deep_search_local` is report-grade and local. Require:
+`deep_search_local` is report-grade and local. It validates the run directory that `deep-search-mcp` itself writes (`init-run` through `render-report-bundle --strict`), not a Styrir-specific bundle. Require:
 
-- `plan.json` with `mode: "deep_search_local"` and non-empty `facets[]`.
-- `research-notes/*.md`.
-- `source-registry.json` with non-empty `sources[]`.
-- `consolidated-findings.md` with section headings, substantive findings, and `[s1]`-style source-id citations that exist in the registry.
-- `report.md` with substantive final prose, section headings, `[s1]`-style source-id citations, and a Sources section.
-- `gate-result.json` with `gateStatus: "pass"`.
+- `run_manifest.json` from `init-run` (has `run_id`).
+- `sources.jsonl` with at least one registered `source_id`.
+- `claims.jsonl` with at least one recorded `claim_id`.
+- `report.md`, which `render-report-bundle --strict` writes only after its own section, citation, claim-support, contradiction, challenge, and temporal checks pass. A `report.candidate.md` without `report.md` means the bundle failed.
+- `[claim:<id>]` markers in `report.md` that resolve to `claims.jsonl`.
 
-The artifact gate is structural, not a truth verifier. It blocks empty, malformed, uncited, and thin bundles; it also warns when registered sources are not cited. It does not prove that claims are true.
+The artifact gate is structural, not a truth verifier. It blocks empty, malformed, uncited, and thin bundles (plus) and unrendered or unprovenanced deep-search runs (deep-local). It does not prove that claims are true.
 
 Run `npm run artifact-gate -- <mode> <run-dir>` before final synthesis.

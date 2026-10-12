@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { validateLedger } from "./styrir-search-gate.ts";
@@ -19,9 +19,6 @@ export interface ArtifactGateResult {
   blockers: ArtifactGateIssue[];
   warnings: ArtifactGateIssue[];
 }
-
-const MIN_FINDINGS_WORDS = 40;
-const MIN_REPORT_WORDS = 60;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -66,14 +63,6 @@ function readText(blockers: ArtifactGateIssue[], runDir: string, relativePath: s
   return readFileSync(path, "utf8");
 }
 
-function wordCount(text: string): number {
-  return text.trim().split(/\s+/).filter(Boolean).length;
-}
-
-function headingCount(text: string): number {
-  return (text.match(/^##+\s+\S.+$/gm) ?? []).length;
-}
-
 function extractRegistrySourceIds(registry: Record<string, unknown>): Set<string> {
   const ids = new Set<string>();
   const sources = Array.isArray(registry.sources) ? registry.sources : [];
@@ -83,10 +72,6 @@ function extractRegistrySourceIds(registry: Record<string, unknown>): Set<string
     }
   }
   return ids;
-}
-
-function extractSourceCitations(text: string): Set<string> {
-  return new Set([...text.matchAll(/\[(s[0-9][A-Za-z0-9_-]*)\]/g)].map((match) => match[1]));
 }
 
 function validatePlan(blockers: ArtifactGateIssue[], runDir: string, mode: ArtifactMode) {
@@ -137,78 +122,63 @@ function validatePlus(blockers: ArtifactGateIssue[], warnings: ArtifactGateIssue
   validateGateResult(blockers, runDir);
 }
 
-function validateDeepLocal(blockers: ArtifactGateIssue[], warnings: ArtifactGateIssue[], runDir: string) {
-  validatePlan(blockers, runDir, "deep_search_local");
-  const sourceIds = validateSourceRegistry(blockers, runDir);
-  const notesDir = join(runDir, "research-notes");
-  if (!existsSync(notesDir) || !statSync(notesDir).isDirectory()) {
-    blockers.push(issue("missing_research_notes", "research-notes", "research-notes/*.md is required."));
-  } else {
-    const notes = readdirSync(notesDir).filter((name) => name.endsWith(".md"));
-    if (notes.length === 0) {
-      blockers.push(issue("missing_research_notes", "research-notes", "research-notes/*.md is required."));
+function readJsonlIds(blockers: ArtifactGateIssue[], runDir: string, relativePath: string, idField: string): Set<string> {
+  const ids = new Set<string>();
+  const text = readText(blockers, runDir, relativePath);
+  for (const [index, line] of text.split("\n").entries()) {
+    if (!line.trim()) {
+      continue;
+    }
+    try {
+      const row = JSON.parse(line);
+      if (isRecord(row) && typeof row[idField] === "string" && row[idField]) {
+        ids.add(row[idField] as string);
+      }
+    } catch {
+      blockers.push(issue("invalid_jsonl", relativePath, `${relativePath} line ${index + 1} is not valid JSON.`));
     }
   }
-  requireFile(blockers, runDir, "consolidated-findings.md", "missing_consolidated_findings");
-  requireFile(blockers, runDir, "report.md", "missing_report");
-  const findingsCitations = validateFindings(blockers, runDir, sourceIds);
-  const reportCitations = validateReport(blockers, runDir, sourceIds);
-  warnOnUncitedSources(warnings, sourceIds, new Set([...findingsCitations, ...reportCitations]));
-  validateGateResult(blockers, runDir);
+  return ids;
 }
 
-function validateFindings(blockers: ArtifactGateIssue[], runDir: string, sourceIds: Set<string>): Set<string> {
-  const text = readText(blockers, runDir, "consolidated-findings.md");
-  if (!text) {
-    return new Set();
+// deep_search_local validates a real deep-search-mcp run dir. render-report-bundle --strict owns the report checks
+// (sections, citations, claim support, contradictions) and only promotes report.candidate.md to report.md on pass.
+function validateDeepLocal(blockers: ArtifactGateIssue[], runDir: string) {
+  requireFile(blockers, runDir, "run_manifest.json", "missing_run_manifest");
+  const manifest = readJson(blockers, runDir, "run_manifest.json");
+  if (existsSync(join(runDir, "run_manifest.json")) && typeof manifest.run_id !== "string") {
+    blockers.push(issue("missing_run_id", "run_manifest.json", "run_manifest.json must come from deep-search-mcp init-run."));
   }
-  if (wordCount(text) < MIN_FINDINGS_WORDS) {
-    blockers.push(issue("findings_too_short", "consolidated-findings.md", "consolidated-findings.md must contain substantive findings."));
+  if (readJsonlIds(blockers, runDir, "sources.jsonl", "source_id").size === 0) {
+    blockers.push(issue("missing_registered_sources", "sources.jsonl", "sources.jsonl must register at least one source."));
   }
-  if (headingCount(text) === 0) {
-    blockers.push(issue("missing_findings_sections", "consolidated-findings.md", "consolidated-findings.md must contain at least one section heading."));
-  }
-  const citations = extractSourceCitations(text);
-  for (const citation of citations) {
-    if (!sourceIds.has(citation)) {
-      blockers.push(issue("unknown_findings_citation", "consolidated-findings.md", `Findings cite unknown source id '${citation}'.`));
-    }
-  }
-  return citations;
-}
-
-function validateReport(blockers: ArtifactGateIssue[], runDir: string, sourceIds: Set<string>): Set<string> {
-  const text = readText(blockers, runDir, "report.md");
-  if (!text) {
-    return new Set();
+  const claimIds = readJsonlIds(blockers, runDir, "claims.jsonl", "claim_id");
+  if (claimIds.size === 0) {
+    blockers.push(issue("missing_claims", "claims.jsonl", "claims.jsonl must record at least one claim."));
   }
 
-  if (wordCount(text) < MIN_REPORT_WORDS) {
-    blockers.push(issue("report_too_short", "report.md", "report.md must contain substantive final prose."));
-  }
-  if (headingCount(text) < 2) {
-    blockers.push(issue("missing_report_sections", "report.md", "report.md must contain findings and sources sections."));
-  }
-  if (!/^##+\s+Sources\b/im.test(text)) {
-    blockers.push(issue("missing_sources_section", "report.md", "report.md must contain a Sources section."));
+  const reportPath = join(runDir, "report.md");
+  if (!existsSync(reportPath) || !statSync(reportPath).isFile()) {
+    const candidate = existsSync(join(runDir, "report.candidate.md"));
+    blockers.push(
+      issue(
+        candidate ? "report_bundle_not_passed" : "missing_report",
+        "report.md",
+        candidate
+          ? "report.candidate.md exists but report.md does not; render-report-bundle --strict has not passed."
+          : "report.md is required; run render-report-bundle --strict.",
+      ),
+    );
+    return;
   }
 
-  const citations = extractSourceCitations(text);
-  if (citations.size === 0) {
-    blockers.push(issue("missing_report_citations", "report.md", "report.md must cite source ids from source-registry.json."));
+  const markers = new Set([...readFileSync(reportPath, "utf8").matchAll(/\[claim:([A-Za-z0-9_-]+)\]/g)].map((match) => match[1]));
+  if (markers.size === 0) {
+    blockers.push(issue("missing_report_claim_markers", "report.md", "report.md must carry [claim:<id>] markers."));
   }
-  for (const citation of citations) {
-    if (!sourceIds.has(citation)) {
-      blockers.push(issue("unknown_report_citation", "report.md", `Report cites unknown source id '${citation}'.`));
-    }
-  }
-  return citations;
-}
-
-function warnOnUncitedSources(warnings: ArtifactGateIssue[], sourceIds: Set<string>, citations: Set<string>) {
-  for (const sourceId of sourceIds) {
-    if (!citations.has(sourceId)) {
-      warnings.push(issue("uncited_registered_source", "source-registry.json", `Registered source '${sourceId}' is not cited in findings or report.`));
+  for (const marker of markers) {
+    if (!claimIds.has(marker)) {
+      blockers.push(issue("unknown_report_claim", "report.md", `Report cites unknown claim '${marker}'.`));
     }
   }
 }
@@ -222,7 +192,7 @@ export function validateArtifactRun(mode: ArtifactMode, runDir: string): Artifac
   } else if (mode === "styrir_plus") {
     validatePlus(blockers, warnings, runDir);
   } else {
-    validateDeepLocal(blockers, warnings, runDir);
+    validateDeepLocal(blockers, runDir);
   }
 
   return {

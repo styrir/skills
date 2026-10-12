@@ -43,11 +43,11 @@ Choose gated report mode when any of these are true:
    - `detect-contradictions` for known conflicts, with unresolved conflicts blocking publication.
    - `red-team-node` for important claims where counter-evidence exists or should be sought.
    - `temporal-diff` for time-sensitive claims.
-8. Run delivery gates:
-   - `verify-claims --strict`
-   - `verify-citations --strict --no-network`
-   - `validate-report`
-   - `render-report-bundle --strict`
+8. Run delivery gates (every `deep-search-mcp` command takes one `--json` payload; flag forms are rejected):
+   - `verify-claims --json '{"directory":"<run-dir>","strict":true}'`
+   - `verify-citations --json '{"report":"<run-dir>/report.candidate.md","strict":true,"network":false}'`
+   - `validate-report --json '{"report":"<run-dir>/report.candidate.md"}'`
+   - `render-report-bundle --json '{"directory":"<run-dir>","draft_report":"<run-dir>/report.candidate.md","strict":true}'`
 9. Publish only if `render-report-bundle --strict` returns pass and `report.md` exists. If it fails, report the blocking JSON fields and leave `report.candidate.md` as a candidate.
 
 ## Minimum final answer for gated mode

@@ -29,15 +29,26 @@ export interface HandoffManifestInput {
 const GATED_REPORT_REFERENCE =
   "/Users/brooks/Code/skills/research/deep-search-cli/references/gated-report-mode.md";
 
+const ARTIFACT_GATE_SCRIPT = "/Users/brooks/Code/skills/styrir-search/scripts/styrir-artifact-gate.ts";
+
+// deep-search-mcp takes one strict `--json` payload per command (deep-search e8555ee); flag forms are rejected.
+export function deepSearchCommand(command: string, payload: Record<string, unknown>): string {
+  const json = JSON.stringify(payload).replaceAll("'", "'\\''");
+  return `.venv/bin/deep-search-mcp ${command} --json '${json}'`;
+}
+
 function buildDeepSearchCommands(question: string): string[] {
+  const draft = "<run-dir>/report.candidate.md";
   return [
     "cd /Users/brooks/Code/refs/deep-search",
-    `# Create <run-dir>, register sources/evidence/claims, and draft report.candidate.md per ${GATED_REPORT_REFERENCE} before running verification commands.`,
-    ".venv/bin/deep-search-mcp plan-research-lanes --query " + JSON.stringify(question),
-    ".venv/bin/deep-search-mcp verify-claims --dir <run-dir> --strict",
-    ".venv/bin/deep-search-mcp verify-citations --report <run-dir>/report.candidate.md --strict --no-network",
-    ".venv/bin/deep-search-mcp validate-report --report <run-dir>/report.candidate.md",
-    ".venv/bin/deep-search-mcp render-report-bundle --strict --dir <run-dir> --draft-report <run-dir>/report.candidate.md",
+    deepSearchCommand("init-run", { out_dir: "<run-dir>", query: question }),
+    deepSearchCommand("plan-research-lanes", { query: question }),
+    `# Register sources/evidence/claims in <run-dir> and draft ${draft} per ${GATED_REPORT_REFERENCE} before running verification commands.`,
+    deepSearchCommand("verify-claims", { directory: "<run-dir>", strict: true }),
+    deepSearchCommand("verify-citations", { report: draft, strict: true, network: false }),
+    deepSearchCommand("validate-report", { report: draft }),
+    deepSearchCommand("render-report-bundle", { directory: "<run-dir>", draft_report: draft, strict: true }),
+    `node --experimental-strip-types ${ARTIFACT_GATE_SCRIPT} deep_search_local <run-dir>`,
   ];
 }
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -15,10 +15,6 @@ function writeJson(path: string, value: unknown) {
 
 function writeText(path: string, value: string) {
   writeFileSync(path, `${value}\n`);
-}
-
-function longParagraph(prefix: string, count: number): string {
-  return Array.from({ length: count }, (_, index) => `${prefix}${index + 1}`).join(" ");
 }
 
 function validLedger() {
@@ -43,32 +39,6 @@ function validLedger() {
     ],
     proofGaps: [{ description: "No additional provider contradiction was found.", attemptedQueries: ["provider contradiction"] }],
   };
-}
-
-function writeValidDeepBundle(dir: string, overrides: {
-  plan?: unknown;
-  registry?: unknown;
-  findings?: string;
-  report?: string;
-  gateResult?: unknown;
-} = {}) {
-  mkdirSync(join(dir, "research-notes"));
-  writeJson(join(dir, "plan.json"), overrides.plan ?? { mode: "deep_search_local", facets: ["official docs"] });
-  writeText(join(dir, "research-notes", "q1.md"), "# Query 1\n\nNotes for a bounded research lane.");
-  writeJson(
-    join(dir, "source-registry.json"),
-    overrides.registry ?? { sources: [{ id: "s1", url: "https://example.com", fetched: true }] },
-  );
-  writeText(
-    join(dir, "consolidated-findings.md"),
-    overrides.findings ?? `# Findings\n\n## Theme\n\nThe local evidence bundle cites the registered source [s1]. ${longParagraph("finding", 45)}`,
-  );
-  writeText(
-    join(dir, "report.md"),
-    overrides.report ??
-      `# Report\n\n## Findings\n\nThe final report cites the registered source [s1]. ${longParagraph("report", 65)}\n\n## Sources\n\n- [s1] https://example.com`,
-  );
-  writeJson(join(dir, "gate-result.json"), overrides.gateResult ?? { gateStatus: "pass" });
 }
 
 test("accepts styrir_plus artifact minima without requiring report-grade files", () => {
@@ -114,142 +84,89 @@ test("rejects styrir_plus runs whose ledger fails the normal Styrir gate", () =>
   assert.ok(result.blockers.some((issue) => issue.code === "ledger_inference_in_observation"));
 });
 
-test("accepts deep_search_local artifact bundle with notes and final report", () => {
-  const dir = makeRunDir();
-  writeValidDeepBundle(dir);
-
-  const result = validateArtifactRun("deep_search_local", dir);
-
-  assert.equal(result.gateStatus, "pass");
-});
-
-test("rejects deep_search_local bundle without research notes", () => {
-  const dir = makeRunDir();
-  writeJson(join(dir, "plan.json"), { mode: "deep_search_local", facets: ["official docs"] });
+function writePlusRun(dir: string, plan: unknown, gateResult: unknown = { gateStatus: "pass" }) {
+  writeJson(join(dir, "plan.json"), plan);
   writeJson(join(dir, "source-registry.json"), { sources: [{ id: "s1", url: "https://example.com", fetched: true }] });
-  writeText(join(dir, "consolidated-findings.md"), `# Findings\n\n## Theme\n\nThe local evidence bundle cites the registered source [s1]. ${longParagraph("finding", 45)}`);
-  writeText(join(dir, "report.md"), `# Report\n\n## Findings\n\nThe final report cites the registered source [s1]. ${longParagraph("report", 65)}\n\n## Sources\n\n- [s1] https://example.com`);
-  writeJson(join(dir, "gate-result.json"), { gateStatus: "pass" });
+  writeJson(join(dir, "ledger.json"), validLedger());
+  writeText(join(dir, "contradiction-sweep.md"), "# Contradiction Sweep\n\nNo material contradiction found.");
+  writeJson(join(dir, "gate-result.json"), gateResult);
+}
 
-  const result = validateArtifactRun("deep_search_local", dir);
-
-  assert.equal(result.gateStatus, "fail");
-  assert.ok(result.blockers.some((issue) => issue.code === "missing_research_notes"));
-});
-
-test("rejects deep_search_local report without a Sources section", () => {
-  const dir = makeRunDir();
-  writeValidDeepBundle(dir, {
-    report: `# Report\n\n## Findings\n\nThe final report cites the registered source [s1]. ${longParagraph("report", 65)}`,
-  });
-
-  const result = validateArtifactRun("deep_search_local", dir);
-
-  assert.equal(result.gateStatus, "fail");
-  assert.ok(result.blockers.some((issue) => issue.code === "missing_sources_section"));
-});
-
-test("rejects deep_search_local report with citations missing from source registry", () => {
-  const dir = makeRunDir();
-  writeValidDeepBundle(dir, {
-    report: `# Report\n\n## Findings\n\nThe final report cites an unknown source [s2]. ${longParagraph("report", 65)}\n\n## Sources\n\n- [s2] https://example.com/other`,
-  });
-
-  const result = validateArtifactRun("deep_search_local", dir);
-
-  assert.equal(result.gateStatus, "fail");
-  assert.ok(result.blockers.some((issue) => issue.code === "unknown_report_citation"));
-});
-
-test("rejects artifact runs with plan mode mismatches or missing facets", () => {
+test("rejects styrir_plus runs with plan mode mismatches, missing facets, or a failed gate result", () => {
   const modeMismatch = makeRunDir();
-  writeValidDeepBundle(modeMismatch, { plan: { mode: "styrir_plus", facets: ["official docs"] } });
-
+  writePlusRun(modeMismatch, { mode: "deep_search_local", facets: ["official docs"] });
   const missingFacets = makeRunDir();
-  writeValidDeepBundle(missingFacets, { plan: { mode: "deep_search_local", facets: [] } });
-
-  const modeResult = validateArtifactRun("deep_search_local", modeMismatch);
-  const facetsResult = validateArtifactRun("deep_search_local", missingFacets);
-
-  assert.equal(modeResult.gateStatus, "fail");
-  assert.ok(modeResult.blockers.some((issue) => issue.code === "plan_mode_mismatch"));
-  assert.equal(facetsResult.gateStatus, "fail");
-  assert.ok(facetsResult.blockers.some((issue) => issue.code === "missing_planner_facets"));
-});
-
-test("rejects artifact runs without registered sources or passing gate result", () => {
-  const missingSources = makeRunDir();
-  writeValidDeepBundle(missingSources, { registry: { sources: [] } });
-
+  writePlusRun(missingFacets, { mode: "styrir_plus", facets: [] });
   const failedGate = makeRunDir();
-  writeValidDeepBundle(failedGate, { gateResult: { gateStatus: "fail" } });
+  writePlusRun(failedGate, { mode: "styrir_plus", facets: ["official docs"] }, { gateStatus: "fail" });
 
-  const sourceResult = validateArtifactRun("deep_search_local", missingSources);
-  const gateResult = validateArtifactRun("deep_search_local", failedGate);
-
-  assert.equal(sourceResult.gateStatus, "fail");
-  assert.ok(sourceResult.blockers.some((issue) => issue.code === "missing_registered_sources"));
-  assert.equal(gateResult.gateStatus, "fail");
-  assert.ok(gateResult.blockers.some((issue) => issue.code === "artifact_gate_not_passed"));
+  assert.ok(validateArtifactRun("styrir_plus", modeMismatch).blockers.some((issue) => issue.code === "plan_mode_mismatch"));
+  assert.ok(validateArtifactRun("styrir_plus", missingFacets).blockers.some((issue) => issue.code === "missing_planner_facets"));
+  assert.ok(validateArtifactRun("styrir_plus", failedGate).blockers.some((issue) => issue.code === "artifact_gate_not_passed"));
 });
 
-test("rejects thin report prose and missing citations", () => {
-  const shortReport = makeRunDir();
-  writeValidDeepBundle(shortReport, {
-    report: "# Report\n\n## Findings\n\nToo thin [s1].\n\n## Sources\n\n- [s1] https://example.com",
-  });
+// Mirrors the layout deep-search-mcp init-run + render-report-bundle --strict produce.
+function writeDeepSearchRun(dir: string, overrides: { report?: string | null; candidate?: boolean; sources?: string; claims?: string } = {}) {
+  writeJson(join(dir, "run_manifest.json"), { run_id: "f13bf63dae1c50e2", query: "q", artifact_paths: { report: "report.md" } });
+  writeText(join(dir, "sources.jsonl"), overrides.sources ?? JSON.stringify({ source_id: "78c0941cf095f395", raw_url: "https://example.com" }));
+  writeText(join(dir, "claims.jsonl"), overrides.claims ?? JSON.stringify({ claim_id: "995af60b47336154", claim_type: "factual", text: "x" }));
+  const report = overrides.report === undefined
+    ? "# Report\n\n## Executive Summary\n\nKent resigned. [1] [claim:995af60b47336154]\n\n## Bibliography\n\n[1] https://example.com"
+    : overrides.report;
+  if (report !== null) {
+    writeText(join(dir, "report.md"), report);
+  }
+  if (overrides.candidate) {
+    writeText(join(dir, "report.candidate.md"), "# Draft");
+  }
+}
 
-  const missingCitations = makeRunDir();
-  writeValidDeepBundle(missingCitations, {
-    report: `# Report\n\n## Findings\n\nThis report has enough prose but no source id citation. ${longParagraph("report", 65)}\n\n## Sources\n\n- s1 https://example.com`,
-  });
-
-  const shortResult = validateArtifactRun("deep_search_local", shortReport);
-  const citationResult = validateArtifactRun("deep_search_local", missingCitations);
-
-  assert.equal(shortResult.gateStatus, "fail");
-  assert.ok(shortResult.blockers.some((issue) => issue.code === "report_too_short"));
-  assert.equal(citationResult.gateStatus, "fail");
-  assert.ok(citationResult.blockers.some((issue) => issue.code === "missing_report_citations"));
-});
-
-test("rejects consolidated findings with citations missing from source registry", () => {
+test("accepts a rendered deep-search run", () => {
   const dir = makeRunDir();
-  writeValidDeepBundle(dir, {
-    findings: `# Findings\n\n## Theme\n\nThe consolidated findings cite an unknown source [s2]. ${longParagraph("finding", 45)}`,
-  });
+  writeDeepSearchRun(dir);
 
   const result = validateArtifactRun("deep_search_local", dir);
 
-  assert.equal(result.gateStatus, "fail");
-  assert.ok(result.blockers.some((issue) => issue.code === "unknown_findings_citation"));
+  assert.equal(result.gateStatus, "pass", JSON.stringify(result.blockers));
 });
 
-test("warns when registered sources are not cited in findings or report", () => {
-  const dir = makeRunDir();
-  writeValidDeepBundle(dir, {
-    registry: {
-      sources: [
-        { id: "s1", url: "https://example.com", fetched: true },
-        { id: "s2", url: "https://example.com/unused", fetched: true },
-      ],
-    },
-  });
+test("rejects deep-search runs whose report bundle has not passed", () => {
+  const unrendered = makeRunDir();
+  writeDeepSearchRun(unrendered, { report: null, candidate: true });
+  const missing = makeRunDir();
+  writeDeepSearchRun(missing, { report: null });
 
-  const result = validateArtifactRun("deep_search_local", dir);
-
-  assert.equal(result.gateStatus, "pass");
-  assert.ok(result.warnings.some((issue) => issue.code === "uncited_registered_source"));
+  assert.ok(validateArtifactRun("deep_search_local", unrendered).blockers.some((issue) => issue.code === "report_bundle_not_passed"));
+  assert.ok(validateArtifactRun("deep_search_local", missing).blockers.some((issue) => issue.code === "missing_report"));
 });
 
-test("does not treat ordinary bracketed prose as source citations", () => {
-  const dir = makeRunDir();
-  writeValidDeepBundle(dir, {
-    report: `# Report\n\n## Findings\n\nThe final report includes editorial markers [TODO], [sic], and [summary] while citing source [s1]. ${longParagraph("report", 65)}\n\n## Sources\n\n- [s1] https://example.com`,
-  });
+test("rejects deep-search runs without sources, claims, or a run manifest", () => {
+  const empty = makeRunDir();
+  writeDeepSearchRun(empty, { sources: "", claims: "" });
+  const bare = makeRunDir();
 
-  const result = validateArtifactRun("deep_search_local", dir);
+  const emptyCodes = validateArtifactRun("deep_search_local", empty).blockers.map((issue) => issue.code);
+  const bareCodes = validateArtifactRun("deep_search_local", bare).blockers.map((issue) => issue.code);
 
-  assert.equal(result.gateStatus, "pass");
-  assert.ok(!result.blockers.some((issue) => issue.code === "unknown_report_citation"));
+  assert.ok(emptyCodes.includes("missing_registered_sources"));
+  assert.ok(emptyCodes.includes("missing_claims"));
+  assert.ok(bareCodes.includes("missing_run_manifest"));
+});
+
+test("rejects reports with unknown or missing claim markers", () => {
+  const unknown = makeRunDir();
+  writeDeepSearchRun(unknown, { report: "# Report\n\nText [claim:deadbeef]" });
+  const unmarked = makeRunDir();
+  writeDeepSearchRun(unmarked, { report: "# Report\n\nText [1]" });
+
+  assert.ok(validateArtifactRun("deep_search_local", unknown).blockers.some((issue) => issue.code === "unknown_report_claim"));
+  assert.ok(validateArtifactRun("deep_search_local", unmarked).blockers.some((issue) => issue.code === "missing_report_claim_markers"));
+});
+
+const REAL_RUN = "/Users/brooks/Code/refs/deep-search/runs/joekent-foreign-influence-20260602-0857";
+
+test("accepts a real rendered deep-search run", { skip: !existsSync(REAL_RUN) && "deep-search runs are not present" }, () => {
+  const result = validateArtifactRun("deep_search_local", REAL_RUN);
+
+  assert.equal(result.gateStatus, "pass", JSON.stringify(result.blockers));
 });

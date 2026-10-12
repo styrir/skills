@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -47,9 +47,42 @@ test("creates a local Deep Search manifest with concrete next commands", () => {
   assert.equal(manifest.ledgerPath, "/tmp/styrir-ledger.json");
   assert.equal(manifest.gateStatus, "pass");
   assert.ok(manifest.commands.some((command) => command.includes("plan-research-lanes")));
-  assert.ok(manifest.commands.some((command) => command.includes("render-report-bundle --strict")));
+  assert.ok(manifest.commands.some((command) => command.includes("render-report-bundle --json")));
   assert.ok(manifest.commands.some((command) => command.includes("gated-report-mode.md")));
+  assert.ok(manifest.commands.some((command) => command.includes("styrir-artifact-gate.ts deep_search_local <run-dir>")));
+  assert.ok(!manifest.commands.some((command) => / --(query|dir|strict|report|no-network)\b/.test(command)));
 });
+
+const DEEP_SEARCH_REPO = "/Users/brooks/Code/refs/deep-search";
+const DEEP_SEARCH_CLI = join(DEEP_SEARCH_REPO, ".venv/bin/deep-search-mcp");
+
+test(
+  "deep-local manifest commands run against the installed deep-search CLI",
+  { skip: !existsSync(DEEP_SEARCH_CLI) && "deep-search-mcp is not installed" },
+  () => {
+    const descriptor = {
+      question: "Can't this quote survive shell quoting?",
+      objective: "Smoke the handoff contract",
+      lane: "gated_report_local",
+      forceMode: "deep_search_local" as const,
+    };
+    const manifest = createHandoffManifest({ route: chooseRoute(descriptor), descriptor });
+    const runDir = join(mkdtempSync(join(tmpdir(), "styrir-deep-local-")), "run");
+    const commands = manifest.commands
+      .filter((command) => command.startsWith(".venv/bin/deep-search-mcp"))
+      .map((command) => command.replaceAll("<run-dir>", runDir));
+    // Only commands that need no hand-built research artifacts; the rest share the same --json contract.
+    for (const command of commands.filter((c) => /deep-search-mcp (init-run|plan-research-lanes|verify-claims) /.test(c))) {
+      const result = spawnSync("/bin/sh", ["-c", command], { cwd: DEEP_SEARCH_REPO, encoding: "utf8" });
+      assert.equal(result.status, 0, `${command}\n${result.stderr}${result.stdout}`);
+      assert.doesNotMatch(result.stdout, /"error"/, command);
+    }
+    assert.ok(existsSync(join(runDir, "run_manifest.json")));
+    const { status, stdout } = spawnSync(DEEP_SEARCH_CLI, ["validate-report", "--help"], { encoding: "utf8" });
+    assert.equal(status, 0);
+    assert.match(stdout, /--json/);
+  },
+);
 
 test("creates a NVIDIA AI-Q handoff manifest without pretending local execution exists", () => {
   const manifest = createHandoffManifest({
