@@ -20,10 +20,10 @@ Use this subskill when the research question depends on local code behavior. Pre
 
 ```bash
 cd /Users/brooks/Code/refs/deep-search
-.venv/bin/deep-search-mcp index-codebase --root .
-.venv/bin/deep-search-mcp search-code --root . --query "render_report_bundle validation gates" --limit 10
-.venv/bin/deep-search-mcp get-indexing-status --root .
-.venv/bin/deep-search-mcp clear-index --root .
+.venv/bin/deep-search-mcp index-codebase --json '{"root":"."}'
+.venv/bin/deep-search-mcp search-code --json '{"root":".","query":"render_report_bundle validation gates","limit":10}'
+.venv/bin/deep-search-mcp get-indexing-status --json '{"root":"."}'
+.venv/bin/deep-search-mcp clear-index --json '{"root":"."}'
 ```
 
 ## Workflow

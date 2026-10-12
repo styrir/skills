@@ -70,7 +70,7 @@ Default budget:
 }
 ```
 
-Output is a `deep-search-mcp` run directory described in `aiq-borrowed-patterns.md`: `run_manifest.json`, `sources.jsonl`, `claims.jsonl`, and a `report.md` promoted by `render-report-bundle --strict`.
+Output is a `deep-search-mcp` run directory described in `aiq-borrowed-patterns.md`: `run_manifest.json`, `sources.jsonl`, `claims.jsonl`, and a `report.md` promoted by `render-report-bundle` with `"strict":true`.
 
 ### `nvidia_aiq_handoff`
 

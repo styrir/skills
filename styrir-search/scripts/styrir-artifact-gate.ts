@@ -141,7 +141,7 @@ function readJsonlIds(blockers: ArtifactGateIssue[], runDir: string, relativePat
   return ids;
 }
 
-// deep_search_local validates a real deep-search-mcp run dir. render-report-bundle --strict owns the report checks
+// deep_search_local validates a real deep-search-mcp run dir. strict render-report-bundle owns the report checks
 // (sections, citations, claim support, contradictions) and only promotes report.candidate.md to report.md on pass.
 function validateDeepLocal(blockers: ArtifactGateIssue[], runDir: string) {
   requireFile(blockers, runDir, "run_manifest.json", "missing_run_manifest");
@@ -165,8 +165,8 @@ function validateDeepLocal(blockers: ArtifactGateIssue[], runDir: string) {
         candidate ? "report_bundle_not_passed" : "missing_report",
         "report.md",
         candidate
-          ? "report.candidate.md exists but report.md does not; render-report-bundle --strict has not passed."
-          : "report.md is required; run render-report-bundle --strict.",
+          ? "report.candidate.md exists but report.md does not; strict render-report-bundle has not passed."
+          : "report.md is required; run render-report-bundle with {\"strict\":true}.",
       ),
     );
     return;

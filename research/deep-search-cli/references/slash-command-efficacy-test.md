@@ -23,7 +23,7 @@ The visible flow should show:
 - The agent loads the narrow subskill required by the task, commonly `deep-search-p1-retrieval` for web/source research.
 - Provider/setup subskills such as `deep-search-provider-setup` are loaded only after a real provider/setup failure.
 - Broad sibling skills such as `arxiv`, `research-and-recon`, and `parallel-cli` are not loaded reflexively.
-- Early work is done through visible `deep-search-mcp` CLI calls such as `plan-research-lanes`, `web-search --provider parallel`, and `web-fetch`.
+- Early work is done through visible `deep-search-mcp` CLI calls such as `plan-research-lanes`, `web-search` with `"provider":"parallel"`, and `web-fetch`.
 - `execute_code` may appear later for batching, JSON parsing, or output reduction, but should not be the first opaque path.
 
 ## Output richness rubric

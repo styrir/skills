@@ -137,7 +137,7 @@ The deterministic gate checks only things it can prove without a model:
 - search/fetch budget overages,
 - malformed dates and required fields.
 
-The artifact gate additionally checks mode-specific run bundles: `styrir_plus` must include a normal Styrir ledger that passes the ledger gate, and `deep_search_local` must be a `deep-search-mcp` run directory with `run_manifest.json`, registered sources, recorded claims, and a `report.md` promoted by `render-report-bundle --strict` whose `[claim:<id>]` markers resolve to `claims.jsonl`. These gates validate structure and provenance, not claim truth.
+The artifact gate additionally checks mode-specific run bundles: `styrir_plus` must include a normal Styrir ledger that passes the ledger gate, and `deep_search_local` must be a `deep-search-mcp` run directory with `run_manifest.json`, registered sources, recorded claims, and a `report.md` promoted by `render-report-bundle` with `"strict":true` whose `[claim:<id>]` markers resolve to `claims.jsonl`. These gates validate structure and provenance, not claim truth.
 
 ## Escalation
 

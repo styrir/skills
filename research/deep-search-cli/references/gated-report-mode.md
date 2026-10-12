@@ -48,7 +48,7 @@ Choose gated report mode when any of these are true:
    - `verify-citations --json '{"report":"<run-dir>/report.candidate.md","strict":true,"network":false}'`
    - `validate-report --json '{"report":"<run-dir>/report.candidate.md"}'`
    - `render-report-bundle --json '{"directory":"<run-dir>","draft_report":"<run-dir>/report.candidate.md","strict":true}'`
-9. Publish only if `render-report-bundle --strict` returns pass and `report.md` exists. If it fails, report the blocking JSON fields and leave `report.candidate.md` as a candidate.
+9. Publish only if `render-report-bundle` with `"strict":true` returns pass and `report.md` exists. If it fails, report the blocking JSON fields and leave `report.candidate.md` as a candidate.
 
 ## Minimum final answer for gated mode
 
@@ -72,7 +72,7 @@ A gated run is acceptable only when:
 - `missing_claim_ids` is empty.
 - strict claim verification passes, or failures are explicitly reported as blockers.
 - strict no-network citation verification passes.
-- `render-report-bundle --strict` writes `report.md`.
+- `render-report-bundle` with `"strict":true` writes `report.md`.
 
 ## Competitive reference map
 

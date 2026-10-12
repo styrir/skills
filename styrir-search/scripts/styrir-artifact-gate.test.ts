@@ -105,7 +105,7 @@ test("rejects styrir_plus runs with plan mode mismatches, missing facets, or a f
   assert.ok(validateArtifactRun("styrir_plus", failedGate).blockers.some((issue) => issue.code === "artifact_gate_not_passed"));
 });
 
-// Mirrors the layout deep-search-mcp init-run + render-report-bundle --strict produce.
+// Mirrors the layout deep-search-mcp init-run + strict render-report-bundle produce.
 function writeDeepSearchRun(dir: string, overrides: { report?: string | null; candidate?: boolean; sources?: string; claims?: string } = {}) {
   writeJson(join(dir, "run_manifest.json"), { run_id: "f13bf63dae1c50e2", query: "q", artifact_paths: { report: "report.md" } });
   writeText(join(dir, "sources.jsonl"), overrides.sources ?? JSON.stringify({ source_id: "78c0941cf095f395", raw_url: "https://example.com" }));

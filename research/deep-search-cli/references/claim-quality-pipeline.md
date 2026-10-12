@@ -6,38 +6,22 @@ Use this when the task moves beyond source discovery into auditable claim valida
 
 ```bash
 # Extract candidate factual claims from prose without writing ledgers
-.venv/bin/deep-search-mcp extract-claims \
-  --text 'The sample contains 12 rows and it includes 3 columns.' \
-  --section-id methods
+.venv/bin/deep-search-mcp extract-claims --json '{"text":"The sample contains 12 rows and it includes 3 columns.","section_id":"methods"}'
 
 # Extract and append claims to claims.jsonl, preserving extraction_metadata
-.venv/bin/deep-search-mcp extract-claims \
-  --file /tmp/run/report.candidate.md \
-  --section-id findings \
-  --dir /tmp/run \
-  --write
+.venv/bin/deep-search-mcp extract-claims --json '{"file":"/tmp/run/report.candidate.md","section_id":"findings","directory":"/tmp/run","write":true}'
 
 # Link each claim to best matching evidence; --write updates evidence_ids/cited_source_ids idempotently
-.venv/bin/deep-search-mcp link-claims-to-evidence \
-  --dir /tmp/run \
-  --write \
-  --min-score 0.35
+.venv/bin/deep-search-mcp link-claims-to-evidence --json '{"directory":"/tmp/run","write":true,"min_score":0.35}'
 
 # Deterministic NLI-style proxy
-.venv/bin/deep-search-mcp entailment-check \
-  --claim 'Alpha increased in 2024' \
-  --evidence 'Alpha decreased in 2024.'
+.venv/bin/deep-search-mcp entailment-check --json '{"claim":"Alpha increased in 2024","evidence":"Alpha decreased in 2024."}'
 
 # Active counter-evidence retrieval; dry-run must not mutate ledgers
-.venv/bin/deep-search-mcp retrieve-counter-evidence \
-  --dir /tmp/run \
-  --all \
-  --limit 3 \
-  --provider parallel \
-  --dry-run
+.venv/bin/deep-search-mcp retrieve-counter-evidence --json '{"directory":"/tmp/run","all":true,"limit":3,"provider":"parallel","dry_run":true}'
 
 # Provenance scoring across coverage/support/entailment/citation/source-quality/independence/challenge penalty
-.venv/bin/deep-search-mcp provenance-soundness --dir /tmp/run
+.venv/bin/deep-search-mcp provenance-soundness --json '{"directory":"/tmp/run"}'
 ```
 
 ## Acceptance bar
@@ -53,8 +37,8 @@ Use this when the task moves beyond source discovery into auditable claim valida
 ```bash
 .venv/bin/python -m pytest -q
 .venv/bin/python -m pip wheel . -w /tmp/deep-search-wheel
-.venv/bin/deep-search-mcp extract-claims --text 'The sample contains 12 rows and it includes 3 columns.' --section-id methods
-.venv/bin/deep-search-mcp entailment-check --claim 'Alpha increased in 2024' --evidence 'Alpha decreased in 2024.'
+.venv/bin/deep-search-mcp extract-claims --json '{"text":"The sample contains 12 rows and it includes 3 columns.","section_id":"methods"}'
+.venv/bin/deep-search-mcp entailment-check --json '{"claim":"Alpha increased in 2024","evidence":"Alpha decreased in 2024."}'
 ```
 
 Useful smoke result shape:

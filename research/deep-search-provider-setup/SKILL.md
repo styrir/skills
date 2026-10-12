@@ -22,12 +22,12 @@ The canonical production path is Parallel Search through the in-repo provider ad
 cd /Users/brooks/Code/refs/deep-search
 export PARALLEL_API_KEY="[REDACTED]"
 export DEEP_SEARCH_WEB_SEARCH_ENDPOINT=provider:parallel
-.venv/bin/deep-search-mcp web-search --query "deep search systems" --provider parallel --limit 5
+.venv/bin/deep-search-mcp web-search --json '{"query":"deep search systems","provider":"parallel","limit":5}'
 ```
 
 ## When to Use
 
-- Verifying `--provider parallel` works.
+- Verifying `"provider":"parallel"` works.
 - Diagnosing `PARALLEL_API_KEY` availability.
 - Explaining provider boundaries: Parallel provider vs stdlib fallback.
 - Preventing credential leakage in command output or docs.
@@ -41,17 +41,14 @@ export DEEP_SEARCH_WEB_SEARCH_ENDPOINT=provider:parallel
 5. Smoke-test with a low-limit search:
 
 ```bash
-.venv/bin/deep-search-mcp web-search \
-  --query "deep-search-mcp provider smoke test" \
-  --provider parallel \
-  --limit 1
+.venv/bin/deep-search-mcp web-search --json '{"query":"deep-search-mcp provider smoke test","provider":"parallel","limit":1}'
 ```
 
 6. Inspect JSON for provider identity, results, search id, or usage metadata.
 
 ## Provider Rules
 
-- `--provider parallel` maps to `DEEP_SEARCH_WEB_SEARCH_ENDPOINT=provider:parallel` for that command.
+- `"provider":"parallel"` in a `web-search` payload maps to `DEEP_SEARCH_WEB_SEARCH_ENDPOINT=provider:parallel` for that command.
 - If no endpoint/provider is configured, `web_search` falls back to stdlib DuckDuckGo HTML search.
 - Parallel `search_queries[0]` is bounded to 200 characters; the full query is preserved as `objective`.
 - Parallel `max_results` is clamped to 50.
