@@ -30,8 +30,16 @@ mkdir -p "$BIN" "$ASK_TEST_TMP/work"
 cat > "$BIN/claude" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-echo "native claude must not be invoked for proxy-owned routing" > "${CLAUDE_NATIVE_CALLED:?}"
-exit 99
+if [ "${1:-}" = "auth" ]; then
+  if [ "${CLAUDE_STUB_MODE:-}" = "noauth" ]; then echo '{"loggedIn": false}'; else echo '{"loggedIn": true, "authMethod": "claude.ai"}'; fi
+  exit 0
+fi
+cat >/dev/null
+python3 -c 'import json,os,sys; json.dump({"argv":sys.argv[1:],"cwd":os.getcwd()},open(os.environ["CLAUDE_ARGS_CAPTURE"],"w"))' "$@"
+cat <<'JSON'
+{"type":"assistant","message":{"content":[{"type":"text","text":"stub claude review"}]}}
+{"type":"result","subtype":"success","result":"stub claude review"}
+JSON
 SH
 chmod +x "$BIN/claude"
 
@@ -89,11 +97,11 @@ JSON
 SH
 chmod +x "$BIN/curl"
 
-# Hermetic grok route config: claude models are proxy-owned (base_url), the
-# native xAI model has no [model.*] section at all.
+# Hermetic grok route config: proxy-owned models (base_url); the native xAI
+# model has no [model.*] section at all. Claude is native-only and never here.
 cat > "$ASK_TEST_TMP/grok-config.toml" <<'TOML'
-[model.claude-opus-5]
-model = "claude-opus-5"
+[model."gpt-5.6-sol"]
+model = "gpt-5.6-sol"
 base_url = "http://127.0.0.1:8318/v1"
 api_key = "sk-dummy"
 
@@ -111,35 +119,66 @@ export ASK_GROK_CONFIG="$ASK_TEST_TMP/grok-config.toml"
 
 # Same routes pointed at a closed port for the fail-closed case.
 cat > "$ASK_TEST_TMP/grok-config-down.toml" <<'TOML'
-[model.claude-opus-5]
-model = "claude-opus-5"
+[model."gpt-5.6-sol"]
+model = "gpt-5.6-sol"
 base_url = "http://127.0.0.1:1/v1"
 api_key = "sk-dummy"
 TOML
 
-CLAUDE_NATIVE_CALLED="$ASK_TEST_TMP/native-claude-called.txt" GROK_ARGS_CAPTURE="$ASK_TEST_TMP/claude-default-args.txt" \
-  CURL_CALLS_CAPTURE="$ASK_TEST_TMP/curl-default-calls.txt" \
-  "$ASK" claude -m claude-opus-5 --effort medium -d "$ASK_TEST_TMP/work" -o "$ASK_TEST_TMP/default" "Review the local change" >/dev/null
+# Native claude argv contract: read-only OS sandbox scoped to the workdir.
+cat > "$ASK_TEST_TMP/check-claude-args.py" <<'PY'
+import json, os, sys
+cap = json.load(open(sys.argv[1])); argv = cap["argv"]; work = os.path.realpath(sys.argv[2]); research = sys.argv[3] == "research"
+def val(flag):
+    assert flag in argv, (flag, argv)
+    return argv[argv.index(flag) + 1]
+assert argv[0] == "-p", argv
+assert cap["cwd"] == work, cap
+assert ("--safe-mode" in argv) is (not research), argv
+assert "--no-session-persistence" in argv, argv
+assert val("--permission-mode") == "dontAsk", argv
+assert val("--output-format") == "stream-json", argv
+sandbox = json.loads(val("--settings"))["sandbox"]
+assert sandbox["enabled"] is True and sandbox["failIfUnavailable"] is True, sandbox
+assert sandbox["allowUnsandboxedCommands"] is False, sandbox
+assert sandbox["filesystem"]["denyWrite"] == [work], sandbox
+assert json.loads(val("--settings"))["disableAllHooks"] is True, argv
+assert val("--setting-sources") == "user", argv
+if research:
+    assert val("--model") == "claude-fable-5", argv
+    assert val("--tools") == "Read,Grep,Glob,Bash,WebSearch,WebFetch,MCPSearch", argv
+    assert "mcp__context7__*" in val("--allowedTools"), argv
+else:
+    assert val("--model") == "claude-opus-5", argv
+    assert val("--tools") == "Read,Grep,Glob,Bash", argv
+    assert "--allowedTools" not in argv, argv
+    assert val("--effort") == "medium", argv
+    assert val("--max-budget-usd") == "2", argv
+PY
 
-[ ! -e "$ASK_TEST_TMP/native-claude-called.txt" ] || fail "proxy-owned Claude route invoked native claude"
-assert_contains "http://127.0.0.1:8318/v1/models" "$ASK_TEST_TMP/curl-default-calls.txt"
+# Grok must never be invoked for the claude provider.
+export GROK_ARGS_CAPTURE="$ASK_TEST_TMP/grok-called-for-claude.txt"
+CLAUDE_ARGS_CAPTURE="$ASK_TEST_TMP/claude-default-args.json" \
+  "$ASK" claude -m claude-opus-5 --effort medium -b 2 -d "$ASK_TEST_TMP/work" -o "$ASK_TEST_TMP/default" "Review the local change" >/dev/null
+
 assert_not_contains "Optional Research Tools" "$ASK_TEST_TMP/default/prompt.md"
-assert_contains "-m claude-opus-5" "$ASK_TEST_TMP/claude-default-args.txt"
-assert_contains "--reasoning-effort medium" "$ASK_TEST_TMP/claude-default-args.txt"
-assert_contains "--tools read_file,grep,list_dir" "$ASK_TEST_TMP/claude-default-args.txt"
+assert_contains "stub claude review" "$ASK_TEST_TMP/default/artifact.md"
+python3 "$ASK_TEST_TMP/check-claude-args.py" "$ASK_TEST_TMP/claude-default-args.json" "$ASK_TEST_TMP/work" default
 
-CLAUDE_NATIVE_CALLED="$ASK_TEST_TMP/native-claude-called-research.txt" GROK_ARGS_CAPTURE="$ASK_TEST_TMP/claude-research-args.txt" \
-  "$ASK" claude --research -m claude-fable-5 -d "$ASK_TEST_TMP/work" -o "$ASK_TEST_TMP/research" "Review the local change" >/dev/null
+# Relative -o resolves against the caller's cwd, not the claude workdir.
+(cd "$ASK_TEST_TMP" && CLAUDE_ARGS_CAPTURE="$ASK_TEST_TMP/claude-research-args.json" \
+  "$ASK" claude --research -m claude-fable-5 -d "$ASK_TEST_TMP/work" -o research "Review the local change" >/dev/null)
+[ ! -e "$ASK_TEST_TMP/work/research" ] || fail "relative outdir landed in the claude workdir"
 
-[ ! -e "$ASK_TEST_TMP/native-claude-called-research.txt" ] || fail "proxy-owned Claude research route invoked native claude"
 assert_contains "Optional Research Tools" "$ASK_TEST_TMP/research/prompt.md"
 # shellcheck disable=SC2016 # literal skill token, not shell expansion.
 assert_contains '$styrir-search' "$ASK_TEST_TMP/research/prompt.md"
 assert_contains "Context7" "$ASK_TEST_TMP/research/prompt.md"
-assert_contains "-m claude-fable-5" "$ASK_TEST_TMP/claude-research-args.txt"
-assert_contains "--disallowed-tools run_terminal_cmd,get_task_output,kill_task,task,Agent,search_replace,hashline_edit,ask_user_question,enter_plan_mode,exit_plan_mode" "$ASK_TEST_TMP/claude-research-args.txt"
+python3 "$ASK_TEST_TMP/check-claude-args.py" "$ASK_TEST_TMP/claude-research-args.json" "$ASK_TEST_TMP/work" research
+[ ! -e "$ASK_TEST_TMP/grok-called-for-claude.txt" ] || fail "claude provider invoked grok"
+unset GROK_ARGS_CAPTURE
 
-echo "ok - ask runner proxy-owned claude route"
+echo "ok - ask runner native read-only claude route"
 
 GROK_ARGS_CAPTURE="$ASK_TEST_TMP/grok-default-args.txt" \
   "$ASK" grok -d "$ASK_TEST_TMP/work" -o "$ASK_TEST_TMP/grok-default" "Review the local change" >/dev/null
@@ -197,28 +236,28 @@ fi
 assert_contains "not authenticated" "$ASK_TEST_TMP/grok-noauth/artifact.md"
 assert_contains "not authenticated" "$ASK_TEST_TMP/grok-noauth/summary.md"
 
-CLAUDE_NATIVE_CALLED="$ASK_TEST_TMP/native-claude-called-noauth.txt" GROK_ARGS_CAPTURE="$ASK_TEST_TMP/claude-noauth-args.txt" GROK_STUB_MODE=noauth \
-  "$ASK" claude -m claude-opus-5 -d "$ASK_TEST_TMP/work" -o "$ASK_TEST_TMP/claude-noauth" "Review the local change" >/dev/null
-[ ! -e "$ASK_TEST_TMP/native-claude-called-noauth.txt" ] || fail "proxy route fell back to native claude"
-assert_contains "stub grok review" "$ASK_TEST_TMP/claude-noauth/artifact.md"
+if CLAUDE_ARGS_CAPTURE="$ASK_TEST_TMP/claude-noauth-args.json" CLAUDE_STUB_MODE=noauth \
+  "$ASK" claude -m claude-opus-5 -d "$ASK_TEST_TMP/work" -o "$ASK_TEST_TMP/claude-noauth" "Review the local change" >/dev/null 2>&1; then
+  fail "expected unauthenticated claude run to be blocked"
+fi
+[ ! -e "$ASK_TEST_TMP/claude-noauth-args.json" ] || fail "unauthenticated claude launched"
+assert_contains "claude auth login" "$ASK_TEST_TMP/claude-noauth/artifact.md"
 
 echo "ok - ask runner grok and claude transport guard rails"
 
 # ops-ts4: proxy-down fail-closed — the resolved base_url points at a closed
 # port, so preflight must block (exit 2) naming the endpoint and the auth
-# owner, without suggesting a native claude login and without invoking claude.
+# owner. Proxy-owned routes remain a grok-provider concern.
 set +e
-CLAUDE_NATIVE_CALLED="$ASK_TEST_TMP/native-claude-called-proxydown.txt" GROK_ARGS_CAPTURE="$ASK_TEST_TMP/claude-proxydown-args.txt" \
+GROK_ARGS_CAPTURE="$ASK_TEST_TMP/grok-proxydown-args.txt" \
   ASK_GROK_CONFIG="$ASK_TEST_TMP/grok-config-down.toml" \
-  "$ASK" claude -m claude-opus-5 -d "$ASK_TEST_TMP/work" -o "$ASK_TEST_TMP/claude-proxydown" "Review the local change" >/dev/null 2>&1
+  "$ASK" grok -m gpt-5.6-sol -d "$ASK_TEST_TMP/work" -o "$ASK_TEST_TMP/grok-proxydown" "Review the local change" >/dev/null 2>&1
 PROXY_DOWN_STATUS=$?
 set -e
-[ "$PROXY_DOWN_STATUS" -eq 2 ] || fail "expected proxy-down claude route to exit 2, got $PROXY_DOWN_STATUS"
-[ ! -e "$ASK_TEST_TMP/native-claude-called-proxydown.txt" ] || fail "proxy-down claude route fell back to native claude"
-assert_contains "http://127.0.0.1:1/v1" "$ASK_TEST_TMP/claude-proxydown/artifact.md"
-assert_contains "vibeproxy" "$ASK_TEST_TMP/claude-proxydown/artifact.md"
-assert_not_contains "claude auth login" "$ASK_TEST_TMP/claude-proxydown/artifact.md"
-assert_not_contains "claude auth login" "$ASK_TEST_TMP/claude-proxydown/summary.md"
+[ "$PROXY_DOWN_STATUS" -eq 2 ] || fail "expected proxy-down grok route to exit 2, got $PROXY_DOWN_STATUS"
+[ ! -e "$ASK_TEST_TMP/grok-proxydown-args.txt" ] || fail "proxy-down route launched grok"
+assert_contains "http://127.0.0.1:1/v1" "$ASK_TEST_TMP/grok-proxydown/artifact.md"
+assert_contains "vibeproxy" "$ASK_TEST_TMP/grok-proxydown/artifact.md"
 
 # ops-ts4: native xAI model — no [model.*] base_url in the route config, so
 # the proxy probe must not run at all.
@@ -244,18 +283,30 @@ expected_keys = {"provider", "transport", "model", "endpoint", "authOwner",
                  "authCheckPassed", "rollback"}
 assert set(d) == expected_keys, sorted(d)
 assert d["provider"] == "claude", d
-assert d["transport"] == "grok", d
-assert d["model"] == "claude-opus-5", d
-assert d["endpoint"] == "http://127.0.0.1:8318/v1", d
-assert d["authOwner"] == "vibeproxy", d
-assert d["endpointHealthy"] is True, d
-assert d["modelListed"] is True, d
+assert d["transport"] == "claude", d
+assert d["model"] == "claude-opus-5-5", d
+assert d["endpoint"] is None and d["authOwner"] is None and d["rollback"] is None, d
+assert d["endpointHealthy"] is None and d["modelListed"] is None, d
 assert d["cliFound"] is True, d
-assert d["authCheckPassed"] is None, d
-assert d["rollback"] == "127.0.0.1:8319 standalone (agent-ops:ops-ts4)", d
+assert d["authCheckPassed"] is True, d
 assert "sk-dummy" not in json.dumps(d), d
 PY
 [ ! -e "$ASK_TEST_TMP/route-status-cwd/.ask" ] || fail "--route-status must not create an outdir"
+
+# Proxy-owned grok route still reports endpoint health.
+(cd "$ASK_TEST_TMP/route-status-cwd" && "$ASK" grok -m gpt-5.6-sol --route-status) > "$ASK_TEST_TMP/route-status-grok.json" 2>/dev/null
+python3 - "$ASK_TEST_TMP/route-status-grok.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["transport"] == "grok" and d["endpoint"] == "http://127.0.0.1:8318/v1", d
+assert d["endpointHealthy"] is True and d["modelListed"] is True, d
+assert "sk-dummy" not in json.dumps(d), d
+PY
+
+if "$ASK" claude --transport proxy -m claude-opus-5-5 -o "$ASK_TEST_TMP/claude-proxy" "x" >/dev/null 2>"$ASK_TEST_TMP/claude-proxy.err"; then
+  fail "claude --transport proxy must be refused"
+fi
+grep -q "native claude CLI" "$ASK_TEST_TMP/claude-proxy.err" || fail "claude proxy refusal message missing"
 
 echo "ok - ask runner route status"
 

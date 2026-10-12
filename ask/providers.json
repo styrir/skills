@@ -2,15 +2,11 @@
   "_comment": "Provider registry for the ask skill. defaultModel is the single place to update as models improve or get deprecated. Tiers: stream-json (realtime adapter), final-json (structured final output only), text-tee (no structured output; omc ask fallback).",
   "providers": {
     "claude": {
-      "defaultModel": "claude-opus-5",
+      "defaultModel": "claude-opus-5-5",
       "tier": "stream-json",
-      "transport": "grok",
-      "adapter": "grok-stream-surface.ts",
-      "versionCheck": "grok --version",
-      "authCheck": "grok models",
-      "authOwner": "vibeproxy",
-      "routeContract": "agent-ops:ops-ts4",
-      "rollbackNote": "127.0.0.1:8319 standalone (agent-ops:ops-ts4)"
+      "adapter": "claude-stream-surface.ts",
+      "versionCheck": "claude --version",
+      "authCheck": "claude auth status"
     },
     "codex": {
       "defaultModel": "gpt-6-astra",

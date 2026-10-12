@@ -45,7 +45,7 @@ test("ask is the unified skill for Codex and Claude second opinions", () => {
   assert.match(providers, /"claude"/);
 });
 
-test("ask documents the current Codex exec and Claude proxy routes", () => {
+test("ask documents the current Codex exec and native Claude routes", () => {
   const skill = readSkill("ask/SKILL.md");
   const runner = readSkill("ask/scripts/ask.sh");
   const execHelp = spawnCodexExecHelp();
@@ -59,7 +59,7 @@ test("ask documents the current Codex exec and Claude proxy routes", () => {
     assert.match(reviewHelp, /-o,\s+--output-last-message/);
   }
   assert.match(skill, /codex exec --json/);
-  assert.match(skill, /VibeProxy-owned route/);
+  assert.match(skill, /Native claude route/);
   assert.match(runner, /TRANSPORT="\$\(field transport\)"/);
   assert.match(runner, /grok "\$\{GROK_ARGS\[@\]\}" --prompt-file/);
 });

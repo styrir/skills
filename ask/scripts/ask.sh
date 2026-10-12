@@ -128,6 +128,7 @@ TRANSPORT="$(field transport)"
 [ -n "$TRANSPORT" ] || TRANSPORT="$PROVIDER"
 if [ -n "$TRANSPORT_OVERRIDE" ]; then
   [ "$TRANSPORT_OVERRIDE" = "proxy" ] || { echo 'ask: only explicit proxy transport override is supported' >&2; exit 2; }
+  [ "$PROVIDER" != "claude" ] || { echo 'ask: claude runs only on the native claude CLI; --transport proxy is not available for it' >&2; exit 2; }
   TRANSPORT=proxy
 fi
 ADAPTER="$(field adapter)"
@@ -302,9 +303,19 @@ case "$TIER" in
       claude)
         command -v claude >/dev/null || blocker "claude CLI not found on PATH"
         AUTH_OUT="$(claude auth status 2>&1 || true)"
-        printf '%s' "$AUTH_OUT" | grep -qiE 'not logged in|loggedIn.*false' && blocker "Not logged in — this gate applies to the NATIVE claude transport only; providers routed through another transport (see providers.json) never reach it. Consult providers.json authOwner before running 'claude auth login': run it only when the claude CLI itself owns auth for this provider."$'\n'"$AUTH_OUT"
+        printf '%s' "$AUTH_OUT" | grep -qiE 'not logged in|loggedIn.*false' && blocker "claude CLI not logged in · run: claude auth login (claude.ai account)"$'\n'"$AUTH_OUT"
+        [ -d "$WORKDIR" ] || blocker "workdir not found: $WORKDIR"
+        WORKDIR="$(cd "$WORKDIR" && pwd -P)"
+        # Read-only like codex: OS sandbox denies writes to the workdir for Bash
+        # and its children; fail closed if the sandbox is unavailable.
+        CLAUDE_SETTINGS="$(python3 -c 'import json,sys; print(json.dumps({"sandbox":{"enabled":True,"autoAllowBashIfSandboxed":True,"allowUnsandboxedCommands":False,"failIfUnavailable":True,"filesystem":{"denyWrite":[sys.argv[1]]}},"disableAllHooks":True}))' "$WORKDIR")"
         CLAUDE_TOOLS=(Read Grep Glob Bash)
-        CLAUDE_ARGS=(-p --model "$MODEL" --permission-mode dontAsk)
+        CLAUDE_ARGS=(-p)
+        # Hooks run outside the sandbox, so disableAllHooks applies to every pass.
+        # --safe-mode also disables MCP, so research passes skip it and load only
+        # user settings (never the reviewed workdir's project settings).
+        [ "$RESEARCH_TOOLS" = "1" ] || CLAUDE_ARGS+=(--safe-mode)
+        CLAUDE_ARGS+=(--setting-sources user --no-session-persistence --model "$MODEL" --permission-mode dontAsk --settings "$CLAUDE_SETTINGS")
         if [ "$RESEARCH_TOOLS" = "1" ]; then
           CLAUDE_TOOLS+=(WebSearch WebFetch MCPSearch)
           CLAUDE_ALLOWED_TOOLS=(Read Grep Glob Bash WebSearch WebFetch MCPSearch 'mcp__context7__*' 'mcp__Parallel-Search-MCP__*')
@@ -318,7 +329,9 @@ case "$TIER" in
         if [ -n "$BUDGET" ]; then
           CLAUDE_ARGS+=(--max-budget-usd "$BUDGET")
         fi
-        run_supervised claude "${CLAUDE_ARGS[@]}" < "$OUTDIR/prompt.md" || blocker "Claude consultation incomplete; see result.json"
+        # Claude has no --cwd flag; launch from the workdir with an absolute outdir.
+        OUTDIR="$(cd "$OUTDIR" && pwd -P)"
+        (cd "$WORKDIR" && run_supervised claude "${CLAUDE_ARGS[@]}" < "$OUTDIR/prompt.md") || blocker "Claude consultation incomplete; see result.json"
         ;;
       codex)
         command -v codex >/dev/null || blocker "codex CLI not found on PATH"
@@ -340,7 +353,7 @@ case "$TIER" in
         command -v grok >/dev/null || blocker "grok CLI not found on PATH"
         # Proxy routes do not use xAI authentication. Native xAI still does.
         AUTH_ENDPOINT="$(resolve_route_base_url "$MODEL")" || blocker "Cannot parse configured model route"
-        if [ -z "$AUTH_ENDPOINT" ] && [ "$PROVIDER" != "claude" ]; then
+        if [ -z "$AUTH_ENDPOINT" ]; then
           AUTH_OUT="$(grok models 2>&1 || true)"
           if ! printf '%s' "$AUTH_OUT" | grep -qi 'logged in'; then
             sleep 2
@@ -352,7 +365,7 @@ case "$TIER" in
           fi
         fi
         # ops-ts4: `grok models` proves xAI auth only. Proxy-owned models
-        # (claude-*, gpt-5.6-*) ride a local CLIProxyAPI declared as a
+        # (e.g. gpt-5.6-*) ride a local CLIProxyAPI declared as a
         # [model.*] base_url in the grok config; probe the endpoint the run
         # actually depends on so a dead proxy blocks at preflight instead of
         # dying generically mid-run.
@@ -362,9 +375,6 @@ case "$TIER" in
             ROUTE_BASE_URL=""
             echo "ask: warning: cannot parse grok route config ($GROK_ROUTE_CONFIG); proxy probe skipped, grok auth gate still applies" >&2
           fi
-        fi
-        if [ "$PROVIDER" = "claude" ] && [ -z "$ROUTE_BASE_URL" ]; then
-          blocker "Claude proxy model is not configured: $MODEL; no fallback permitted"
         fi
         if [ -n "$ROUTE_BASE_URL" ]; then
           AUTH_OWNER="$(field authOwner)"
@@ -378,8 +388,7 @@ case "$TIER" in
           else
             blocker "proxy-owned model route unreachable: $MODEL is served by ${AUTH_OWNER:-vibeproxy} (CLIProxyAPI) at $ROUTE_BASE_URL, which did not answer.
 diagnostics: curl $ROUTE_BASE_URL/models
-rollback route: ${ROLLBACK_NOTE:-127.0.0.1:8319 per agent-ops:ops-ts4}
-Do NOT log in with the claude CLI ('auth login') — auth for this route is owned by ${AUTH_OWNER:-vibeproxy}, not the claude CLI."
+rollback route: ${ROLLBACK_NOTE:-127.0.0.1:8319 per agent-ops:ops-ts4}"
           fi
         fi
         GROK_ARGS=(--no-auto-update --cwd "$WORKDIR" --output-format streaming-json)

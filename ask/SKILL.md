@@ -20,7 +20,7 @@ Examples:
 
 ```bash
 scripts/ask.sh codex -p brief-review.md                      # Codex review, default model, streamed
-scripts/ask.sh claude --effort high "Second opinion on this plan: …"  # Claude advisor via the default Grok/VibeProxy transport
+scripts/ask.sh claude --effort high "Second opinion on this plan: …"  # Claude advisor via the native claude CLI, read-only sandbox
 scripts/ask.sh codex -m gpt-5.6-sol -d ~/Code/gefa -o .pipeline/safelight/review -p build-review.md  # -m overrides the registry default
 scripts/ask.sh claude --research -p build-review.md          # Reviewer may use bounded web/Context7 research
 scripts/ask.sh grok -p brief-review.md                       # Grok review (read-only tools), streamed
@@ -37,10 +37,10 @@ Every run also writes `<outdir>/summary.md` next to `artifact.md` — **orchestr
 
 ## Self-contained proxy review
 
-For a prompt that already contains the complete material, explicitly select the tool-free streaming proxy route:
+For a prompt that already contains the complete material, explicitly select the tool-free streaming proxy route on a proxy-configured grok model (Claude is native-only and refuses this):
 
 ```bash
-scripts/ask.sh claude --transport proxy -m claude-opus-5-5 --effort medium --max-output-tokens 16384 -p complete-review-prompt.md
+scripts/ask.sh grok --transport proxy -m gpt-6.1-sol-medium --effort medium --max-output-tokens 16384 -p complete-review-prompt.md
 ```
 
 This reads the existing configured loopback route and credential at runtime. It does not change defaults or expose secrets. No file-reading, web, send or mutation tools are available; research/build modes are refused. Its SSE is normalized to JSONL and supervised by the same watcher. See the supervision reference for route qualification and token limits.
@@ -51,7 +51,7 @@ Defaults live in **`providers.json` — the single place to update as models imp
 
 | Provider | Default model | Tier | Route |
 |---|---|---|---|
-| claude | claude-opus-5 | stream-json | `grok -m <claude-model> --output-format streaming-json` → `grok-stream-surface.ts` (VibeProxy-owned route) |
+| claude | claude-opus-5-5 | stream-json | native `claude -p --output-format stream-json` (read-only sandbox) → `claude-stream-surface.ts` |
 | codex | gpt-6-astra | stream-json | `codex exec --json` → `codex-stream-surface.ts` |
 | grok | (grok CLI config default) | stream-json | `grok --prompt-file --output-format streaming-json` → `grok-stream-surface.ts` |
 | gemini | (CLI default) | final-json | `omc ask gemini` fallback |
@@ -59,7 +59,7 @@ Defaults live in **`providers.json` — the single place to update as models imp
 
 Tiers: **stream-json** = realtime adapter (trace + progress + artifact); **final-json** = structured output only at the end; **text-tee** = no structured output, raw tee. Unqualified tiers cannot launch. A new provider earns a JSONL completion adapter and watcher qualification (`scripts/<provider>-stream-surface.ts` built on `stream-core.ts`).
 
-**Proxy-owned claude route (ops-ts4):** the claude provider's models ride a local CLIProxyAPI whose endpoint is declared in the grok CLI config (`[model.claude-*]` `base_url`; override the config path with `ASK_GROK_CONFIG` for tests). Preflight resolves that route and hard-gates on `GET <base_url>/models`, so a dead proxy blocks up front with an artifact naming the owner (`authOwner: vibeproxy`), the exact endpoint, and the rollback route from the registry's `rollbackNote` (default `127.0.0.1:8319`, agent-ops:ops-ts4) — never remediate that blocker with a native claude login. Native xAI models (no `base_url`) skip the proxy probe and require their own Grok auth. Configured proxy routes do not require unrelated xAI login. Unknown Claude proxy models fail before consultation; no fallback is permitted. `ask.sh <provider> --route-status` prints one JSON object — `{provider, transport, model, endpoint, authOwner, endpointHealthy, modelListed, cliFound, authCheckPassed, rollback}` — for checking the route without spending tokens.
+**Native claude route (owner decision 2026-10-12):** the claude provider runs the native `claude` CLI; its claude.ai login owns auth (`claude auth status`; preflight blocks with `claude auth login` instructions if signed out). Review passes are read-only like codex: launched from `-d`, with `--safe-mode` (no user plugins), `disableAllHooks`, `--setting-sources user` (the reviewed workdir's project settings never load), `--no-session-persistence`, `--permission-mode dontAsk`, tools `Read,Grep,Glob,Bash`, and an OS sandbox via `--settings` (`denyWrite: [<workdir>]`, `allowUnsandboxedCommands: false`, `failIfUnavailable: true`), so the reviewer can run `git diff`/`git status` but cannot write to the workdir. `--research` adds WebSearch/WebFetch/Context7/Parallel MCP and drops `--safe-mode` (it disables MCP); hooks stay disabled and the sandbox still covers Bash, but user plugins load. `--transport proxy` is refused for claude. `-b` maps to `--max-budget-usd`. Proxy-owned `[model.*]` `base_url` routes (ops-ts4 preflight on `GET <base_url>/models`, `ASK_GROK_CONFIG` override) now apply only to the `grok` provider. `ask.sh <provider> --route-status` prints one JSON object — `{provider, transport, model, endpoint, authOwner, endpointHealthy, modelListed, cliFound, authCheckPassed, rollback}` — for checking the route without spending tokens.
 
 Codex specifics: **the registry default is GPT-6 Astra (`gpt-6-astra`; owner directive 2026-09-05 — faster, more thorough, cheaper than 5.6 Sol; slug verified with codex-cli 0.153.3 via `codex exec -m gpt-6-astra`).** Older note (verified 2026-07-09): GPT-5.6 ships as three tiers — **Sol** (flagship, the registry default), **Terra** (balanced), **Luna** (fast/cheap) — slugs `gpt-5.6-sol|terra|luna`. Sol requires codex CLI ≥ 0.144 and the runner passes `--disable multi_agent_v2` (its injected spawn_agent tool collides with Sol's reserved `collaboration.spawn_agent`; openai/codex#26753).
 
@@ -83,7 +83,7 @@ Builder-pass rules:
 
 ## Optional reviewer research
 
-Use `--research` or `--with-research-tools` only when current external evidence may change the review: dependency/API behavior, framework docs, provider limits, web-visible facts, or contradiction checks. The runner appends a research appendix to the saved prompt. Claude uses the same Grok read-only research surface as the Grok provider route: local file tools plus configured web/documentation tools, with shell, edits, subagents, and interactive tools explicitly denied. Codex gets the same prompt contract and should use configured tools/skills when available.
+Use `--research` or `--with-research-tools` only when current external evidence may change the review: dependency/API behavior, framework docs, provider limits, web-visible facts, or contradiction checks. The runner appends a research appendix to the saved prompt. Claude keeps its read-only sandboxed surface plus WebSearch/WebFetch and the Context7/Parallel MCP tools. Codex gets the same prompt contract and should use configured tools/skills when available.
 
 Research-enabled reviewers should still start from local files, prefer `$styrir-search` for bounded web research, use Context7 for current library/API/CLI/cloud docs, fetch/read sources before citing them, keep search budgets small, and report unavailable tools instead of inventing citations.
 
