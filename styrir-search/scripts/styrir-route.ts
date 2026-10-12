@@ -19,6 +19,7 @@ export interface CanonicalRouteRequest {
   contestedOrHighStakes?: boolean;
   needsClaimLevelValidation?: boolean;
   needsReportArtifact?: boolean;
+  htmlReport?: boolean;
   estimatedSearchQueries?: number;
   estimatedFetches?: number;
   preferredProviders?: string[];
@@ -53,6 +54,11 @@ export interface RouteDecision {
   requiredReferences: string[];
   gate: "optional-ledger-gate" | "styrir-search-gate" | "deep-search-strict-gates" | "handoff-only";
   contradictionSweep: "off" | "required";
+  outputs: {
+    agentReadable: string[];
+    humanReadable: string[];
+    sourceOfTruth: string;
+  };
   handoff: null | {
     nextSystem: "deep-search-cli" | "NVIDIA AI-Q";
     reason: string;
@@ -114,8 +120,23 @@ function dedupe(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
+function textRequestsHtmlReport(request: Pick<CanonicalRouteRequest, "question" | "objective">): boolean {
+  const text = `${request.question} ${request.objective ?? ""}`.toLowerCase();
+  return /\b(add|include|produce|generate|make|render)\s+(an?\s+)?html\b/.test(text) ||
+    /\bhtml\s+(report|output|artifact|brief)\b/.test(text) ||
+    /\bhuman-readable\s+(report|output|artifact|brief)\b/.test(text) ||
+    /\bprint(?:able|-friendly)?\s+(report|output|artifact|brief)\b/.test(text) ||
+    /\bpublishing?\s+(report|output|artifact|brief)\b/.test(text);
+}
+
 function isCanonicalRequest(input: Record<string, unknown>): boolean {
-  return "lane" in input || "estimatedSearchQueries" in input || "estimatedFetches" in input || "sourceScope" in input;
+  return (
+    "lane" in input ||
+    "estimatedSearchQueries" in input ||
+    "estimatedFetches" in input ||
+    "sourceScope" in input ||
+    "htmlReport" in input
+  );
 }
 
 function validateCanonicalRequest(request: CanonicalRouteRequest): CanonicalRouteRequest {
@@ -156,6 +177,7 @@ function validateCanonicalRequest(request: CanonicalRouteRequest): CanonicalRout
     contestedOrHighStakes: request.contestedOrHighStakes ?? false,
     needsClaimLevelValidation: request.needsClaimLevelValidation ?? false,
     needsReportArtifact: request.needsReportArtifact ?? false,
+    htmlReport: request.htmlReport ?? textRequestsHtmlReport(request),
   };
 }
 
@@ -221,6 +243,7 @@ export function parseRequest(input: unknown): CanonicalRouteRequest {
       contestedOrHighStakes: asBoolean(input.contestedOrHighStakes),
       needsClaimLevelValidation: asBoolean(input.needsClaimLevelValidation),
       needsReportArtifact: asBoolean(input.needsReportArtifact),
+      htmlReport: asBoolean(input.htmlReport),
       estimatedSearchQueries: asNumber(input.estimatedSearchQueries),
       estimatedFetches: asNumber(input.estimatedFetches),
       preferredProviders: asStringArray(input.preferredProviders),
@@ -263,6 +286,31 @@ function buildProviderHints(input: CanonicalRouteRequest): string[] {
     providerHints.push("tavily");
   }
   return dedupe(providerHints);
+}
+
+// report.html renders from ledger.json; deep-search and AI-Q handoff lanes have no Styrir ledger to render.
+function rendersHtmlReport(mode: RouteMode, input: CanonicalRouteRequest): boolean {
+  return Boolean(input.htmlReport) && mode !== "deep_search_local" && mode !== "nvidia_aiq_handoff";
+}
+
+function withHtmlReference(mode: RouteMode, input: CanonicalRouteRequest, references: string[]): string[] {
+  return rendersHtmlReport(mode, input) ? dedupe([...references, "references/html-report.md"]) : references;
+}
+
+function buildOutputs(mode: RouteMode, input: CanonicalRouteRequest): RouteDecision["outputs"] {
+  const agentReadableByMode: Record<RouteMode, string[]> = {
+    direct_search: ["ledger.json", "gate-result.json"],
+    styrir_search: ["ledger.json", "gate-result.json", "progress.jsonl"],
+    styrir_plus: ["plan.json", "source-registry.json", "ledger.json", "contradiction-sweep.md", "gate-result.json", "progress.jsonl"],
+    deep_search_local: ["run_manifest.json", "sources.jsonl", "claims.jsonl", "report.md"],
+    nvidia_aiq_handoff: ["route-decision.json", "handoff-manifest.json"],
+  };
+
+  return {
+    agentReadable: agentReadableByMode[mode],
+    humanReadable: rendersHtmlReport(mode, input) ? ["report.html"] : [],
+    sourceOfTruth: mode === "deep_search_local" ? "claims.jsonl" : "ledger.json",
+  };
 }
 
 function inferMode(input: CanonicalRouteRequest): RouteMode {
@@ -310,9 +358,10 @@ export function chooseRoute(input: CanonicalRouteRequest | LegacyRouteRequest): 
         reason: buildReason(mode, request),
         budget: BUDGETS.direct_search,
         providerHints,
-        requiredReferences: ["references/provider-matrix.md"],
+        requiredReferences: withHtmlReference(mode, request, ["references/provider-matrix.md"]),
         gate: "optional-ledger-gate",
         contradictionSweep: "off",
+        outputs: buildOutputs(mode, request),
         handoff: null,
       };
     case "styrir_plus":
@@ -321,9 +370,10 @@ export function chooseRoute(input: CanonicalRouteRequest | LegacyRouteRequest): 
         reason: buildReason(mode, request),
         budget: BUDGETS.styrir_plus,
         providerHints,
-        requiredReferences: ["references/ledger-contract.md", "references/provider-matrix.md"],
+        requiredReferences: withHtmlReference(mode, request, ["references/ledger-contract.md", "references/provider-matrix.md"]),
         gate: "styrir-search-gate",
         contradictionSweep: "required",
+        outputs: buildOutputs(mode, request),
         handoff: null,
       };
     case "deep_search_local":
@@ -332,9 +382,10 @@ export function chooseRoute(input: CanonicalRouteRequest | LegacyRouteRequest): 
         reason: buildReason(mode, request),
         budget: BUDGETS.deep_search_local,
         providerHints,
-        requiredReferences: ["references/provider-matrix.md", "references/handoff-manifest.md"],
+        requiredReferences: withHtmlReference(mode, request, ["references/provider-matrix.md", "references/handoff-manifest.md"]),
         gate: "deep-search-strict-gates",
         contradictionSweep: "required",
+        outputs: buildOutputs(mode, request),
         handoff: {
           nextSystem: "deep-search-cli",
           reason: "Claim-level report validation is required.",
@@ -346,9 +397,10 @@ export function chooseRoute(input: CanonicalRouteRequest | LegacyRouteRequest): 
         reason: buildReason(mode, request),
         budget: BUDGETS.nvidia_aiq_handoff,
         providerHints,
-        requiredReferences: ["references/provider-matrix.md", "references/handoff-manifest.md"],
+        requiredReferences: withHtmlReference(mode, request, ["references/provider-matrix.md", "references/handoff-manifest.md"]),
         gate: "handoff-only",
         contradictionSweep: "required",
+        outputs: buildOutputs(mode, request),
         handoff: {
           nextSystem: "NVIDIA AI-Q",
           reason: request.aiqBaseUrl
@@ -363,9 +415,10 @@ export function chooseRoute(input: CanonicalRouteRequest | LegacyRouteRequest): 
         reason: buildReason("styrir_search", request),
         budget: BUDGETS.styrir_search,
         providerHints,
-        requiredReferences: ["references/ledger-contract.md", "references/provider-matrix.md"],
+        requiredReferences: withHtmlReference("styrir_search", request, ["references/ledger-contract.md", "references/provider-matrix.md"]),
         gate: "styrir-search-gate",
         contradictionSweep: "off",
+        outputs: buildOutputs("styrir_search", request),
         handoff: null,
       };
   }

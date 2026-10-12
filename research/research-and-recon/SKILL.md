@@ -78,12 +78,49 @@ A good research result includes:
 - explicit gaps / unanswered questions
 - a clear recommendation or next step
 
+## Product-price research: exact-variant verification
+
+For shopping and deal-finding requests, treat the requested configuration as a hard constraint, not a suggestion. Before comparing prices, normalize the product identity across:
+
+- exact model/SKU or manufacturer part number;
+- body-only versus kit, and the precise included lens/accessories;
+- color, finish, and limited/special-edition status;
+- new, open-box, refurbished, used, or private-sale condition;
+- VAT, shipping, import charges, currency, and destination eligibility.
+
+Search broadly, but report only offers that satisfy every stated constraint. A cheaper body-only unit, standard-color unit, or lensless unit is not an answer to a kit/edition request; label it separately as a non-matching fallback if useful. When no qualifying offer is found, say so plainly and provide the nearest verified offer with the exact shortfall (price difference and any shipping/import uncertainty).
+
+Use a product-comparison page only for discovery when possible; verify the retailer/listing page or a current indexed offer before presenting it as purchasable. Dynamic marketplaces often expose stale or incomplete prices, so mark those prices as requiring checkout verification. Prefer a small evidence table containing seller, exact configuration, condition, displayed price, shipping/tax caveat, and URL over a long undifferentiated list.
+
+## Specialized lane: text-transformation and humanizer tools
+
+When evaluating paraphrasers, style rewriters, translation chains, detector-evasion tools, or writing skills:
+
+- trace the real code path and enumerate every external recipient of the text;
+- quarantine first, then inspect the manifest and advertised entry point before running installers, CLIs, tests, package scripts, or containers;
+- search for downloader/launcher chains, shell execution, encoded commands, IP literals, install hooks, and code unrelated to the repository's stated purpose;
+- verify installation only after pre-execution triage, using the declared CLI, focused tests, and full tests;
+- inspect whether quality claims have a reproducible corpus, detector version, scoring code, and command;
+- measure meaning and voice preservation, not only detector scores;
+- distinguish a standalone tool from an agent skill and recommend a wrapper only when orchestration adds value;
+- defang suspicious URLs in every rendered surface because desktop previewers may fetch raw URLs even inside code blocks.
+
+For Brooks, high-register diction is protected content: never equate “humanized” with casualized or simplified prose. Evaluate whether the transformation preserves precise erudition, rhetorical cadence, technical terminology, modality, and authorial idiosyncrasy. Prefer constrained direct editing with a semantic/register audit over blind back-translation; aggressive translation chains should be explicit opt-ins with privacy and drift warnings.
+
+Detailed checklist: `references/text-transformation-tool-evaluation.md`.
+Untrusted-source triage, URL defanging, and download-prompt incident verification: `references/untrusted-repository-and-url-safety.md`.
+
 ## Common pitfalls
 
 - Treating snippets as proof; always open or extract the source before concluding
 - Mixing the observation with the inference
 - Using the wrong tool for the question (e.g. docs lookup when you need OSINT)
 - Forgetting to record gaps; missing evidence is part of the result
+- Repeating vendor detector verdicts without locating the evaluation corpus and scoring path
+- Calling locally executed software “local” when it sends text to external LLM or translation providers
+- Installing a repository as a skill when it is actually a standalone executable with no `SKILL.md`
+- Treating quarantine as permission to execute before reading the real entry point and startup side effects
+- Repeating a hostile URL verbatim; renderers may auto-fetch it even when formatted as code
 
 ## Absorbed sibling gotchas
 

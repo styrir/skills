@@ -26,6 +26,8 @@ Use this reference when `styrir_plus` needs structured coverage or `deep_search_
 - `contradiction-sweep.md`.
 - `gate-result.json` with `gateStatus: "pass"`.
 
+If `plan.json` requests `htmlReport: true`, `outputs.htmlReport: true`, or `outputs.humanReadable: ["report.html"]`, also require `report.html`. The HTML report is a human-facing derivative of the run bundle, not a replacement for the ledger. The HTML requirement does not apply to `deep_search_local`, which has no ledger to render.
+
 ## `deep_search_local` Run Directory
 
 `deep_search_local` is report-grade and local. It validates the run directory that `deep-search-mcp` itself writes (`init-run` through `render-report-bundle` with `"strict":true`), not a Styrir-specific bundle. Require:

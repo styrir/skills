@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -18,6 +19,11 @@ export interface ArtifactGateResult {
   runDir: string;
   blockers: ArtifactGateIssue[];
   warnings: ArtifactGateIssue[];
+}
+
+interface SourceReference {
+  id: string;
+  url: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -63,18 +69,85 @@ function readText(blockers: ArtifactGateIssue[], runDir: string, relativePath: s
   return readFileSync(path, "utf8");
 }
 
-function extractRegistrySourceIds(registry: Record<string, unknown>): Set<string> {
-  const ids = new Set<string>();
-  const sources = Array.isArray(registry.sources) ? registry.sources : [];
+function extractSourceReferences(container: Record<string, unknown>): Map<string, SourceReference> {
+  const references = new Map<string, SourceReference>();
+  const sources = Array.isArray(container.sources) ? container.sources : [];
   for (const source of sources) {
     if (isRecord(source) && typeof source.id === "string" && source.id.trim()) {
-      ids.add(source.id);
+      references.set(source.id, { id: source.id, url: typeof source.url === "string" ? source.url : "" });
     }
   }
-  return ids;
+  return references;
 }
 
-function validatePlan(blockers: ArtifactGateIssue[], runDir: string, mode: ArtifactMode) {
+function comparePlusSources(
+  blockers: ArtifactGateIssue[],
+  warnings: ArtifactGateIssue[],
+  registrySources: Map<string, SourceReference>,
+  ledger: Record<string, unknown>,
+) {
+  const ledgerSources = extractSourceReferences(ledger);
+  for (const ledgerSource of ledgerSources.values()) {
+    const registrySource = registrySources.get(ledgerSource.id);
+    if (!registrySource) {
+      blockers.push(
+        issue(
+          "ledger_source_missing_from_registry",
+          "source-registry.json",
+          `Ledger source '${ledgerSource.id}' is absent from source-registry.json.`,
+        ),
+      );
+    } else if (ledgerSource.url && registrySource.url && ledgerSource.url !== registrySource.url) {
+      blockers.push(
+        issue(
+          "source_registry_url_mismatch",
+          "source-registry.json",
+          `Source '${ledgerSource.id}' has URL '${registrySource.url}' in source-registry.json but '${ledgerSource.url}' in ledger.json.`,
+        ),
+      );
+    }
+  }
+  for (const registrySource of registrySources.values()) {
+    if (!ledgerSources.has(registrySource.id)) {
+      warnings.push(
+        issue(
+          "registry_source_missing_from_ledger",
+          "source-registry.json",
+          `Registered source '${registrySource.id}' is absent from ledger.json sources[].`,
+        ),
+      );
+    }
+  }
+}
+
+function planRequestsHtmlReport(plan: Record<string, unknown>): boolean {
+  const outputs = plan.outputs;
+  if (plan.htmlReport === true || (isRecord(outputs) && outputs.htmlReport === true)) {
+    return true;
+  }
+  return isRecord(outputs) && Array.isArray(outputs.humanReadable) && outputs.humanReadable.includes("report.html");
+}
+
+function validateHtmlReport(blockers: ArtifactGateIssue[], runDir: string) {
+  const relativePath = "report.html";
+  const path = join(runDir, relativePath);
+  if (!existsSync(path) || !statSync(path).isFile()) {
+    blockers.push(issue("missing_html_report", relativePath, "report.html is required because plan.json requested an HTML report."));
+    return;
+  }
+  const html = readText(blockers, runDir, relativePath);
+  if (!/<html\b[^>]*\blang=["']en["']/i.test(html)) {
+    blockers.push(issue("invalid_html_report", relativePath, "report.html must declare <html lang=\"en\">."));
+  }
+  if (!/\bdata-styrir-report\b/i.test(html)) {
+    blockers.push(issue("invalid_html_report", relativePath, "report.html must include the data-styrir-report marker."));
+  }
+  if (!/Evidence Ledger/i.test(html)) {
+    blockers.push(issue("invalid_html_report", relativePath, "report.html must include an Evidence Ledger section."));
+  }
+}
+
+function validatePlan(blockers: ArtifactGateIssue[], runDir: string, mode: ArtifactMode): Record<string, unknown> {
   requireFile(blockers, runDir, "plan.json", "missing_plan");
   const plan = readJson(blockers, runDir, "plan.json");
   const facets = plan.facets;
@@ -84,34 +157,46 @@ function validatePlan(blockers: ArtifactGateIssue[], runDir: string, mode: Artif
   if (!Array.isArray(facets) || facets.length === 0) {
     blockers.push(issue("missing_planner_facets", "plan.json", "plan.json must include at least one planner facet."));
   }
+  return plan;
 }
 
-function validateSourceRegistry(blockers: ArtifactGateIssue[], runDir: string): Set<string> {
+function validateSourceRegistry(blockers: ArtifactGateIssue[], runDir: string): Map<string, SourceReference> {
   requireFile(blockers, runDir, "source-registry.json", "missing_source_registry");
-  const registry = readJson(blockers, runDir, "source-registry.json");
-  const sourceIds = extractRegistrySourceIds(registry);
-  if (sourceIds.size === 0) {
+  const sources = extractSourceReferences(readJson(blockers, runDir, "source-registry.json"));
+  if (sources.size === 0) {
     blockers.push(issue("missing_registered_sources", "source-registry.json", "source-registry.json must include sources[]."));
   }
-  return sourceIds;
+  return sources;
 }
 
-function validateGateResult(blockers: ArtifactGateIssue[], runDir: string) {
+function validateGateResult(blockers: ArtifactGateIssue[], warnings: ArtifactGateIssue[], runDir: string, ledgerText?: string) {
   requireFile(blockers, runDir, "gate-result.json", "missing_gate_result");
   const gateResult = readJson(blockers, runDir, "gate-result.json");
   if (gateResult.gateStatus !== "pass") {
     blockers.push(issue("artifact_gate_not_passed", "gate-result.json", "gate-result.json must have gateStatus='pass'."));
   }
+  if (typeof gateResult.ledgerSha256 === "string" && ledgerText !== undefined) {
+    const currentDigest = createHash("sha256").update(ledgerText).digest("hex");
+    if (gateResult.ledgerSha256 !== currentDigest) {
+      warnings.push(
+        issue("stale_gate_result", "gate-result.json", `gate-result.json ledgerSha256 does not match current ledger.json (${currentDigest}).`),
+      );
+    }
+  }
 }
 
 function validatePlus(blockers: ArtifactGateIssue[], warnings: ArtifactGateIssue[], runDir: string) {
-  validatePlan(blockers, runDir, "styrir_plus");
-  validateSourceRegistry(blockers, runDir);
+  const plan = validatePlan(blockers, runDir, "styrir_plus");
+  const registrySources = validateSourceRegistry(blockers, runDir);
   requireFile(blockers, runDir, "ledger.json", "missing_ledger");
   requireFile(blockers, runDir, "contradiction-sweep.md", "missing_contradiction_sweep");
   const ledgerPath = join(runDir, "ledger.json");
+  let ledgerText: string | undefined;
   if (existsSync(ledgerPath) && statSync(ledgerPath).isFile()) {
-    const ledgerResult = validateLedger(readJson(blockers, runDir, "ledger.json"));
+    ledgerText = readText(blockers, runDir, "ledger.json");
+    const ledger = readJson(blockers, runDir, "ledger.json");
+    comparePlusSources(blockers, warnings, registrySources, ledger);
+    const ledgerResult = validateLedger(ledger);
     for (const gateBlocker of ledgerResult.blockers) {
       blockers.push(issue(`ledger_${gateBlocker.code}`, "ledger.json", gateBlocker.message));
     }
@@ -119,7 +204,11 @@ function validatePlus(blockers: ArtifactGateIssue[], warnings: ArtifactGateIssue
       warnings.push(issue(`ledger_${gateWarning.code}`, "ledger.json", gateWarning.message));
     }
   }
-  validateGateResult(blockers, runDir);
+  validateGateResult(blockers, warnings, runDir, ledgerText);
+  // HTML report applies to Styrir ledger bundles only; deep_search_local runs have no ledger.json/plan.json to render.
+  if (planRequestsHtmlReport(plan)) {
+    validateHtmlReport(blockers, runDir);
+  }
 }
 
 function readJsonlIds(blockers: ArtifactGateIssue[], runDir: string, relativePath: string, idField: string): Set<string> {

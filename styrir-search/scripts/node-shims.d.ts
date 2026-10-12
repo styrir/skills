@@ -9,6 +9,10 @@ declare module "node:fs" {
   export function mkdtempSync(prefix: string): string;
 }
 
+declare module "node:crypto" {
+  export function createHash(algorithm: string): { update(data: string): { digest(encoding: string): string } };
+}
+
 declare module "node:url" {
   export function pathToFileURL(path: string): { href: string };
   export function fileURLToPath(url: string | URL): string;

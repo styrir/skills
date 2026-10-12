@@ -84,6 +84,87 @@ test("rejects styrir_plus runs whose ledger fails the normal Styrir gate", () =>
   assert.ok(result.blockers.some((issue) => issue.code === "ledger_inference_in_observation"));
 });
 
+function writeValidPlusBundle(dir: string, overrides: { plan?: unknown; registry?: unknown; gateResult?: unknown } = {}) {
+  writeJson(join(dir, "plan.json"), overrides.plan ?? { mode: "styrir_plus", facets: ["official docs", "contradiction sweep"] });
+  writeJson(join(dir, "source-registry.json"), overrides.registry ?? { sources: [{ id: "s1", url: "https://example.com", fetched: true }] });
+  writeJson(join(dir, "ledger.json"), validLedger());
+  writeText(join(dir, "contradiction-sweep.md"), "# Contradiction Sweep\n\nNo material contradiction found.");
+  writeJson(join(dir, "gate-result.json"), overrides.gateResult ?? { gateStatus: "pass" });
+}
+
+const HTML_PLAN = { mode: "styrir_plus", facets: ["official docs", "contradiction sweep"], outputs: { htmlReport: true } };
+
+test("requires report.html when a styrir_plus plan requests an HTML report", () => {
+  const dir = makeRunDir();
+  writeValidPlusBundle(dir, { plan: HTML_PLAN });
+
+  const result = validateArtifactRun("styrir_plus", dir);
+
+  assert.equal(result.gateStatus, "fail");
+  assert.ok(result.blockers.some((issue) => issue.code === "missing_html_report"));
+});
+
+test("accepts requested HTML reports with Styrir report markers", () => {
+  const dir = makeRunDir();
+  writeValidPlusBundle(dir, { plan: HTML_PLAN });
+  writeText(
+    join(dir, "report.html"),
+    '<!doctype html><html lang="en" data-styrir-report><body><h1>Report</h1><section>Evidence Ledger</section></body></html>',
+  );
+
+  const result = validateArtifactRun("styrir_plus", dir);
+
+  assert.equal(result.gateStatus, "pass");
+  assert.equal(result.blockers.length, 0);
+});
+
+test("rejects styrir_plus ledger sources missing from source registry", () => {
+  const dir = makeRunDir();
+  writeValidPlusBundle(dir, { registry: { sources: [{ id: "s2", url: "https://example.com/other", fetched: true }] } });
+
+  const result = validateArtifactRun("styrir_plus", dir);
+
+  assert.equal(result.gateStatus, "fail");
+  assert.ok(result.blockers.some((issue) => issue.code === "ledger_source_missing_from_registry"));
+});
+
+test("warns when styrir_plus source registry has sources absent from the ledger", () => {
+  const dir = makeRunDir();
+  writeValidPlusBundle(dir, {
+    registry: {
+      sources: [
+        { id: "s1", url: "https://example.com", fetched: true },
+        { id: "s2", url: "https://example.com/unused", fetched: true },
+      ],
+    },
+  });
+
+  const result = validateArtifactRun("styrir_plus", dir);
+
+  assert.equal(result.gateStatus, "pass");
+  assert.ok(result.warnings.some((issue) => issue.code === "registry_source_missing_from_ledger"));
+});
+
+test("rejects styrir_plus URL mismatches between ledger and source registry", () => {
+  const dir = makeRunDir();
+  writeValidPlusBundle(dir, { registry: { sources: [{ id: "s1", url: "https://example.com/registry", fetched: true }] } });
+
+  const result = validateArtifactRun("styrir_plus", dir);
+
+  assert.equal(result.gateStatus, "fail");
+  assert.ok(result.blockers.some((issue) => issue.code === "source_registry_url_mismatch"));
+});
+
+test("warns when persisted gate-result digest is stale", () => {
+  const dir = makeRunDir();
+  writeValidPlusBundle(dir, { gateResult: { gateStatus: "pass", ledgerSha256: "0".repeat(64) } });
+
+  const result = validateArtifactRun("styrir_plus", dir);
+
+  assert.equal(result.gateStatus, "pass");
+  assert.ok(result.warnings.some((issue) => issue.code === "stale_gate_result"));
+});
+
 function writePlusRun(dir: string, plan: unknown, gateResult: unknown = { gateStatus: "pass" }) {
   writeJson(join(dir, "plan.json"), plan);
   writeJson(join(dir, "source-registry.json"), { sources: [{ id: "s1", url: "https://example.com", fetched: true }] });

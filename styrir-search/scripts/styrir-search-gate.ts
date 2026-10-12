@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -15,6 +16,7 @@ export interface GateResult {
   gateStatus: GateStatus;
   blockers: GateIssue[];
   warnings: GateIssue[];
+  ledgerSha256?: string;
   counts: {
     entries: number;
     sources: number;
@@ -52,6 +54,11 @@ const ALLOWED_SOURCE_TYPES = new Set([
 const PRIMARY_SOURCE_TYPES = new Set(["official", "legal", "product", "academic", "repo", "local"]);
 const ALLOWED_CONFIDENCE = new Set(["high", "medium", "low"]);
 const INFERENCE_RE = /\b(suggests?|indicates?|means|implies?|therefore|proves?|likely|it follows that)\b/i;
+const DOT_PLACEHOLDER = "<styrir-dot>";
+const ELLIPSIS_PLACEHOLDER = "<styrir-ellipsis>";
+const COMMON_ABBREVIATION_RE =
+  /\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|Mt|No|Fig|Eq|vs|Inc|Ltd|Corp|Co|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|approx|est|dept|vol|pp|ref|refs|cf)\./gi;
+const INITIALISM_RE = /\b(?:[A-Za-z]\.){2,}/g;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -92,8 +99,25 @@ function firstNumber(record: Record<string, unknown>, keys: string[]): number | 
 }
 
 function looksBundled(text: string): boolean {
-  const sentences = text.split(/[.!?]+/).map((part) => part.trim()).filter(Boolean);
+  const sentences = sentenceFragments(text);
   return sentences.length > 1 || /\b(and also|as well as)\b/i.test(text) || text.includes(";");
+}
+
+function sentenceFragments(text: string): string[] {
+  return protectAtomicPunctuation(text).split(/[.!?]+/).map((part) => part.trim()).filter(Boolean);
+}
+
+function protectAtomicPunctuation(text: string): string {
+  return text
+    .replace(/\.\.\./g, ELLIPSIS_PLACEHOLDER)
+    .replace(/(?<=\d)\.(?=\d)/g, DOT_PLACEHOLDER)
+    .replace(INITIALISM_RE, (match) => match.replace(/\./g, DOT_PLACEHOLDER))
+    .replace(/(?<=[A-Za-z])\.(?=[A-Za-z])/g, DOT_PLACEHOLDER)
+    .replace(COMMON_ABBREVIATION_RE, (match) => match.replace(/\./g, DOT_PLACEHOLDER));
+}
+
+function sha256Text(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
 }
 
 export function validateLedger(input: unknown): GateResult {
@@ -306,15 +330,24 @@ function validateEntry(
   }
 }
 
-function readJsonInput(pathArg: string | undefined): unknown {
+function readRawInput(pathArg: string | undefined): { raw: string; ledgerSha256?: string } {
   const raw = pathArg ? readFileSync(pathArg, "utf8") : readFileSync(0, "utf8");
-  return JSON.parse(raw);
+  return {
+    raw,
+    ledgerSha256: pathArg ? sha256Text(raw) : undefined,
+  };
 }
 
 function main() {
+  let ledgerSha256: string | undefined;
   try {
-    const payload = readJsonInput(process.argv[2]);
+    const rawInput = readRawInput(process.argv[2]);
+    ledgerSha256 = rawInput.ledgerSha256;
+    const payload = JSON.parse(rawInput.raw);
     const result = validateLedger(payload);
+    if (ledgerSha256) {
+      result.ledgerSha256 = ledgerSha256;
+    }
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     process.exitCode = result.gateStatus === "pass" ? 0 : 1;
   } catch (error) {
@@ -324,9 +357,16 @@ function main() {
       path: "$",
       message: error instanceof Error ? error.message : String(error),
     };
-    process.stdout.write(
-      `${JSON.stringify({ gateStatus: "fail", blockers: [issue], warnings: [], counts: { entries: 0, sources: 0, proofGaps: 0 } }, null, 2)}\n`,
-    );
+    const result: GateResult = {
+      gateStatus: "fail",
+      blockers: [issue],
+      warnings: [],
+      counts: { entries: 0, sources: 0, proofGaps: 0 },
+    };
+    if (ledgerSha256) {
+      result.ledgerSha256 = ledgerSha256;
+    }
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     process.exitCode = 1;
   }
 }

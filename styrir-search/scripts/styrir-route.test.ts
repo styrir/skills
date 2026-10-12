@@ -80,6 +80,41 @@ test("routes normal current technical decisions to styrir_search", () => {
   assert.equal(result.gate, "styrir-search-gate");
 });
 
+test("records optional human-readable HTML report output without changing the selected route", () => {
+  const result = chooseRoute(
+    makeRequest({
+      question: "Compare current docs-backed search providers and add html",
+      requiresOfficialSources: true,
+      htmlReport: true,
+    }),
+  );
+
+  assert.equal(result.mode, "styrir_search");
+  assert.deepEqual(result.outputs.humanReadable, ["report.html"]);
+  assert.ok(result.outputs.agentReadable.includes("ledger.json"));
+  assert.ok(result.requiredReferences.includes("references/html-report.md"));
+});
+
+test("infers HTML report output from search-time add html language", () => {
+  const result = chooseRoute(
+    makeRequest({
+      question: "Compare current docs-backed search providers, add html",
+      requiresOfficialSources: true,
+    }),
+  );
+
+  assert.deepEqual(result.outputs.humanReadable, ["report.html"]);
+});
+
+test("does not promise report.html for deep_search_local runs, which have no Styrir ledger", () => {
+  const result = chooseRoute(makeRequest({ question: "Deep audit, add html", forceMode: "deep_search_local", htmlReport: true }));
+
+  assert.equal(result.mode, "deep_search_local");
+  assert.deepEqual(result.outputs.humanReadable, []);
+  assert.equal(result.outputs.sourceOfTruth, "claims.jsonl");
+  assert.ok(!result.requiredReferences.includes("references/html-report.md"));
+});
+
 test("routes contested multi-entity work to styrir_plus", () => {
   const result = chooseRoute(
     makeRequest({

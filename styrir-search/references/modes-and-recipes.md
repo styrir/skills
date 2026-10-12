@@ -105,6 +105,7 @@ Use `scripts/styrir-route.ts` when the mode is not obvious:
   "contestedOrHighStakes": false,
   "needsClaimLevelValidation": false,
   "needsReportArtifact": false,
+  "htmlReport": false,
   "estimatedSearchQueries": 6,
   "estimatedFetches": 6,
   "preferredProviders": ["context7", "tavily"],
@@ -112,9 +113,9 @@ Use `scripts/styrir-route.ts` when the mode is not obvious:
 }
 ```
 
-`preferredProviders` are hints only. To route to a confirmed local NVIDIA AI-Q REST target, add `forceMode: "nvidia_aiq_handoff"` and `aiqBaseUrl`.
+`preferredProviders` are hints only. To route to a confirmed local NVIDIA AI-Q REST target, add `forceMode: "nvidia_aiq_handoff"` and `aiqBaseUrl`. To request a human-readable report, set `htmlReport: true` or include request text such as `add html`, `html report`, `human-readable report`, or `printable report`.
 
-The route output includes `gate`, `requiredReferences`, `contradictionSweep`, and `handoff.nextSystem`. `direct_search` uses `optional-ledger-gate`, `styrir_search` and `styrir_plus` use `styrir-search-gate`, `deep_search_local` uses `deep-search-strict-gates`, and `nvidia_aiq_handoff` uses `handoff-only`.
+The route output includes `gate`, `requiredReferences`, `contradictionSweep`, `outputs`, and `handoff.nextSystem`. `outputs.agentReadable` names the authoritative files to preserve; `outputs.humanReadable` includes `report.html` only when requested on a Styrir ledger lane (`direct_search`, `styrir_search`, `styrir_plus`); `deep_search_local` reports `claims.jsonl` as its source of truth and never promises `report.html`. `direct_search` uses `optional-ledger-gate`, `styrir_search` and `styrir_plus` use `styrir-search-gate`, `deep_search_local` uses `deep-search-strict-gates`, and `nvidia_aiq_handoff` uses `handoff-only`.
 
 ## Recipe Shape
 

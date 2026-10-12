@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -138,6 +139,53 @@ test("blocks inference language inside observation fields", () => {
   assert.ok(result.blockers.some((issue) => issue.code === "inference_in_observation"));
 });
 
+test("does not flag numeric punctuation or abbreviations as bundled observations", () => {
+  const observations = [
+    "The benchmark reports 90.2 percent recall for v1.5.2 on the U.S. dataset.",
+    "The monthly cost is $1,234.56 for the sampled tier.",
+    "The docs use e.g. provider-specific fetch steps in one row.",
+    "The observed range is 90.2-91.4 percent in Table 2.",
+    "The changelog says retry behavior is pending...",
+    "Acme Inc. documents Node.js support in the Jan. release notes.",
+    "The source says approx. 200 records were indexed.",
+  ];
+
+  for (const observation of observations) {
+    const result = validateLedger(
+      cloneLedger({
+        entries: [
+          {
+            ...baseLedger.entries[0],
+            observation,
+          },
+        ],
+      }),
+    );
+
+    assert.equal(result.gateStatus, "pass", observation);
+    assert.ok(
+      !result.warnings.some((issue) => issue.code === "possibly_bundled_observation"),
+      observation,
+    );
+  }
+});
+
+test("warns on true multi-sentence bundled observations", () => {
+  const result = validateLedger(
+    cloneLedger({
+      entries: [
+        {
+          ...baseLedger.entries[0],
+          observation: "The docs list JSON output. The docs also list YAML output.",
+        },
+      ],
+    }),
+  );
+
+  assert.equal(result.gateStatus, "pass");
+  assert.ok(result.warnings.some((issue) => issue.code === "possibly_bundled_observation"));
+});
+
 test("blocks high confidence for non-primary source types", () => {
   const ledger = cloneLedger({
     entries: [
@@ -213,3 +261,39 @@ test("CLI writes JSON gate output and exits non-zero on blockers", () => {
   assert.ok(payload.blockers.some((issue: { code: string }) => issue.code === "inference_in_observation"));
 }
 );
+
+test("CLI includes a ledgerSha256 digest for file input", () => {
+  const dir = mkdtempSync(join(tmpdir(), "styrir-search-gate-digest-"));
+  const ledgerPath = join(dir, "ledger.json");
+  writeFileSync(ledgerPath, `${JSON.stringify(baseLedger, null, 2)}\n`);
+
+  const result = spawnSync(
+    process.execPath,
+    ["--experimental-strip-types", new URL("./styrir-search-gate.ts", import.meta.url).pathname, ledgerPath],
+    { encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  const expectedDigest = createHash("sha256").update(readFileSync(ledgerPath, "utf8")).digest("hex");
+  assert.equal(payload.ledgerSha256, expectedDigest);
+  assert.match(payload.ledgerSha256, /^[a-f0-9]{64}$/);
+});
+
+test("CLI includes a ledgerSha256 digest for invalid JSON file input", () => {
+  const dir = mkdtempSync(join(tmpdir(), "styrir-search-gate-invalid-digest-"));
+  const ledgerPath = join(dir, "ledger.json");
+  writeFileSync(ledgerPath, "{not valid json");
+
+  const result = spawnSync(
+    process.execPath,
+    ["--experimental-strip-types", new URL("./styrir-search-gate.ts", import.meta.url).pathname, ledgerPath],
+    { encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 1);
+  const payload = JSON.parse(result.stdout);
+  const expectedDigest = createHash("sha256").update(readFileSync(ledgerPath, "utf8")).digest("hex");
+  assert.equal(payload.ledgerSha256, expectedDigest);
+  assert.match(payload.ledgerSha256, /^[a-f0-9]{64}$/);
+});

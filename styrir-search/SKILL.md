@@ -1,13 +1,13 @@
 ---
 name: styrir-search
-description: Use when choosing or running a bounded local-agent search mode, routing between direct search, Styrir Search, Styrir Plus, local deep-search handoff, and NVIDIA AI-Q handoff, normalizing evidence ledgers, or validating citations.
+description: Use when choosing or running a bounded local-agent search mode, routing between direct search, Styrir Search, Styrir Plus, local deep-search handoff, and NVIDIA AI-Q handoff, normalizing evidence ledgers, validating citations, or rendering human-readable HTML search reports.
 ---
 
 # Styrir Search
 
 ## Overview
 
-Use Styrir Search for search work that needs more structure than one Tavily/Exa call but should stay cheaper and more bounded than full deep research. The core artifacts are a route decision, a JSON evidence ledger, and a deterministic gate result.
+Use Styrir Search for search work that needs more structure than one Tavily/Exa call but should stay cheaper and more bounded than full deep research. The core artifacts are a route decision, a JSON evidence ledger, a deterministic gate result, and a lightweight progress trace for longer runs. When the user asks for `add html`, `html report`, printable output, or a human-readable report on a Styrir ledger lane, also produce a static `report.html` rendered from the same bundle. HTML reports present the evidence ledger without adding duplicate summaries, rankings, or recommendations. `deep_search_local` runs have no Styrir ledger; their human-readable output is the strict-rendered `report.md`.
 
 Start with `scripts/styrir-route.ts` when the mode is not obvious. Use `scripts/styrir-ledger-normalize.ts` when adapting a Hermes-style or YAML ledger into the canonical JSON shape. Use `scripts/styrir-handoff-manifest.ts` when the route points at local deep search or NVIDIA AI-Q. Keep `references/provider-matrix.md` and `references/handoff-manifest.md` alongside the route output whenever the lane depends on provider choice or handoff packaging.
 
@@ -54,6 +54,7 @@ When one of these wrappers is invoked, honor its forced mode unless the user exp
   "contestedOrHighStakes": false,
   "needsClaimLevelValidation": false,
   "needsReportArtifact": false,
+  "htmlReport": false,
   "estimatedSearchQueries": 6,
   "estimatedFetches": 6,
   "preferredProviders": ["context7", "tavily"],
@@ -61,7 +62,7 @@ When one of these wrappers is invoked, honor its forced mode unless the user exp
 }
 ```
 
-Use `preferredProviders` as hints only. To route to a configured AI-Q target, explicitly set `forceMode: "nvidia_aiq_handoff"` and include `aiqBaseUrl`.
+Use `preferredProviders` as hints only. To route to a configured AI-Q target, explicitly set `forceMode: "nvidia_aiq_handoff"` and include `aiqBaseUrl`. Set `htmlReport: true`, or include request language such as `add html`, when a ledger lane should also emit `report.html`; the route ignores it for `deep_search_local` and `nvidia_aiq_handoff`.
 
 2. Run the route chooser and write down the selected budget before searching:
 
@@ -69,36 +70,50 @@ Use `preferredProviders` as hints only. To route to a configured AI-Q target, ex
 node --experimental-strip-types scripts/styrir-route.ts request.json
 ```
 
-3. Plan small search facets: entity-specific, comparison, official-source, contradiction, and gap follow-up.
-4. Treat search snippets as discovery only. Fetch/read a source before using it as evidence.
-5. Build a JSON evidence ledger with atomic entries, source appendix, and proof gaps. If another agent produced YAML or legacy JSON, normalize it first:
+3. For any run longer than a quick direct lookup, append progress events to the run directory and surface the compact output line to the user:
+
+```bash
+node --experimental-strip-types scripts/styrir-progress-event.ts path/to/run-dir routing "Selected styrir_plus" --mode styrir_plus --budget-used 0 --budget-limit 10
+```
+
+4. Plan small search facets: entity-specific, comparison, official-source, contradiction, and gap follow-up.
+5. Treat search snippets as discovery only. Fetch/read a source before using it as evidence.
+6. Build a JSON evidence ledger with atomic entries, source appendix, and proof gaps. If another agent produced YAML or legacy JSON, normalize it first:
 
 ```bash
 node --experimental-strip-types scripts/styrir-ledger-normalize.ts legacy-ledger.yaml
 ```
 
-6. Run the gate:
+7. Run the gate:
 
 ```bash
 node --experimental-strip-types scripts/styrir-search-gate.ts path/to/ledger.json
 ```
 
-7. If the gate fails, fix the ledger or report the blockers. Do not synthesize from a failed ledger unless the user explicitly asks for the blocked draft.
-8. Synthesize only from ledger entries and cite source IDs or URLs from the ledger.
-9. When the route is `deep_search_local` or `nvidia_aiq_handoff`, create a handoff manifest:
+8. If the gate fails, fix the ledger or report the blockers. Do not synthesize from a failed ledger unless the user explicitly asks for the blocked draft.
+9. Synthesize only from ledger entries and cite source IDs or URLs from the ledger.
+10. When the route output includes `outputs.humanReadable: ["report.html"]`, render the static HTML report from the completed ledger bundle:
+
+```bash
+node --experimental-strip-types scripts/styrir-html-report.ts path/to/run-dir
+```
+
+The HTML report is derivative; `ledger.json`, `source-registry.json`, and `gate-result.json` stay authoritative. Do not add highlights, rankings, or recommendations inside it; leave callouts to the receiving orchestrator or a separate decision artifact. Read `references/html-report.md` before designing or troubleshooting HTML output.
+
+11. When the route is `deep_search_local` or `nvidia_aiq_handoff`, create a handoff manifest:
 
 ```bash
 node --experimental-strip-types scripts/styrir-handoff-manifest.ts request.json
 ```
 
-10. For `styrir_plus` or `deep_search_local` artifact bundles, run the artifact gate:
+12. For `styrir_plus` or `deep_search_local` artifact bundles, run the artifact gate:
 
 ```bash
 node --experimental-strip-types scripts/styrir-artifact-gate.ts styrir_plus path/to/run-dir
 node --experimental-strip-types scripts/styrir-artifact-gate.ts deep_search_local path/to/run-dir
 ```
 
-Read `references/ledger-contract.md` when creating a ledger, debugging gate failures, or adapting another agent's YAML ledger into the Styrir JSON shape. Read `references/provider-matrix.md` before choosing providers, `references/aiq-borrowed-patterns.md` before creating plus/deep-local artifact bundles, and `references/handoff-manifest.md` before packaging a deep-search or NVIDIA handoff.
+Read `references/ledger-contract.md` when creating a ledger, debugging gate failures, or adapting another agent's YAML ledger into the Styrir JSON shape. Read `references/provider-matrix.md` before choosing providers, `references/progress-events.md` before running Plus/deep-local work that may take more than one or two turns, `references/html-report.md` before producing a requested HTML report, `references/aiq-borrowed-patterns.md` before creating plus/deep-local artifact bundles, and `references/handoff-manifest.md` before packaging a deep-search or NVIDIA handoff.
 
 ## Evidence Rules
 
@@ -126,6 +141,8 @@ Available scripts:
 - `npm run gate -- ledger.json`: validate a canonical ledger.
 - `npm run artifact-gate -- styrir_plus <run-dir>`: validate mode-specific Styrir artifact minima.
 - `npm run handoff -- request.json`: create a local deep-search or NVIDIA AI-Q handoff manifest.
+- `npm run progress -- <run-dir> <phase> <message> --mode <mode>`: append a JSONL progress event and print one compact status line.
+- `npm run html-report -- <run-dir> [output.html]`: render a static HTML report from a Styrir ledger bundle.
 
 The deterministic gate checks only things it can prove without a model:
 
@@ -137,7 +154,7 @@ The deterministic gate checks only things it can prove without a model:
 - search/fetch budget overages,
 - malformed dates and required fields.
 
-The artifact gate additionally checks mode-specific run bundles: `styrir_plus` must include a normal Styrir ledger that passes the ledger gate, and `deep_search_local` must be a `deep-search-mcp` run directory with `run_manifest.json`, registered sources, recorded claims, and a `report.md` promoted by `render-report-bundle` with `"strict":true` whose `[claim:<id>]` markers resolve to `claims.jsonl`. These gates validate structure and provenance, not claim truth.
+The artifact gate additionally checks mode-specific run bundles: `styrir_plus` must include a normal Styrir ledger that passes the ledger gate, a `source-registry.json` that agrees with ledger source ids and URLs, and a gate result (warned as stale when its `ledgerSha256` no longer matches `ledger.json`); when its `plan.json` requests HTML through `htmlReport: true`, `outputs.htmlReport: true`, or `outputs.humanReadable: ["report.html"]`, it also requires `report.html` with the Styrir report marker and an Evidence Ledger section. `deep_search_local` must be a `deep-search-mcp` run directory with `run_manifest.json`, registered sources, recorded claims, and a `report.md` promoted by `render-report-bundle` with `"strict":true` whose `[claim:<id>]` markers resolve to `claims.jsonl`. These gates validate structure and provenance, not claim truth.
 
 ## Escalation
 

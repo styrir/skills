@@ -198,6 +198,11 @@ test("rejects malformed AI-Q REST targets even when a prebuilt route is supplied
           requiredReferences: [],
           gate: "handoff-only",
           contradictionSweep: "off",
+          outputs: {
+            agentReadable: ["route-decision.json", "handoff-manifest.json"],
+            humanReadable: [],
+            sourceOfTruth: "ledger.json",
+          },
           handoff: { nextSystem: "NVIDIA AI-Q", reason: "prebuilt" },
         },
         descriptor,
