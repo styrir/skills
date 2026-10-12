@@ -39,7 +39,7 @@ How this was produced:**
   - `choice` returns one of up to 255 declared options with per-option probabilities and a confidence. It cannot invent a label.
   - `score` works over 2–10 ordered levels and returns a fractional position, a legend, probabilities, and a confidence.
 - **Price:** $0.042 per million input tokens; output is free. Today's calls cost $0.00002–0.00003 each and took 380–730 ms end-to-end from this machine through Requesty.
-- **Known weak spots** (TypeSafe's own list): literal reading, math and counting, dates, indirection, large irrelevant state, adversarial content, and no guaranteed consistency between equivalent questions. There is no generation.
+- **Known weak spots** (TypeSafe's jaggedness page, reviewed 2026-10-02): literal reading, math and numbers, dates, indirection, large irrelevant state, adversarial content, contradictory instructions and criteria, Choice option order (leans toward the first option), and no generation. Separately, there are no structural invariants between equivalent questions: a Noul and the equivalent Choice don't agree numerically, so thresholds don't carry across question types (`analysis-v1.md`, item 8).
 - **Routes:**
   - Requesty chat-completions with `response_format: {type: "questions"}`. This is marked experimental; the pinned ID is `typesafe/jev-1.13.0`, and `typesafe/jev-1.13` returns 404 there.
   - OpenRouter `/api/alpha/decisions` (`typesafe/jev-1.13`).

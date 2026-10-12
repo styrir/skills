@@ -60,7 +60,8 @@ Read [references/question-design.md](references/question-design.md) before writi
 that acts. The short form:
 
 1. One judgment per question. Describe **situations** in criteria, not degrees ("blocked, no workaround", not "high").
-2. Always give a Choice an `other` exit (the builder adds one) and route `other` to review.
+2. Always give a Choice an `other` exit (the builder adds one) and route `other` to review. Option order biases
+   the pick toward the first option: calibrate routing Choices with their options reversed too.
 3. **Jev only answers what you ask.** A "what does this do to the machine" gate approved `cat ~/.codex/auth.json`
    at 1.00 read-only — nothing asked about secrets. Ask each risk class explicitly.
 4. Send only the state the question needs; irrelevant detail costs accuracy (context rot). Keep state under ~32k tokens.

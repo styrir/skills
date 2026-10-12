@@ -22,7 +22,12 @@ disler/ten-levels-of-jev, and our own live calibration (`research/jev/`).
 - **Situations, not degrees.** "The author is blocked, losing money or customers, or very angry" beats "high".
 - **No indirection or double negatives.** Refer to parts of the state by name (`` `command` ``,
   `` `files["src/a.ts"]` ``, `` `output` ``).
-- **Instructions and criteria must agree.** A Noul whose `true` describes "no" performs worse.
+- **Instructions and criteria must agree** (TypeSafe failure mode #7, contradictory instructions and criteria).
+  A Noul whose `true` describes "no" performs worse.
+- **Choice option order matters** (failure mode #8). `jev-1.13` leans toward the first option. For anything that
+  routes or acts, run `calibrate` twice, with the questions file as written and with each Choice's options
+  reversed, and keep the question only if accuracy and picks hold. Don't put the option you hope for first:
+  lead with the most common legitimate answer, and keep `other` last.
 - **Question IDs are never sent to the model.** All meaning lives in `instructions` and `criteria`.
 - **Choices need an exit.** Add `other` (or `none_of_the_above`) and route it to review even at high confidence.
 
