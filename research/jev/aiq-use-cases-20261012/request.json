@@ -1,0 +1,14 @@
+{
+  "question": "As of October 12, 2026: produce an exhaustive, categorized catalog of use cases for integrating Jev (TypeSafe's 'System One' decision model, version jev-1.13, served via TypeSafe, OpenRouter and Requesty) into modern agentic workflows. Jev is NOT an LLM: it takes a text/JSON 'state' (~32k tokens) plus typed questions and returns only probabilities: noul (yes/no), choice (one of up to 255 declared options), score (2-10 ordered levels). ~0.4 s and ~$0.00003 per call, no generated text. Known weak spots: literal reading, math/counting, dates, indirection, large irrelevant state, adversarial content, cross-question consistency. Cover agent harness hooks (pre/post tool-use gates for Claude Code, Codex, Grok and similar), routers and intent classification, orchestrator and multi-agent supervision, retrieval/RAG filtering and file triage, eval and QA gates, CI/CD and code review, security and data-egress policy, content moderation, cost control (replacing LLM calls), monitoring/alerting triage, news/feed scoring, human-in-the-loop escalation, and any other categories you find (e.g. IndyDevDan's 'Ten Levels of Jev', disler/ten-levels-of-jev). For each use case give: the decision Jev makes, question type, where it sits in the workflow, why Jev beats an LLM or rules there, failure modes and required safeguards (calibration, thresholds, fail-open/closed), and sources. Separate documented real-world deployments from proposed patterns, and flag where Jev is a poor fit.",
+  "lane": "deep_research",
+  "needsReportArtifact": true,
+  "forceMode": "nvidia_aiq_handoff",
+  "aiqBaseUrl": "http://100.64.0.2:8180",
+  "sourceScope": [
+    "typesafe.ai docs",
+    "openrouter.ai",
+    "requesty.ai",
+    "github.com/disler/ten-levels-of-jev",
+    "agent engineering blogs and talks 2026"
+  ]
+}
