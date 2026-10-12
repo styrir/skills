@@ -328,6 +328,60 @@ assert_not_contains "Explanatory paragraph" "$ASK_TEST_TMP/verdict/summary.md"
 assert_not_contains "Closing remarks" "$ASK_TEST_TMP/verdict/summary.md"
 assert_contains "Preamble prose" "$ASK_TEST_TMP/verdict/artifact.md"
 
+# skills-cg0: severity-section reviews (bold/## headings + dash bullets, the
+# shape Claude Opus emits) keep every finding, not just the VERDICT line.
+mkdir -p "$ASK_TEST_TMP/severity"
+cat > "$ASK_TEST_TMP/severity/trace.jsonl" <<'JSON'
+{"type":"text","data":"Intro prose, excluded.\n\n**BLOCKING**\n\n- **`a.rs:1`: planted bug.** Details.\n  - nested evidence line\n\n  Wrapped continuation paragraph.\n\n**MAJOR**\n\n- monolith not rebuilt\n\nMINOR: none\n\n## Notes\nOther section, excluded.\n\nClosing remarks, excluded.\n\nVERDICT: REQUEST_CHANGES"}
+{"type":"end","stopReason":"EndTurn","sessionId":"stub-severity"}
+JSON
+node --experimental-strip-types "$ROOT/scripts/grok-stream-surface.ts" \
+  --from-file "$ASK_TEST_TMP/severity/trace.jsonl" "$ASK_TEST_TMP/severity/artifact.md" 2>/dev/null
+S="$ASK_TEST_TMP/severity/summary.md"
+assert_contains "VERDICT: REQUEST_CHANGES" "$S"
+assert_contains "**BLOCKING**" "$S"
+assert_contains "planted bug" "$S"
+assert_contains "nested evidence line" "$S"
+assert_contains "Wrapped continuation paragraph" "$S"
+assert_contains "**MAJOR**" "$S"
+assert_contains "monolith not rebuilt" "$S"
+assert_contains "MINOR: none" "$S"
+assert_not_contains "Intro prose" "$S"
+assert_not_contains "Other section" "$S"
+assert_not_contains "Closing remarks" "$S"
+
+# Intro line under a heading and bold-paragraph findings stay in the section;
+# prose that merely starts with a severity word is not a heading.
+mkdir -p "$ASK_TEST_TMP/severity2"
+cat > "$ASK_TEST_TMP/severity2/trace.jsonl" <<'JSON'
+{"type":"text","data":"Critical paths are unaffected, excluded.\n\n**MAJOR**\n\nTwo issues:\n\n- a.ts:1 first issue\n- b.ts:2 second issue\n\n**BLOCKING**\n\n**`c.ts:3`: bold-paragraph finding.** Details.\n\nVERDICT: REQUEST_CHANGES"}
+{"type":"end","stopReason":"EndTurn","sessionId":"stub-severity2"}
+JSON
+node --experimental-strip-types "$ROOT/scripts/grok-stream-surface.ts" \
+  --from-file "$ASK_TEST_TMP/severity2/trace.jsonl" "$ASK_TEST_TMP/severity2/artifact.md" 2>/dev/null
+S="$ASK_TEST_TMP/severity2/summary.md"
+assert_contains "first issue" "$S"
+assert_contains "second issue" "$S"
+assert_contains "bold-paragraph finding" "$S"
+assert_not_contains "Critical paths" "$S"
+
+# Sub-headed findings, worded severity headings, quoted verdicts in findings,
+# a fence, and a later non-severity section that ends the findings.
+mkdir -p "$ASK_TEST_TMP/severity3"
+cat > "$ASK_TEST_TMP/severity3/trace.jsonl" <<'JSON'
+{"type":"text","data":"Intro, excluded.\n\n## MAJOR\n### `a.ts:1`: sub-headed finding\nDetails.\n\n## Minor issues\n- `VERDICT: APPROVE` is quoted in a finding\n- after the quote\n```sh\nclosed fence\n```\n\n## Notes\nNotes section, excluded.\n\nVERDICT: REQUEST_CHANGES"}
+{"type":"end","stopReason":"EndTurn","sessionId":"stub-severity3"}
+JSON
+node --experimental-strip-types "$ROOT/scripts/grok-stream-surface.ts" \
+  --from-file "$ASK_TEST_TMP/severity3/trace.jsonl" "$ASK_TEST_TMP/severity3/artifact.md" 2>/dev/null
+S="$ASK_TEST_TMP/severity3/summary.md"
+head -1 "$S" | grep -q "^VERDICT: REQUEST_CHANGES" || fail "summary must lead with the final verdict"
+assert_contains "sub-headed finding" "$S"
+assert_contains "## Minor issues" "$S"
+assert_contains "after the quote" "$S"
+assert_not_contains "Intro, excluded" "$S"
+assert_not_contains "Notes section" "$S"
+
 mkdir -p "$ASK_TEST_TMP/jsonl-tail"
 cat > "$ASK_TEST_TMP/jsonl-tail/trace.jsonl" <<'JSON'
 {"type":"text","data":"Build narration that should not appear.\n\n{\"slice\":\"s1\",\"status\":\"done\"}\n{\"slice\":\"s2\",\"status\":\"done\"}"}

@@ -134,11 +134,54 @@ export function renderSummary(finalAssistantText: string): string {
   }
   const lines = text.split("\n");
 
-  // Review-shaped output: keep the VERDICT line plus numbered-finding
-  // paragraphs; drop surrounding prose and any progress/command echoes.
-  const verdictLine = lines.find((l) => /^[\s#>*_`-]*VERDICT\b/i.test(l));
-  if (verdictLine !== undefined) {
-    const kept: string[] = [verdictLine.trim()];
+  // Review-shaped output: keep the VERDICT line plus findings. Reviews with
+  // severity sections (`**BLOCKING**`, `## Major issues`, `MINOR: none`) keep
+  // everything from the first section to the verdict or the next non-severity
+  // `#` heading at the section's level or above; otherwise keep
+  // numbered-finding paragraphs only.
+  const verdictPattern = /^[\s#>*_`-]*VERDICT\b/i;
+  // The last verdict-looking line wins: findings may quote "VERDICT: …".
+  const verdictIdx = lines.findLastIndex((l) => verdictPattern.test(l));
+  if (verdictIdx !== -1) {
+    const kept: string[] = [lines[verdictIdx].trim()];
+    const severity = String.raw`BLOCK(ING|ERS?)|CRITICAL|MAJOR|MINOR|NIT\w*|SUGGESTIONS?`;
+    // `#` headings may carry trailing words; bold/plain lines must be the
+    // severity word alone (plus an optional count or `: inline text`), so
+    // prose that merely starts with "Minor" or "Critical" never matches.
+    const hashSeverity = new RegExp(String.raw`^(#{1,6})\s+\W*(${severity})\b`, "i");
+    const lineSeverity = new RegExp(
+      String.raw`^(\*\*|__)?(${severity})(\s*\([^)]*\))?(\*\*|__)?\s*(:.*)?$`,
+      "i",
+    );
+    const severityLevel = (line: string): number => {
+      const clean = line.replace(/\r$/, "");
+      const hash = hashSeverity.exec(clean);
+      if (hash) return hash[1].length;
+      return lineSeverity.test(clean) ? 7 : 0;
+    };
+    const firstSection = lines.findIndex((l) => severityLevel(l) > 0);
+    if (firstSection !== -1) {
+      let fence = "";
+      let level = 7;
+      kept.push("");
+      for (let i = firstSection; i < lines.length && i !== verdictIdx; i++) {
+        const line = lines[i].trimEnd();
+        const marker = /^\s*(```|~~~)/.exec(line)?.[1];
+        if (marker && (!fence || fence === marker)) fence = fence ? "" : marker;
+        if (!fence || marker) {
+          const sev = severityLevel(line);
+          if (sev) {
+            level = sev;
+          } else {
+            const hashes = /^(#{1,6})\s/.exec(line)?.[1].length;
+            if (hashes !== undefined && hashes <= level) break;
+          }
+        }
+        if (line.trim() || kept[kept.length - 1].trim()) kept.push(line);
+      }
+      if (fence) kept.push(fence);
+      return capSummaryLines(kept);
+    }
     let paragraph: string[] = [];
     const flushParagraph = () => {
       const firstNumbered = paragraph.findIndex((l) => /^[\s>*_`]*\d+[.)]\s/.test(l));
