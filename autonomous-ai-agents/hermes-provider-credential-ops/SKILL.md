@@ -212,6 +212,12 @@ Current Hermes versions may display `hermes login` in help while the command its
 
 Full update, transfer, verification, and SSH-stdin procedure: `references/remote-codex-credential-recovery.md`.
 
+## Desktop executable discovery versus login
+
+`Claude Code CLI not found on PATH` with a healthy terminal login is not an auth failure. Compare the actual Desktop Python backend PATH: shell-backed tools may source rc files and find Claude while their parent cannot. Before adding symlinks or changing auth, check whether source already has `apps/desktop/electron/shell-path.ts` and `ensureLoginShellPath()` before backend spawn but the installed app is stale. Modern packaged builds unpack `dist/`: look for `__HERMES_LOGIN_PATH_START__` in `app.asar.unpacked/dist/electron-main.mjs`, not only app.asar.
+
+Reuse the existing fix. Run `npm exec -- vitest run --project electron electron/shell-path.test.ts electron/backend-env.test.ts`, launch the packaged app with a minimal PATH and isolated `--user-data-dir`, verify its Python child discovers Claude, and smoke the adapter with that PATH. Preserve the old app and replace the whole bundle: copying over an existing bundle merges stale resources and can invalidate codesigning. Verify the installed signature and hashes against the tested build. A running app retains its old environment until restart; do not terminate the chat hosting the repair without a handoff.
+
 ## Pitfalls
 
 - Don't conclude "my code/prompt is broken" from a provider 401/429 — check `credential_pool` first.
