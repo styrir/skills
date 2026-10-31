@@ -60,7 +60,8 @@ The helper runs approved checks unless a current-HEAD review already covers them
 
 Read the structured outcome. `receipt` names a receipt covering current HEAD. `review_pending` means the existing independent reviewer still has work; wait or inspect the review, repair findings and request closeout again. `needs_action` and command errors remain unfinished. Exit 3 means pending/action needed, not success. Tests, commit, source publication, installation and live acceptance remain separate evidence.
 
-Only a pending explicit request leaves a session-scoped marker in `~/.cache/verk-closeout/`. The plugin Stop hook consumes it once, refuses changed/dirty work and reports the current result. It never runs tests at Stop, answers reviews, changes policy or starts a permanent service. Ordinary turns with no request do nothing. Hook trust is the operator's action; if the host has not loaded/trusted the hook, use the foreground helper and report that qualification limit. The marker/result files are disposable requests and observations; Verk remains the authority.
+The declaration and committed proof paths are recorded in Verk before checks or review.
+Only the latest pending explicit request leaves a session-scoped marker in `~/.cache/verk-closeout/`. A newer pending closeout supersedes the previous hook request; Verk retains both tasks. The plugin Stop hook consumes it once, refuses changed/dirty work and reports the current result. It never runs tests at Stop, answers reviews, changes policy or starts a permanent service. Ordinary turns with no request do nothing. Hook trust is the operator's action; if the host has not loaded/trusted the hook, use the foreground helper and report that qualification limit. The marker/result files are disposable requests and observations; Verk remains the authority.
 
 ## Operator boundaries
 

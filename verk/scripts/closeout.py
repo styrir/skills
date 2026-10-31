@@ -33,6 +33,7 @@ def state_path(repo, env):
     _, _, scoped = invocation(["--repo", str(repo), "brief", "--json"], env)
     # Scratch stores keep their requests isolated too; this cache is never task truth.
     root = Path(env["VERK_HOME"]) / "codex-closeout" if env.get("VERK_HOME") else Path.home() / ".cache/verk-closeout"
+    # ponytail: one pending request per session; add a queue if concurrent hook observations are needed.
     return root / (scoped["VERK_SESSION"] + ".json")
 
 
@@ -77,7 +78,6 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
             raise ValueError("Qualification must be a regular committed repository file")
         qualification = str(record.resolve().relative_to(repo))
         git(repo, "ls-files", "--error-unmatch", "--", qualification)
-        proof = qualification
     elif not source_only:
         raise ValueError("Declare --qualification PATH for installed/live evidence, or --source-only when acceptance requires none")
     view = call(repo, env, "view", contract, "--json")
@@ -90,16 +90,20 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
             # checkpoint acts on the selected attempt: start refuses to replace another held task.
             call(repo, env, "start", contract, "--json")
             checks = view["policy"]["checks"]
+            proofs = list(dict.fromkeys(p for p in [proof, qualification] if p))
+            if not checks and not proofs:
+                raise ValueError("Review-only code needs --proof pointing to a committed repository file")
+            declaration = f"Qualification record: {qualification}" if qualification else "Source-only acceptance explicitly declared"
+            checkpoint = ["checkpoint", "--next", f"Independent review of ready work. {declaration}"]
+            for item in proofs:
+                checkpoint.extend(["--proof", item])
+            # Persist the declaration and evidence before any check can open a review.
+            call(repo, env, *checkpoint, *(["--keep"] if checks else []), "--json")
             for check in checks:
                 # Public check status spans revisions; only a current-HEAD review proves reuse is safe.
                 # Producer deadline ends its check process group before this outer timeout.
                 until = str(int((time.time() + 590) * 1000))
                 call(repo, env, "check", check["name"], "--id", contract, "--until", until, timeout=600, structured=False)
-            if not checks:
-                if not proof:
-                    raise ValueError("Review-only code needs --proof pointing to a committed repository file")
-                # Verk validates the path, repository, committed bytes and policy; never synthesize evidence here.
-                call(repo, env, "checkpoint", "--next", "Independent review of ready work", "--proof", proof, "--json")
         if git(repo, "rev-parse", "HEAD") != head or git(repo, "status", "--porcelain"):
             raise ValueError("Ready work changed during closeout; inspect evidence before requesting it again")
         call(repo, env, "reconcile", "--id", contract, "--json")
@@ -129,10 +133,7 @@ def hook(payload, env):
         raise ValueError("Stop session differs from Codex execution identity")
     scoped = dict(env, CODEX_THREAD_ID=session)
     repo = Path(payload["cwd"]).resolve()
-    try:
-        path = state_path(repo, scoped)
-    except subprocess.CalledProcessError:
-        return {}  # No repository means no requested repository closeout.
+    path = state_path(repo, scoped)
     claim = path.with_suffix(f".{os.getpid()}.running")
     try:
         # Atomic consumption prevents duplicate Stop deliveries from replaying a write.

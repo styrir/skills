@@ -14,7 +14,7 @@ and independent review remain responsible for receipts.
 
 ## Source checks
 
-`python3 -m unittest discover -s verk/scripts -p 'test_*.py'`: 15 passed.
+`python3 -m unittest discover -s verk/scripts -p 'test_*.py'`: 16 passed.
 Includes real CLI review-only submission in an isolated scratch store, with
 no reviewer answer or fabricated receipt; a resumed session and corrected HEAD;
 approved-check routing/deadline; duplicate, dirty and stale Stop requests;
@@ -32,3 +32,8 @@ The packaged foreground helper read Minni's actual independently issued receipt
 vk-r64 at revision 57a3ba160e45883d1ce39c5fbc4a1dc00325a9e6. This verifies the
 receipt observation route, not automatic desktop Stop dispatch. The scratch
 fixtures never approve a live review. No permanent service is introduced.
+
+Independent review found the qualification/source-only declaration was not persisted
+on configured-check paths. The repair checkpoints the explicit declaration and
+all supplied committed proof paths before checks/review. Regression checks cover
+both source-only and qualification declarations, ordering and additional proof.

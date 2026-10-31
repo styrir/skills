@@ -44,6 +44,7 @@ class CloseoutTests(unittest.TestCase):
         self.assertEqual(view["receipts"], [])
         self.assertEqual(view["reviews"][0]["lifecycle"], "open")
         self.assertEqual(view["attempts"][0]["actor"], "codex:closeout-test")
+        self.assertIn("Source-only acceptance explicitly declared", view["checkpoint"]["next"])
         old_review = view["reviews"][0]["decision"]
         (self.repo / "proof.txt").write_text("Corrected synthetic proof")
         self.git("commit", "-qam", "corrected proof")
@@ -97,7 +98,22 @@ class CloseoutTests(unittest.TestCase):
         self.assertEqual(check[4], "--until")
         self.assertGreater(int(check[5]), 0)
         self.assertEqual([a[1] for a in args if a[0] == "check"], ["unit", "lint"])
-        self.assertFalse(any("checkpoint" in a or "answer" in a for a in args))
+        checkpoint = next(a for a in args if a[0] == "checkpoint")
+        self.assertIn("Source-only acceptance explicitly declared", checkpoint[2])
+        self.assertIn("--keep", checkpoint)
+        self.assertLess(args.index(checkpoint), args.index(check))
+        self.assertFalse(any("answer" in a for a in args))
+
+    def test_qualification_and_additional_proof_reach_the_checkpoint_before_checks(self):
+        view = {"contract": {"id": "vk-1"}, "state": "active",
+                "policy": {"checks": [{"name": "unit", "status": "none"}]}}
+        with patch.object(closeout, "call", return_value=view) as invoke, patch.object(closeout, "observe", return_value={"status": "receipt"}):
+            closeout.closeout(self.repo, self.env, "vk-1", "extra.txt", 0, qualification="proof.txt")
+        args = [c.args[2:] for c in invoke.call_args_list]
+        checkpoint = next(a for a in args if a[0] == "checkpoint")
+        self.assertIn("Qualification record: proof.txt", checkpoint[2])
+        self.assertEqual([checkpoint[i + 1] for i, a in enumerate(checkpoint) if a == "--proof"], ["extra.txt", "proof.txt"])
+        self.assertLess(args.index(checkpoint), next(i for i, a in enumerate(args) if a[0] == "check"))
 
     def test_observing_another_receipt_preserves_pending_work(self):
         path = closeout.state_path(self.repo, self.env)
