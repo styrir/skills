@@ -8,7 +8,7 @@ Examples: “Use $verk to show my work”, “Resume vk-123”, and “Checkpoin
 
 ## Existing Verk adapters
 
-Read `/Users/brooks/Code/verk/README.md` and `src/adapters/guidance.ts` for the maintained contract. `adapters/claude-code/hooks/verk.ts` is the existing Claude Code band/pane. Its hooks handle lease upkeep and enforce the edit guard; the visible mod is not the store.
+Read the owning Verk repository's `README.md` and `src/adapters/guidance.ts` for the maintained contract. `adapters/claude-code/hooks/verk.ts` is the existing Claude Code band/pane. Its hooks handle lease upkeep and enforce the edit guard; the visible mod is not the store.
 
 `adapters/codex/hooks.json` and `src/adapters/codex.ts` are a bounded Codex CLI prototype, tested against the version recorded in that README. It does not establish desktop coverage. Its quoted shell commands can run as the operator because only plain-word commands are identity-rewritten. The skill wrapper avoids that dependency by explicitly setting the current Codex actor and session before calling the CLI. It grants no shell approval and installs no hooks.
 
@@ -28,6 +28,6 @@ A future Pi extension should consume the same public `verk … --json` output an
 
 - [Codex skill discovery and symlinks](https://developers.openai.com/codex/build-skills)
 - [Plugin packaging and trusted lifecycle hooks](https://developers.openai.com/plugins/build/plugins)
-- Local Verk source: `/Users/brooks/Code/verk/README.md`, `src/help.ts`, `src/public.ts`, `src/adapters/codex.ts`, and `src/producers/check.ts`.
+- Owning Verk source: `README.md`, `src/help.ts`, `src/public.ts`, `src/adapters/codex.ts`, and `src/producers/check.ts`.
 
 When CLI behaviour differs from an example, use wrapper `help <verb>` and inspect the current Verk source. Do not revive decommissioned Beads commands.
