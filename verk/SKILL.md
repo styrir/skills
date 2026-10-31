@@ -19,6 +19,11 @@ Resolve `<skill-dir>` from this skill's location. `--repo` selects the real repo
 
 This is a chat workflow, not a persistent side panel or an edit-enforcement hook. The packaged plugin adds an opt-in Stop follow-up for explicitly requested closeouts. Read [desktop integration](references/desktop.md) when changing hooks, packaging a plugin, comparing Claude Code/Pi integration, or diagnosing discovery.
 
+For Claude Code, explicitly pass `--harness claude-code` to both wrappers and
+supply `CLAUDE_CODE_SESSION_ID` from the actual Claude session. The mod supplies
+this SDK identity itself. Codex remains the default; neither route accepts an
+operator or reviewer role. Claude pending markers have their own harness prefix.
+
 ## Work lifecycle
 
 Use the wrapper with these Verk arguments; replace example IDs with IDs returned by the CLI.
