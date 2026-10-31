@@ -126,6 +126,16 @@ class CloseoutTests(unittest.TestCase):
         self.assertEqual(result["status"], "review_pending")
 
     def test_qualification_choice_is_required_before_verk_mutations(self):
+        # Plain CLI startup must not create untracked bytecode in its own repository.
+        for name in ["closeout.py", "verk.py"]:
+            (self.repo / name).write_bytes(Path(__file__).with_name(name).read_bytes())
+        self.git("add", "closeout.py", "verk.py")
+        self.git("commit", "-qm", "helper fixture")
+        run_env = dict(self.env)
+        run_env.pop("PYTHONDONTWRITEBYTECODE", None)
+        subprocess.run([sys.executable, str(self.repo / "closeout.py"), "--help"], env=run_env,
+                       check=True, capture_output=True)
+        self.assertEqual(closeout.git(self.repo, "status", "--porcelain"), "")
         with patch.object(closeout, "call", side_effect=AssertionError("premature submission")):
             with self.assertRaisesRegex(ValueError, "qualification"):
                 closeout.closeout(self.repo, self.env, "vk-1", "proof.txt", 0)
