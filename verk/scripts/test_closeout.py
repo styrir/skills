@@ -110,6 +110,14 @@ class CloseoutTests(unittest.TestCase):
         self.assertLess(max(i for i, a in enumerate(args) if a[0] == "check"), args.index(result))
         self.assertLess(args.index(result), next(i for i, a in enumerate(args) if a[0] == "reconcile"))
         self.assertFalse(any("answer" in a for a in args))
+        def fail_check(repo, env, *args, **kwargs):
+            if args[0] == "check":
+                raise ValueError("producer failed")
+            return view
+        with patch.object(closeout, "call", side_effect=fail_check) as failed:
+            with self.assertRaisesRegex(ValueError, "producer failed"):
+                closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
+        self.assertFalse(any("Approved checks passed" in str(c.args) for c in failed.call_args_list))
 
     def test_qualification_and_additional_proof_reach_the_checkpoint_before_checks(self):
         view = {"contract": {"id": "vk-1"}, "state": "active",
