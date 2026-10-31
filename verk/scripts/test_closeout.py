@@ -102,6 +102,12 @@ class CloseoutTests(unittest.TestCase):
         self.assertIn("Source-only acceptance explicitly declared", checkpoint[2])
         self.assertIn("--keep", checkpoint)
         self.assertLess(args.index(checkpoint), args.index(check))
+        result = [a for a in args if a[0] == "checkpoint"][-1]
+        self.assertIn(f"Approved checks passed at {self.head}: unit, lint", result[2])
+        self.assertIn("Source-only acceptance explicitly declared", result[2])
+        self.assertFalse(any(a in result for a in ["--open", "--open=", "--decided"]))
+        self.assertLess(max(i for i, a in enumerate(args) if a[0] == "check"), args.index(result))
+        self.assertLess(args.index(result), next(i for i, a in enumerate(args) if a[0] == "reconcile"))
         self.assertFalse(any("answer" in a for a in args))
 
     def test_qualification_and_additional_proof_reach_the_checkpoint_before_checks(self):

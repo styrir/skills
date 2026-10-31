@@ -106,6 +106,10 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
                 call(repo, env, "check", check["name"], "--id", contract, "--until", until, timeout=600, structured=False)
         if git(repo, "rev-parse", "HEAD") != head or git(repo, "status", "--porcelain"):
             raise ValueError("Ready work changed during closeout; inspect evidence before requesting it again")
+        if not current_review and checks:
+            names = ", ".join(check["name"] for check in checks)
+            call(repo, env, "checkpoint", "--keep", "--next",
+                 f"Independent review. {declaration}. Approved checks passed at {head}: {names}", "--json")
         call(repo, env, "reconcile", "--id", contract, "--json")
     result = observe(repo, env, contract, head, wait)
     if result["status"] == "review_pending":

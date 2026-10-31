@@ -58,6 +58,10 @@ requires this choice before submitting ready work; it does not guess from prose.
 
 The helper runs approved checks unless a current-HEAD review already covers them through `verk-check`, or attaches committed path proof when the current policy is review-only, then calls `reconcile`. An empty checks list is valid: it does not prevent independent review or a receipt. Do not invent a check, change policy, or approve your own review to close work.
 
+Successful approved check names and the unchanged source revision are checkpointed
+before reconcile so the reviewer receives their results. Existing unresolved items
+remain in the checkpoint; completed checks do not clear other acceptance gates.
+
 Read the structured outcome. `receipt` names a receipt covering current HEAD. `review_pending` means the existing independent reviewer still has work; wait or inspect the review, repair findings and request closeout again. `needs_action` and command errors remain unfinished. Exit 3 means pending/action needed, not success. Tests, commit, source publication, installation and live acceptance remain separate evidence.
 
 The declaration and committed proof paths are recorded in Verk before checks or review.
