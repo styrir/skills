@@ -1,0 +1,4 @@
+interface:
+  display_name: "Verk"
+  short_description: "Use Verk contracts from Codex desktop"
+  default_prompt: "Use $verk to show my work and continue the right contract."
