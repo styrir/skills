@@ -90,10 +90,10 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
             call(repo, env, "start", contract, "--json")
             checks = view["policy"]["checks"]
             for check in checks:
-                if check["status"] != "passed" or open_reviews:
-                    # Producer deadline ends its check process group before this outer timeout.
-                    until = str(int((time.time() + 590) * 1000))
-                    call(repo, env, "check", check["name"], "--id", contract, "--until", until, timeout=600, structured=False)
+                # Public check status spans revisions; only a current-HEAD review proves reuse is safe.
+                # Producer deadline ends its check process group before this outer timeout.
+                until = str(int((time.time() + 590) * 1000))
+                call(repo, env, "check", check["name"], "--id", contract, "--until", until, timeout=600, structured=False)
             if not checks:
                 if not proof:
                     raise ValueError("Review-only code needs --proof pointing to a committed repository file")
@@ -107,8 +107,10 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
         save(path, {"repo": str(repo), "contract": contract, "head": head,
                     "common_dir": git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"),
                     "qualification": qualification, "source_only": source_only})
-    else:
-        path.unlink(missing_ok=True)
+    elif path.exists():
+        previous = json.loads(path.read_text())
+        if previous.get("contract") == contract and previous.get("repo") == str(repo):
+            path.unlink(missing_ok=True)
     save(path.with_suffix(".result.json"), result)
     return result
 

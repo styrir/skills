@@ -14,12 +14,14 @@ and independent review remain responsible for receipts.
 
 ## Source checks
 
-`python3 -m unittest discover -s verk/scripts -p 'test_*.py'`: 14 passed.
+`python3 -m unittest discover -s verk/scripts -p 'test_*.py'`: 15 passed.
 Includes real CLI review-only submission in an isolated scratch store, with
 no reviewer answer or fabricated receipt; a resumed session and corrected HEAD;
 approved-check routing/deadline; duplicate, dirty and stale Stop requests;
-wrong-session refusal; current-HEAD receipt matching and rejection visibility.
-The bundled plugin copy passed the same 14 checks separately.
+wrong-session refusal; unrelated pending-request preservation; current-HEAD receipt matching and rejection visibility.
+The earlier bundled plugin copy passed its then-current 14 checks separately.
+Final source validation adds preservation of another pending request, and reruns
+approved checks when only revision-agnostic public statuses are available.
 Skill Creator's quick_validate.py also passed. The skill entry contract and
 its linked desktop/qualification guides own the updated workflow; no parent
 ownership or routing contract changes.

@@ -96,7 +96,17 @@ class CloseoutTests(unittest.TestCase):
         self.assertEqual(check[:4], ("check", "unit", "--id", "vk-1"))
         self.assertEqual(check[4], "--until")
         self.assertGreater(int(check[5]), 0)
-        self.assertFalse(any("lint" in a or "checkpoint" in a or "answer" in a for a in args))
+        self.assertEqual([a[1] for a in args if a[0] == "check"], ["unit", "lint"])
+        self.assertFalse(any("checkpoint" in a or "answer" in a for a in args))
+
+    def test_observing_another_receipt_preserves_pending_work(self):
+        path = closeout.state_path(self.repo, self.env)
+        pending = {"repo": str(self.repo), "contract": "vk-pending"}
+        closeout.save(path, pending)
+        view = {"contract": {"id": "vk-done"}, "state": "satisfied"}
+        with patch.object(closeout, "call", return_value=view), patch.object(closeout, "observe", return_value={"status": "receipt"}):
+            closeout.closeout(self.repo, self.env, "vk-done", "proof.txt", 0, source_only=True)
+        self.assertEqual(json.loads(path.read_text()), pending)
 
     def test_receipt_must_cover_head_and_rejections_are_visible(self):
         for view, reason in [
