@@ -324,3 +324,8 @@ test("CLI reads a request file and writes manifest JSON", () => {
   assert.equal(payload.nextSystem, "NVIDIA AI-Q");
   assert.deepEqual(payload.commands, []);
 });
+
+test("GPT Researcher retrieval routes have no deep-search-cli handoff", () => {
+  const descriptor = { question: "Q", lane: "technical_decision", retrievalBackend: "gpt_researcher_deep" as const };
+  assert.throws(() => createHandoffManifest({ descriptor }), /runs locally via npm run gptr-retrieve/);
+});

@@ -59,6 +59,8 @@ Add planner facets, a source registry, a ledger that passes the normal Styrir ga
 
 Use when the request is report-grade or high-stakes but should stay local and below a full external deep-research spend. This mode produces a handoff manifest and gated-report request for a local deep-search workflow; it is still bounded and should not turn into an open-ended research marathon.
 
+With `retrievalBackend: "gpt_researcher_deep"` (opt-in, never inferred), the lane instead runs GPT Researcher deep mode as a source finder. It emits ranked candidate sources, a Styrir ledger is written from them, and `styrir-search-gate` plus the `styrir_plus` artifact gate apply. See `gpt-researcher-retrieval.md`.
+
 Default budget:
 
 ```json

@@ -25,6 +25,7 @@ declare module "node:assert/strict" {
 
 declare module "node:child_process" {
   export function spawnSync(...args: any[]): any;
+  export function spawn(...args: any[]): any;
 }
 
 declare module "node:os" {
@@ -44,6 +45,10 @@ declare module "node:test" {
 declare const process: any;
 declare const console: any;
 declare const URL: any;
+declare function fetch(...args: any[]): Promise<any>;
+declare function setTimeout(...args: any[]): any;
+declare function setInterval(...args: any[]): any;
+declare function clearInterval(handle: any): void;
 declare function structuredClone<T>(value: T): T;
 
 interface ImportMeta {
