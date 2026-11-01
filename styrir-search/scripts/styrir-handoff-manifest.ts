@@ -110,10 +110,6 @@ export function createHandoffManifest(input: HandoffManifestInput): HandoffManif
     throw new Error("Handoff manifest requires a deep_search_local or nvidia_aiq_handoff route.");
   }
 
-  if (route.retrievalBackend) {
-    throw new Error("The GPT Researcher retrieval backend runs locally via npm run gptr-retrieve; it has no handoff manifest.");
-  }
-
   if (route.mode === "nvidia_aiq_handoff") {
     const aiqBaseUrl = input.descriptor.aiqBaseUrl;
     if (aiqBaseUrl) {

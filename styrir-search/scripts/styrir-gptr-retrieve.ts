@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// GPT Researcher deep mode as a retrieval backend for deep_search_local.
+// GPT Researcher deep mode as a source-discovery component, for qualification only; no route selects it.
 // It finds sources; it never writes evidence. See references/gpt-researcher-retrieval.md.
 
 // Settings the 2026-11-01 bake-off qualified (GPT Researcher 0.16.0 / v3.7.0).
@@ -214,6 +214,59 @@ export function assessSpend(balances: { before: number; afterGptr: number; after
   };
 }
 
+// Tavily bills both the searches inside GPT Researcher and the adapter's own extract calls, so both are counted.
+// Readings are per key: other use of the same key during a run is counted too.
+export const TAVILY_PAYGO_USD_PER_CREDIT = 0.008;
+
+export interface TavilyReading {
+  usage: number;
+  search: number;
+  extract: number;
+}
+
+export function tavilyCredits(before: TavilyReading | null, after: TavilyReading | null) {
+  if (!before || !after) {
+    return { measured: false, totalCredits: null, searchCredits: null, extractCredits: null, paygoEstimateUsd: null };
+  }
+  const totalCredits = after.usage - before.usage;
+  return {
+    measured: true,
+    totalCredits,
+    searchCredits: after.search - before.search,
+    extractCredits: after.extract - before.extract,
+    paygoEstimateUsd: Math.round(totalCredits * TAVILY_PAYGO_USD_PER_CREDIT * 10000) / 10000,
+  };
+}
+
+async function tavilyUsage(key: string): Promise<TavilyReading | null> {
+  try {
+    const res = await fetch("https://api.tavily.com/usage", { headers: { Authorization: `Bearer ${key}` } });
+    const k = (await res.json()).key ?? {};
+    const reading = { usage: Number(k.usage), search: Number(k.search_usage), extract: Number(k.extract_usage) };
+    return res.ok && Object.values(reading).every(Number.isFinite) ? reading : null;
+  } catch {
+    return null;
+  }
+}
+
+export const SELECTION_RULES = [
+  "dead: the adapter's own Tavily extract returned no text, a failure, or under 200 characters; dropped.",
+  "off_topic: the NanoGPT judge answered off_topic; dropped unless the source type is primary (legal, official, academic).",
+  "unknown: the judge failed or answered unparseably; kept.",
+  "rank: primary on-topic first, then primary judged off_topic, then the rest; ties keep GPT Researcher's order.",
+];
+
+// Every returned URL, in the styrir_plus registry shape, with its selection decision. Candidates keep their s<n>
+// ids; dropped sources get x<n>, so a reviewer can audit every decision against the ledger.
+export function sourceRegistry(candidates: Candidate[], dropped: Dropped[]) {
+  return {
+    sources: [
+      ...candidates.map((c) => ({ id: c.id, url: c.url, title: c.title, sourceType: c.sourceType, fetched: true, selection: "candidate", verdict: c.verdict })),
+      ...dropped.map((d, i) => ({ id: `x${i + 1}`, url: d.url, title: d.title, sourceType: d.sourceType, fetched: d.fetchStatus === "ok", selection: d.reason, verdict: d.verdict })),
+    ],
+  };
+}
+
 // Keys come only from Infisical (styrir / prod / /providers), which injects them as `nanogpt` and `tavily`.
 // Ambient OPENAI_API_KEY / TAVILY_API_KEY are never read, so a stray shell key can't be billed.
 export function providerKeys(env: Record<string, string | undefined>) {
@@ -322,6 +375,8 @@ async function main(argv: string[]) {
   }
   mkdirSync(args.runDir, { recursive: true });
   const started = Date.now();
+  const seconds = (from: number) => Math.round((Date.now() - from) / 1000);
+  const tavilyBefore = await tavilyUsage(keys.tavily);
   const before = await nanoBalance(keys.nanogpt);
   if (before.usd < args.capUsd) {
     throw new Error(`NanoGPT balance $${before.usd} is below the $${args.capUsd} spend cap; refusing to start.`);
@@ -355,23 +410,35 @@ async function main(argv: string[]) {
   });
   clearInterval(poll);
   const afterGptr = await nanoBalance(keys.nanogpt);
+  const phases: Record<string, number> = { gptrSeconds: seconds(started) };
   const manifest: Record<string, unknown> = {
     backend: "gpt_researcher_deep",
     question,
     objective: request.objective ?? null,
     settings: GPTR_SETTINGS,
     judgeModel: JUDGE_MODEL,
-    tavily: "Searches run inside GPT Researcher (~60 basic searches per run) and the re-fetch uses Tavily extract; " +
-      "neither is metered here, and both sit outside the route's search budget.",
   };
-  const writeManifest = (status: string, spend: object) =>
+  const writeManifest = async (status: string, spend: object) => {
+    const tavily = tavilyCredits(tavilyBefore, await tavilyUsage(keys.tavily));
+    const adapterMinutes = Math.round(seconds(started) / 6) / 10;
     writeFileSync(
       join(args.runDir, "retrieval-manifest.json"),
-      `${JSON.stringify({ status, ...manifest, spend, wallSeconds: Math.round((Date.now() - started) / 1000) }, null, 2)}\n`,
+      `${JSON.stringify({
+        status,
+        ...manifest,
+        spend: { nanogpt: spend, tavily },
+        effort: {
+          ...phases,
+          adapterMinutes,
+          // Filled in by whoever writes the ledger; qualification needs adapter plus ledger-writing time.
+          ledgerWritingMinutes: null,
+        },
+      }, null, 2)}\n`,
     );
+  };
 
   if (capHit || exitCode !== 0) {
-    writeManifest(capHit ? "aborted_spend_cap" : "gptr_failed", { ...assessSpend({ before: before.usd, afterGptr: afterGptr.usd, afterJudge: afterGptr.usd }, args.capUsd), capHit });
+    await writeManifest(capHit ? "aborted_spend_cap" : "gptr_failed", { ...assessSpend({ before: before.usd, afterGptr: afterGptr.usd, afterJudge: afterGptr.usd }, args.capUsd), capHit });
     throw new Error(capHit ? "Spend cap reached; GPT Researcher run was stopped." : `GPT Researcher exited with ${exitCode}.`);
   }
 
@@ -383,7 +450,10 @@ async function main(argv: string[]) {
     }
   }
   const urls = [...titles.keys()];
+  let mark = Date.now();
   const fetched = await refetch(urls, keys.tavily, args.runDir);
+  phases.refetchSeconds = seconds(mark);
+  mark = Date.now();
   const judge = nanoJudge(keys.nanogpt);
   const rows: SourceRow[] = await pool(urls, 8, async (url) => {
     const f = fetched.get(url) ?? { fetchStatus: "missing" as FetchStatus, head: "" };
@@ -393,6 +463,7 @@ async function main(argv: string[]) {
       : null;
     return { url, title, fetchStatus: f.fetchStatus, verdict, ...(f.textFile ? { textFile: f.textFile } : {}) };
   });
+  phases.judgeSeconds = seconds(mark);
   const afterJudge = await nanoBalance(keys.nanogpt);
   const spend = {
     ...assessSpend({ before: before.usd, afterGptr: afterGptr.usd, afterJudge: afterJudge.usd }, args.capUsd),
@@ -400,7 +471,11 @@ async function main(argv: string[]) {
     pendingUsageAfter: afterJudge.pendingUsage,
   };
   const { candidates, dropped } = rankCandidates(rows);
-  writeFileSync(join(args.runDir, "candidate-sources.json"), `${JSON.stringify({ question, candidates, dropped }, null, 2)}\n`);
+  writeFileSync(
+    join(args.runDir, "candidate-sources.json"),
+    `${JSON.stringify({ question, selectionRules: SELECTION_RULES, candidates, dropped }, null, 2)}\n`,
+  );
+  writeFileSync(join(args.runDir, "source-registry.json"), `${JSON.stringify(sourceRegistry(candidates, dropped), null, 2)}\n`);
   const counts = {
     returned: urls.length,
     dead: dropped.filter((d) => d.reason === "dead").length,
@@ -411,7 +486,7 @@ async function main(argv: string[]) {
   };
   Object.assign(manifest, { gptResearcher: raw.gpt_researcher, gptrCostEstimateUsd: raw.gptr_cost_estimate_usd, counts });
   const status = spend.overCap ? "complete_over_cap" : "complete";
-  writeManifest(status, spend);
+  await writeManifest(status, spend);
   process.stdout.write(`${JSON.stringify({ status, ...counts, costUsd: spend.costUsd })}\n`);
   if (spend.overCap) {
     process.exitCode = 1;

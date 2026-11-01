@@ -10,10 +10,6 @@ export type RouteMode =
 
 export type RouteCompatibilityMode = RouteMode | "aiq_deep_tbd";
 
-// Opt-in retrieval backends for deep_search_local. Never inferred; a request must name one.
-export type RetrievalBackend = "gpt_researcher_deep";
-const VALID_RETRIEVAL_BACKENDS = new Set<RetrievalBackend>(["gpt_researcher_deep"]);
-
 export interface CanonicalRouteRequest {
   question: string;
   objective?: string;
@@ -30,7 +26,6 @@ export interface CanonicalRouteRequest {
   sourceScope?: string[];
   aiqBaseUrl?: string;
   forceMode?: RouteCompatibilityMode;
-  retrievalBackend?: RetrievalBackend;
 }
 
 export interface LegacyRouteRequest {
@@ -67,13 +62,6 @@ export interface RouteDecision {
   handoff: null | {
     nextSystem: "deep-search-cli" | "NVIDIA AI-Q";
     reason: string;
-  };
-  retrievalBackend?: {
-    name: RetrievalBackend;
-    command: string;
-    spendCapUsd: number;
-    artifactGateMode: "styrir_plus";
-    note: string;
   };
 }
 
@@ -147,8 +135,7 @@ function isCanonicalRequest(input: Record<string, unknown>): boolean {
     "estimatedSearchQueries" in input ||
     "estimatedFetches" in input ||
     "sourceScope" in input ||
-    "htmlReport" in input ||
-    "retrievalBackend" in input
+    "htmlReport" in input
   );
 }
 
@@ -167,14 +154,6 @@ function validateCanonicalRequest(request: CanonicalRouteRequest): CanonicalRout
   }
   if (request.forceMode && !VALID_FORCE_MODES.has(request.forceMode)) {
     throw new Error(`Invalid forceMode '${request.forceMode}'.`);
-  }
-  if (request.retrievalBackend !== undefined) {
-    if (!VALID_RETRIEVAL_BACKENDS.has(request.retrievalBackend)) {
-      throw new Error(`Invalid retrievalBackend '${request.retrievalBackend}'.`);
-    }
-    if (request.forceMode && normalizeForceMode(request.forceMode) !== "deep_search_local") {
-      throw new Error("retrievalBackend is honored only on deep_search_local; it conflicts with forceMode.");
-    }
   }
   if (request.aiqBaseUrl) {
     try {
@@ -271,7 +250,6 @@ export function parseRequest(input: unknown): CanonicalRouteRequest {
       sourceScope: asStringArray(input.sourceScope),
       aiqBaseUrl: asOptionalString(input.aiqBaseUrl),
       forceMode: asOptionalString(input.forceMode) as RouteCompatibilityMode | undefined,
-      retrievalBackend: input.retrievalBackend === undefined ? undefined : (asString(input.retrievalBackend) as RetrievalBackend),
     });
   }
 
@@ -285,9 +263,6 @@ function buildReason(mode: RouteMode, input: CanonicalRouteRequest): string {
     case "styrir_plus":
       return "The request is still bounded, but contested or broad enough to require a contradiction sweep.";
     case "deep_search_local":
-      if (input.retrievalBackend) {
-        return "The request explicitly selects GPT Researcher deep mode as the retrieval backend; it finds candidate sources and a Styrir ledger is written from them.";
-      }
       return "Claim-level validation or a report artifact is required, so the work should hand off into local Deep Search gates.";
     case "nvidia_aiq_handoff":
       return input.aiqBaseUrl
@@ -344,9 +319,6 @@ function inferMode(input: CanonicalRouteRequest): RouteMode {
       throw new Error(`Invalid forceMode '${input.forceMode}'.`);
     }
     return normalizeForceMode(input.forceMode);
-  }
-  if (input.retrievalBackend) {
-    return "deep_search_local";
   }
 
   if (
@@ -405,39 +377,6 @@ export function chooseRoute(input: CanonicalRouteRequest | LegacyRouteRequest): 
         handoff: null,
       };
     case "deep_search_local":
-      if (request.retrievalBackend) {
-        return {
-          mode,
-          reason: buildReason(mode, request),
-          budget: BUDGETS.deep_search_local,
-          providerHints: dedupe([...providerHints, "tavily"]),
-          requiredReferences: ["references/gpt-researcher-retrieval.md", "references/ledger-contract.md", "references/provider-matrix.md"],
-          gate: "styrir-search-gate",
-          contradictionSweep: "required",
-          outputs: {
-            agentReadable: [
-              "retrieval-manifest.json",
-              "candidate-sources.json",
-              "plan.json",
-              "source-registry.json",
-              "ledger.json",
-              "contradiction-sweep.md",
-              "gate-result.json",
-              "progress.jsonl",
-            ],
-            humanReadable: [],
-            sourceOfTruth: "ledger.json",
-          },
-          handoff: null,
-          retrievalBackend: {
-            name: request.retrievalBackend,
-            command: "npm run gptr-retrieve -- request.json <run-dir> [--cap-usd 1]",
-            spendCapUsd: 1,
-            artifactGateMode: "styrir_plus",
-            note: "Candidates are not evidence. Searches inside GPT Researcher sit outside this budget; the budget bounds the ledger you write from the candidates.",
-          },
-        };
-      }
       return {
         mode,
         reason: buildReason(mode, request),

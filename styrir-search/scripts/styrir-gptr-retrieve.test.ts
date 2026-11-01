@@ -14,6 +14,8 @@ import {
   parseVerdict,
   providerKeys,
   rankCandidates,
+  sourceRegistry,
+  tavilyCredits,
   type SourceRow,
 } from "./styrir-gptr-retrieve.ts";
 
@@ -122,4 +124,24 @@ test("CLI refuses to run without Infisical keys, before any network call", () =>
   );
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Missing provider keys/);
+});
+
+test("Tavily credits count both GPT Researcher searches and adapter extracts", () => {
+  assert.deepEqual(
+    tavilyCredits({ usage: 100, search: 80, extract: 20 }, { usage: 172, search: 140, extract: 32 }),
+    { measured: true, totalCredits: 72, searchCredits: 60, extractCredits: 12, paygoEstimateUsd: 0.576 },
+  );
+  assert.equal(tavilyCredits(null, { usage: 1, search: 1, extract: 0 }).measured, false);
+});
+
+test("source registry records a selection decision for every returned URL", () => {
+  const { candidates, dropped } = rankCandidates([
+    row("https://www.w3.org/TR/webaudio/"),
+    row("https://brush.ninja/x", { verdict: "off_topic" }),
+    row("https://dead.example/x", { fetchStatus: "failed", verdict: null }),
+  ]);
+  assert.deepEqual(
+    sourceRegistry(candidates, dropped).sources.map((s) => [s.id, s.selection, s.fetched]),
+    [["s1", "candidate", true], ["x1", "off_topic", true], ["x2", "dead", false]],
+  );
 });

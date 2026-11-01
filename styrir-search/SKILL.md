@@ -21,10 +21,7 @@ Use one of these modes:
 | `styrir_search` | normal bounded research with an evidence ledger | 4-6 searches, 4-6 fetches | ready |
 | `styrir_plus` | contested/current decisions needing more coverage | 6-10 searches, 6-10 fetches | ready |
 | `deep_search_local` | report-grade/high-stakes work that should stay below a full external deep-search spend | local handoff manifest | ready as handoff |
-| `deep_search_local` + `retrievalBackend: "gpt_researcher_deep"` | the same lane when many candidate sources are wanted: GPT Researcher deep mode finds them, a Styrir ledger is written from them | one GPT Researcher run (~60 internal searches) capped at $1, then a ledger within the route budget | ready, opt-in only |
 | `nvidia_aiq_handoff` | report-grade/high-stakes work with explicit budget and operator approval for NVIDIA AI-Q | external handoff or configured REST target | ready as fail-closed handoff |
-
-The GPT Researcher backend is never inferred; set `retrievalBackend` explicitly. Read `references/gpt-researcher-retrieval.md` before using it.
 
 `aiq_deep_tbd` is still accepted as a legacy compatibility marker. New route decisions should use `nvidia_aiq_handoff`.
 
@@ -103,7 +100,7 @@ node --experimental-strip-types scripts/styrir-html-report.ts path/to/run-dir
 
 The HTML report is derivative; `ledger.json`, `source-registry.json`, and `gate-result.json` stay authoritative. Do not add highlights, rankings, or recommendations inside it; leave callouts to the receiving orchestrator or a separate decision artifact. Read `references/html-report.md` before designing or troubleshooting HTML output.
 
-11. When the route is `deep_search_local` (without `retrievalBackend`) or `nvidia_aiq_handoff`, create a handoff manifest:
+11. When the route is `deep_search_local` or `nvidia_aiq_handoff`, create a handoff manifest:
 
 ```bash
 node --experimental-strip-types scripts/styrir-handoff-manifest.ts request.json
@@ -146,7 +143,7 @@ Available scripts:
 - `npm run handoff -- request.json`: create a local deep-search or NVIDIA AI-Q handoff manifest.
 - `npm run progress -- <run-dir> <phase> <message> --mode <mode>`: append a JSONL progress event and print one compact status line.
 - `npm run html-report -- <run-dir> [output.html]`: render a static HTML report from a Styrir ledger bundle.
-- `npm run gptr-retrieve -- request.json <run-dir> [--cap-usd 1]`: run the opt-in GPT Researcher retrieval backend under Infisical keys and emit `candidate-sources.json` plus `retrieval-manifest.json` (set `GPTR_PYTHON` to a venv with `gpt-researcher==0.16.0`).
+- `npm run gptr-retrieve -- request.json <run-dir> [--cap-usd 1]`: qualification-only GPT Researcher source discovery under Infisical keys. It is not a route; no mode selects it. Read `references/gpt-researcher-retrieval.md` first.
 
 The deterministic gate checks only things it can prove without a model:
 
@@ -181,5 +178,5 @@ For NVIDIA AI-Q, fail closed: if `aiqBaseUrl` is absent, unhealthy, or malformed
 - Do not collapse observation and implication into one prose field.
 - Do not call this "verified" in the entailment sense; the gate validates structure and provenance, not claim truth.
 - Do not expand the lite controller into a deep-research clone. Escalate instead.
-- Do not cite GPT Researcher's report or research context. With `retrievalBackend`, write observations only from the re-fetched pages under `fetched/`.
+- Do not cite GPT Researcher's report or research context. In a `gptr-retrieve` run, write observations only from the re-fetched pages under `fetched/`.
 - Do not treat `nvidia_aiq_handoff` as executable unless a local `aiqBaseUrl` is explicitly configured and health-checked.

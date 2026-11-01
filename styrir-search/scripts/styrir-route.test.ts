@@ -295,35 +295,3 @@ test("CLI maps a legacy request payload when canonical fields are absent", () =>
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.mode, "deep_search_local");
 });
-
-test("retrievalBackend opts deep_search_local into GPT Researcher retrieval", () => {
-  const result = chooseRoute(makeRequest({ retrievalBackend: "gpt_researcher_deep" }));
-
-  assert.equal(result.mode, "deep_search_local");
-  assert.equal(result.gate, "styrir-search-gate");
-  assert.equal(result.handoff, null);
-  assert.equal(result.outputs.sourceOfTruth, "ledger.json");
-  assert.ok(result.outputs.agentReadable.includes("candidate-sources.json"));
-  assert.ok(result.requiredReferences.includes("references/gpt-researcher-retrieval.md"));
-  assert.deepEqual(
-    { name: result.retrievalBackend?.name, cap: result.retrievalBackend?.spendCapUsd, gate: result.retrievalBackend?.artifactGateMode },
-    { name: "gpt_researcher_deep", cap: 1, gate: "styrir_plus" },
-  );
-  assert.equal(chooseRoute(makeRequest({ forceMode: "deep_search_local", retrievalBackend: "gpt_researcher_deep" })).retrievalBackend?.name, "gpt_researcher_deep");
-});
-
-test("retrievalBackend is never inferred and only honored on deep_search_local", () => {
-  const plain = chooseRoute(makeRequest({ needsReportArtifact: true }));
-  assert.equal(plain.mode, "deep_search_local");
-  assert.equal("retrievalBackend" in plain, false);
-  assert.equal(plain.handoff?.nextSystem, "deep-search-cli");
-
-  assert.throws(
-    () => chooseRoute(makeRequest({ forceMode: "styrir_plus", retrievalBackend: "gpt_researcher_deep" })),
-    /only on deep_search_local/,
-  );
-  assert.throws(
-    () => chooseRoute(makeRequest({ retrievalBackend: "quick_search" as never })),
-    /Invalid retrievalBackend/,
-  );
-});

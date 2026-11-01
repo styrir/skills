@@ -1,10 +1,15 @@
-# GPT Researcher retrieval backend (`deep_search_local`)
+# GPT Researcher source discovery (qualification only)
 
-GPT Researcher deep mode can serve as an opt-in source finder for `deep_search_local`. It finds candidate sources; it never writes evidence. The 2026-11-01 bake-off (styrir-os `agent-guidance/research/gpt-researcher-bakeoff-20261101/comparison.md`, Verk vk-2539) qualified it with conditions, and this backend keeps them.
+GPT Researcher deep mode finds candidate sources. It never writes evidence. The 2026-11-01 bake-off (styrir-os `agent-guidance/research/gpt-researcher-bakeoff-20261101/comparison.md`, Verk vk-2539) adopted it provisionally as a source-discovery component, after an independent review. It did not qualify automated `deep_search_local` routing.
 
-## Selecting it
+## Status
 
-Set `"retrievalBackend": "gpt_researcher_deep"` in the route request. The route never infers it. With no `forceMode`, the flag selects `deep_search_local`. Combining it with any other `forceMode` is an error. The decision then uses `styrir-search-gate`, has no deep-search-cli handoff, and reports `ledger.json` as its source of truth.
+This adapter exists to qualify that component. No route selects it, and `styrir-route.ts` has no flag for it. Before a route is added, under its own Verk contract, a qualification run has to record:
+
+- the complete run cost: NanoGPT model spend, plus Tavily search and extract credits;
+- the adapter's minutes, and the minutes spent writing the ledger;
+- every selection decision;
+- a resulting ledger that someone else reviews independently.
 
 ## Running it
 
@@ -29,24 +34,30 @@ GPTR_PYTHON=/path/to/venv/bin/python npm run gptr-retrieve -- request.json <run-
 ## Outputs
 
 - `candidate-sources.json` has `candidates[]` and `dropped[]`. Candidates use the ledger `sources[]` shape (`id`, `url`, `title`, `sourceType`, `fetched: true`) plus `rank`, `primary`, `verdict` and `textFile`. Dropped rows keep their reason (`dead` or `off_topic`) so a person or agent can rescue one.
-- `retrieval-manifest.json` records status, settings, judge model, counts and spend. Spend is the before/after balance delta, split into `gptrCostUsd` and `judgeCostUsd`, with `capHit`, `overCap` and `pendingUsageAfter`. GPT Researcher's own cost estimate is recorded as `gptrCostEstimateUsd` for comparison only; it undercounted by 1.5–2.7× in the bake-off.
+- `candidate-sources.json` also carries `selectionRules`, the exact rules behind every keep or drop decision.
+- `source-registry.json` lists every returned URL in the `styrir_plus` registry shape, with its `selection` (`candidate`, `dead` or `off_topic`) and judge `verdict`. Candidates keep their `s<n>` ids and dropped sources get `x<n>`, so a reviewer can audit each decision against the ledger.
+- `retrieval-manifest.json` records status, settings, judge model, counts, spend and effort.
+  - `spend.nanogpt` is the before/after balance delta, split into `gptrCostUsd` and `judgeCostUsd`, with `capHit`, `overCap` and `pendingUsageAfter`.
+  - `spend.tavily` holds the per-key `GET /usage` deltas: `searchCredits` (the searches inside GPT Researcher), `extractCredits` (the adapter's re-fetch) and `totalCredits`, plus a pay-as-you-go estimate at $0.008 per credit. Other use of the same key during a run is counted too.
+  - `effort` holds per-phase seconds (`gptrSeconds`, `refetchSeconds`, `judgeSeconds`) and `adapterMinutes`. `ledgerWritingMinutes` starts as `null`; whoever writes the ledger fills it in.
+  - GPT Researcher's own cost estimate is recorded as `gptrCostEstimateUsd` for comparison only. It undercounted by 1.5–2.7× in the bake-off.
 - `fetched/` holds the re-fetched page text. Write ledger observations from these files, never from GPT Researcher output.
 
 Then write the ledger bundle as for `styrir_plus` (plan, source registry, ledger, contradiction sweep). Run `styrir-search-gate` and `styrir-artifact-gate.ts styrir_plus <run-dir>`. The `deep_search_local` artifact gate expects a deep-search-mcp run directory and does not apply here.
 
 ## Spend cap
 
-The default cap is $1 per run, measured as the change in NanoGPT balance. While GPT Researcher runs, the adapter polls the balance every 20 seconds and stops the run if the cap is reached. Reported usage can lag, so a run can overshoot by up to one interval's spend; the final reading still sets `overCap` and exits non-zero. The breadth and depth settings are what really bound spend: $0.43–0.76 per run in the bake-off. Tavily is not metered here. A deep run makes about 60 basic searches plus the extract calls. Those cost nothing on the free Researcher plan, but about $0.47 per run at pay-as-you-go rates.
+The default cap is $1 per run, measured as the change in NanoGPT balance. Tavily credits are recorded but not capped. While GPT Researcher runs, the adapter polls the balance every 20 seconds and stops the run if the cap is reached. Reported usage can lag, so a run can overshoot by up to one interval's spend; the final reading still sets `overCap` and exits non-zero. The breadth and depth settings are what really bound spend: $0.43–0.76 per run in the bake-off. A deep run makes about 60 basic searches plus the extract calls. On the free Researcher plan those cost nothing, but the credits still count toward the monthly 1,000.
 
 ## Budget semantics
 
-The route's `deep_search_local` budget (10 searches, 10 fetches) covers the ledger you write from the candidates. The searches and re-fetches inside this backend are outside that budget. Record them in the ledger plan's allocation note, as the bake-off did.
+A ledger written from these candidates gets a `styrir_plus`-style budget: up to 10 of your own targeted searches. The searches and re-fetches inside this adapter are outside that budget. Record them in the ledger plan's allocation note, as the bake-off did.
 
-The gate blocks when `meta.totalQueriesRun` exceeds `budget.maxSearchQueries`, or `meta.totalSourcesFetched` exceeds `budget.maxFetches`. So do not copy the route's `maxFetches: 10` into a ledger that registers 80 candidates. Use the bake-off's `build_bundle.py` values:
+The gate blocks when `meta.totalQueriesRun` exceeds `budget.maxSearchQueries`, or `meta.totalSourcesFetched` exceeds `budget.maxFetches`. So do not use a `maxFetches: 10` budget in a ledger that registers 80 candidates. Use the bake-off's `build_bundle.py` values:
 
 - `meta.mode`: `"styrir_plus"`.
-- `meta.totalQueriesRun`: only your own targeted searches (0 if none). Keep it within the route's 10.
-- `budget.maxSearchQueries`: the route's 10.
+- `meta.totalQueriesRun`: only your own targeted searches (0 if none), at most 10.
+- `budget.maxSearchQueries`: 10.
 - `meta.totalSourcesFetched`: the length of the ledger's `sources[]`, meaning the candidates you register plus your own fetches.
 - `budget.maxFetches`: the same count.
 
