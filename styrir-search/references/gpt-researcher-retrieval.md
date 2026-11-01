@@ -42,6 +42,14 @@ The default cap is $1 per run, measured as the change in NanoGPT balance. While 
 
 The route's `deep_search_local` budget (10 searches, 10 fetches) covers the ledger you write from the candidates. The searches and re-fetches inside this backend are outside that budget. Record them in the ledger plan's allocation note, as the bake-off did.
 
+The gate blocks when `meta.totalQueriesRun` exceeds `budget.maxSearchQueries`, or `meta.totalSourcesFetched` exceeds `budget.maxFetches`. So do not copy the route's `maxFetches: 10` into a ledger that registers 80 candidates. Use the bake-off's `build_bundle.py` values:
+
+- `meta.mode`: `"styrir_plus"`.
+- `meta.totalQueriesRun`: only your own targeted searches (0 if none). Keep it within the route's 10.
+- `budget.maxSearchQueries`: the route's 10.
+- `meta.totalSourcesFetched`: the length of the ledger's `sources[]`, meaning the candidates you register plus your own fetches.
+- `budget.maxFetches`: the same count.
+
 ## Measured off-topic judge quality
 
 These figures come from cached bake-off pages (re-fetched text), scored against the bake-off's hand-labelled off-topic lists, before the primary-source exemption was added:
