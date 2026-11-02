@@ -38,6 +38,8 @@ Default budget:
 
 Output should include an answer, JSON evidence ledger, proof gaps, and gate result.
 
+After fetching, save each page's text as `fetched/<sourceId>.txt` beside `request.json` and run `npm run select -- passages <run-dir>`; read `passages.md` best first when writing the ledger and keep `selector-manifest.json` with the bundle (see the Plus v2 recipe below for what the selector does).
+
 ### `styrir_plus`
 
 Use when the task is still bounded but needs more coverage because it is contested, current, multi-entity, or decision-shaped.
@@ -65,7 +67,7 @@ Keep everything in one run dir with `request.json` (it holds `question`).
 4. **Passages.** `npm run select -- passages <run-dir>` splits fetched pages into 1000-character chunks with 10% overlap, scores each with PPLX Decider v1.2 (`noul`), and writes `passages.md` (best first) and `passages.json`. Read passages in that order when writing the ledger. It is a reading aid: every observation still comes from the fetched page, and every cited source still needs `fetched: true`.
 5. Gates as before.
 
-**Triage before fetch is qualification-only, not the default.** `npm run select -- triage <run-dir> --round 1|2` exists, but the end-to-end eval (styrir-os `agent-guidance/research/gptr-plus-decider-20261101/eval-step4-results.md`) found it cut primary-source share from 0.40–0.70 to 0.10–0.25 on three questions. Its relevance question saturates: most results score above 0.5, and snippet-rich secondary summaries outrank terse primary pages. Do not use it to choose fetches until a primary-aware version passes that comparison again.
+**Fetch choice stays with the agent; the decision model ranks passages after fetch** (the role GPT Researcher gives Jev). **Triage before fetch is qualification-only, not the default.** `npm run select -- triage <run-dir> --round 1|2` exists, but the end-to-end eval (styrir-os `agent-guidance/research/gptr-plus-decider-20261101/eval-step4-results.md`) found it cut primary-source share from 0.40–0.70 to 0.10–0.25 on three questions. Its relevance question saturates: most results score above 0.5, and snippet-rich secondary summaries outrank terse primary pages. Do not use it to choose or filter fetches: in the same data, key primary pages scored near zero from their snippets (PostgreSQL's `runtime-config-resource` docs 0.05, a Wegovy FDA label 0.12), so even a 0.1 cutoff would drop them.
 
 Selector behavior: without a `nanogpt` key, or if any call in a stage still fails after retries, that whole stage uses BM25 instead; the output's `selector` and `fallbackReason` say so. `selector-manifest.json` records calls, input tokens and list cost (about $0.0014 per 200 chunks) per stage; keep it with the run bundle. Public questions only.
 

@@ -77,7 +77,7 @@ node --experimental-strip-types scripts/styrir-progress-event.ts path/to/run-dir
 ```
 
 4. Plan small search facets: entity-specific, comparison, official-source, contradiction, and gap follow-up.
-5. Treat search snippets as discovery only. Fetch/read a source before using it as evidence. In `styrir_plus`, follow the two-round recipe in `references/modes-and-recipes.md`; `npm run select -- passages <run-dir>` ranks fetched passages for the ledger writer.
+5. Treat search snippets as discovery only. Fetch/read a source before using it as evidence. Prefer primary and official sources when choosing what to fetch. In `styrir_search` and `styrir_plus`, save fetched text as `fetched/<sourceId>.txt` and run `npm run select -- passages <run-dir>` by default, so the ledger writer reads the best passages first; `styrir_plus` follows the two-round recipe in `references/modes-and-recipes.md`.
 6. Build a JSON evidence ledger with atomic entries, source appendix, and proof gaps. If another agent produced YAML or legacy JSON, normalize it first:
 
 ```bash
