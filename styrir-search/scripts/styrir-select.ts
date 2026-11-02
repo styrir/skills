@@ -16,7 +16,7 @@ export const CLAIM_FLAG = 0.5; // an entry its source supports with less than th
 // Characters of the cited page sent as the state: the whole page when it fits, else its chunks that best match the
 // observation (BM25). Three chunks missed compound observations' numbers; 24K stays well inside the 32K-token training length.
 export const CLAIM_WINDOW_CHARS = 24_000;
-const CONCURRENCY = 8;
+const CONCURRENCY = 8; // NanoGPT serves about 2.3 calls/s per key (2026-11-02); more in flight only queues and draws 429s
 const RETRY_STATUS = new Set([429, 500, 502, 503, 529]);
 
 export type Scored = { score: number; tokens: number };

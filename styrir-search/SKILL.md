@@ -77,7 +77,7 @@ node --experimental-strip-types scripts/styrir-progress-event.ts path/to/run-dir
 ```
 
 4. Plan small search facets: entity-specific, comparison, official-source, contradiction, and gap follow-up.
-5. Treat search snippets as discovery only. Fetch/read a source before using it as evidence. Prefer primary and official sources when choosing what to fetch. In `styrir_search` and `styrir_plus`, save fetched text as `fetched/<sourceId>.txt` and run `npm run select -- passages <run-dir>` by default, so the ledger writer reads the best passages first; `styrir_plus` follows the two-round recipe in `references/modes-and-recipes.md`.
+5. Treat search snippets as discovery only. Fetch/read a source before using it as evidence. Prefer primary and official sources when choosing what to fetch. In `styrir_search` and `styrir_plus`, save fetched text as `fetched/<sourceId>.txt` and run `npm run select -- passages <run-dir>` by default, so the ledger writer reads the best passages first. It takes minutes, not seconds (NanoGPT serves about 2.3 calls per second, so 300 chunks take about 2.5 minutes): run it in the background and start drafting from the fetched pages, then reorder your reading by `passages.md` when it lands; `styrir_plus` follows the two-round recipe in `references/modes-and-recipes.md`.
 6. Build a JSON evidence ledger with atomic entries, source appendix, and proof gaps. If another agent produced YAML or legacy JSON, normalize it first:
 
 ```bash
@@ -92,8 +92,8 @@ node --experimental-strip-types scripts/styrir-search-gate.ts path/to/ledger.jso
 ```
 
 9. If the gate fails, fix the ledger or report the blockers. Do not synthesize from a failed ledger unless the user explicitly asks for the blocked draft.
-9. Synthesize only from ledger entries and cite source IDs or URLs from the ledger.
-10. When the route output includes `outputs.humanReadable: ["report.html"]`, render the static HTML report from the completed ledger bundle:
+10. Synthesize only from ledger entries and cite source IDs or URLs from the ledger.
+11. When the route output includes `outputs.humanReadable: ["report.html"]`, render the static HTML report from the completed ledger bundle:
 
 ```bash
 node --experimental-strip-types scripts/styrir-html-report.ts path/to/run-dir
@@ -101,13 +101,13 @@ node --experimental-strip-types scripts/styrir-html-report.ts path/to/run-dir
 
 The HTML report is derivative; `ledger.json`, `source-registry.json`, and `gate-result.json` stay authoritative. Do not add highlights, rankings, or recommendations inside it; leave callouts to the receiving orchestrator or a separate decision artifact. Read `references/html-report.md` before designing or troubleshooting HTML output.
 
-11. When the route is `deep_search_local` or `nvidia_aiq_handoff`, create a handoff manifest:
+12. When the route is `deep_search_local` or `nvidia_aiq_handoff`, create a handoff manifest:
 
 ```bash
 node --experimental-strip-types scripts/styrir-handoff-manifest.ts request.json
 ```
 
-12. For `styrir_plus` or `deep_search_local` artifact bundles, run the artifact gate:
+13. For `styrir_plus` or `deep_search_local` artifact bundles, run the artifact gate:
 
 ```bash
 node --experimental-strip-types scripts/styrir-artifact-gate.ts styrir_plus path/to/run-dir
@@ -122,7 +122,7 @@ Read `references/ledger-contract.md` when creating a ledger, debugging gate fail
 - `observation` is factual only; put interpretation in `possibleImplication`.
 - Every entry needs a `sourceId`, `sourceUrl`, `sourceType`, `dateObserved`, and `confidence`.
 - Every cited source must exist in `sources[]` and have `fetched: true`.
-- `proofGaps[]` is mandatory, even when the gap is minor.
+- `proofGaps[]` is mandatory, even when the gap is minor. Every gap needs `attemptedQueries`, the searches you ran toward closing it; for a gap no search could close, list the searches that showed it.
 - High confidence is only for primary/official-quality sources.
 - Budgets are hard limits. If the work needs more, switch mode or escalate.
 
