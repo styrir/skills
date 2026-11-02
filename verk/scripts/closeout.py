@@ -176,7 +176,10 @@ def main():
     env = dict(os.environ, VERK_CLOSEOUT_HARNESS=selected.harness)
     if arguments == ["hook-stop"]:
         try:
-            result = hook(json.load(sys.stdin), env)
+            handler = hook
+            if selected.harness == "codex":
+                from codex_closeout import hook as handler
+            result = handler(json.load(sys.stdin), env)
         except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
             result = {"systemMessage": f"Verk closeout needs attention: {error}"}
         print(json.dumps(result))
@@ -185,13 +188,22 @@ def main():
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--id", required=True)
     parser.add_argument("--proof")
+    parser.add_argument("--delegate-approved-goals", action="store_true",
+                        help="Codex only: operator-delegated completion from an independent exact-target approval")
     qualification = parser.add_mutually_exclusive_group(required=True)
     qualification.add_argument("--qualification", help="Committed diagnosis/checks/installed/operator/limits record")
     qualification.add_argument("--source-only", action="store_true", help="Acceptance requires no installed/live/operator qualification")
     parser.add_argument("--wait", type=int, default=30, choices=range(0, 61), metavar="0..60")
     args = parser.parse_args(arguments)
     try:
-        result = closeout(args.repo.resolve(), env, args.id, args.proof, args.wait, args.qualification, args.source_only)
+        if selected.harness == "codex":
+            from codex_closeout import closeout as runner
+            result = runner(args.repo.resolve(), env, args.id, args.proof, args.wait, args.qualification, args.source_only,
+                            args.delegate_approved_goals)
+        else:
+            if args.delegate_approved_goals:
+                raise ValueError("Delegated goal completion is Codex-only")
+            result = closeout(args.repo.resolve(), env, args.id, args.proof, args.wait, args.qualification, args.source_only)
         print(json.dumps(result))
         return 0 if result["status"] == "receipt" else 3
     except (ValueError, OSError, subprocess.SubprocessError) as error:

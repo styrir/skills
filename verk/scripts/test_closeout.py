@@ -36,7 +36,7 @@ class CloseoutTests(unittest.TestCase):
         # Operator fixture setup is isolated; author commands retain their own identity.
         subprocess.run([str(binary), "bind", "synthetic", "--approve-policy", "--json"], cwd=self.repo, env=self.env,
                        check=True, capture_output=True)
-        added = closeout.call(self.repo, self.env, "add", "Synthetic code", "--kind", "code", "--start", "--json")
+        added = closeout.call(self.repo, self.env, "add", "Synthetic code", "--kind", "code", "--accept", "Synthetic proof exists", "--start", "--json")
         contract = added["id"]
         result = closeout.closeout(self.repo, self.env, contract, "proof.txt", 0, source_only=True)
         self.assertEqual(result["status"], "review_pending")

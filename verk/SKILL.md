@@ -67,14 +67,23 @@ Successful approved check names and the unchanged source revision are checkpoint
 before reconcile so the reviewer receives their results. Existing unresolved items
 remain in the checkpoint; completed checks do not clear other acceptance gates.
 
+Codex uses its own review-completion adapter behind the same foreground command
+and Stop entrypoint. It preserves a pending request and continues the model at
+Stop until receipt/repair, rather than reporting pending as completed. When the
+operator delegates automatic goal completion, add `--delegate-approved-goals`;
+Codex records that delegated action only after a matching independent approval.
+Read [Codex review completion](references/codex-review-completion.md) for scope,
+authorization, report validation and the native Stop contract. Claude retains
+its separate behavior. Never ask the operator to run terminal review commands.
+
 Read the structured outcome. `receipt` names a receipt covering current HEAD. `review_pending` means the existing independent reviewer still has work; wait or inspect the review, repair findings and request closeout again. `needs_action` and command errors remain unfinished. Exit 3 means pending/action needed, not success. Tests, commit, source publication, installation and live acceptance remain separate evidence.
 
 The declaration and committed proof paths are recorded in Verk before checks or review.
-Only the latest pending explicit request leaves a session-scoped marker in `~/.cache/verk-closeout/`. A newer pending closeout supersedes the previous hook request; Verk retains both tasks. The plugin Stop hook consumes it once, refuses changed/dirty work and reports the current result. It never runs tests at Stop, answers reviews, changes policy or starts a permanent service. Ordinary turns with no request do nothing. Hook trust is the operator's action; if the host has not loaded/trusted the hook, use the foreground helper and report that qualification limit. The marker/result files are disposable requests and observations; Verk remains the authority.
+Only the latest pending explicit request leaves a session-scoped marker in `~/.cache/verk-closeout/`. A newer pending closeout supersedes the previous hook request; Verk retains both tasks. The plugin Stop hook consumes it once, refuses changed/dirty work and reports the current result. It never runs tests at Stop, changes policy or starts a permanent service. Codex alone may complete an explicitly delegated, independently approved goal through its adapter; the other harness routes do not inherit this behavior. Ordinary turns with no request do nothing. Hook trust is the operator's action; if the host has not loaded/trusted the hook, use the foreground helper and report that qualification limit. The marker/result files are disposable requests and observations; Verk remains the authority.
 
 ## Operator boundaries
 
-The wrapper deliberately refuses `answer`, `bind`, `snapshot`, `migrate`, and setup `--apply`. These are outside an ordinary author session. Do not change review mode, approve policy, freeze or restore the store, answer the operator's decisions, or grant yourself a reviewer identity. Show the decision or setup plan to the operator instead. This wrapper does not serve designated reviewer sessions.
+The wrapper deliberately refuses `answer`, `bind`, `snapshot`, `migrate`, and setup `--apply`. These are outside an ordinary author session. The separate, explicitly authorized Codex goal-completion route is the sole delegated exception; it is not a general `answer` command or reviewer identity. Do not change review mode, approve policy, freeze or restore the store, answer the operator's decisions, or grant yourself a reviewer identity. Show the decision or setup plan to the operator instead. This wrapper does not serve designated reviewer sessions.
 
 For an unbound repository, wrapper `setup --json` is a read-only plan. Show what it proposes and leave the apply action to the operator. A setup request is not permission to approve policy on their behalf.
 
