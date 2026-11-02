@@ -84,13 +84,14 @@ node --experimental-strip-types scripts/styrir-progress-event.ts path/to/run-dir
 node --experimental-strip-types scripts/styrir-ledger-normalize.ts legacy-ledger.yaml
 ```
 
-7. Run the gate:
+7. In `styrir_search` and `styrir_plus`, run the claim check: `npm run select -- claims <run-dir>`. PPLX Decider asks whether each entry's fetched source supports its observation and writes `claims.json`. It runs in shadow: it changes no ledger and no gate. Recheck any entry it flags (support below 0.5) against the page; fix the entry if it overstates the source, or keep it if the check missed the evidence. Keep `claims.json` with the bundle.
+8. Run the gate:
 
 ```bash
 node --experimental-strip-types scripts/styrir-search-gate.ts path/to/ledger.json
 ```
 
-8. If the gate fails, fix the ledger or report the blockers. Do not synthesize from a failed ledger unless the user explicitly asks for the blocked draft.
+9. If the gate fails, fix the ledger or report the blockers. Do not synthesize from a failed ledger unless the user explicitly asks for the blocked draft.
 9. Synthesize only from ledger entries and cite source IDs or URLs from the ledger.
 10. When the route output includes `outputs.humanReadable: ["report.html"]`, render the static HTML report from the completed ledger bundle:
 
@@ -143,7 +144,9 @@ Available scripts:
 - `npm run handoff -- request.json`: create a local deep-search or NVIDIA AI-Q handoff manifest.
 - `npm run progress -- <run-dir> <phase> <message> --mode <mode>`: append a JSONL progress event and print one compact status line.
 - `npm run html-report -- <run-dir> [output.html]`: render a static HTML report from a Styrir ledger bundle.
-- `npm run select -- passages <run-dir>` / `npm run select -- triage <run-dir> --round 1|2`: Styrir Plus v2 selector. PPLX Decider v1.2 (`noul`, one candidate per request, ZDR requested) ranks fetched chunks; `triage` (scoring search results before fetch) is qualification-only after the step-4 eval lowered primary-source share; it falls back to BM25 with no `nanogpt` key or any failed call, records the selector in its output, and logs calls, tokens and list cost in `selector-manifest.json`. The npm script injects the key from Infisical; never pass or print it.
+- `npm run select -- passages <run-dir>`: PPLX Decider v1.2 (`noul`, one candidate per request, ZDR requested) ranks fetched chunks into `passages.md`; it falls back to BM25 with no `nanogpt` key or any failed call and records which selector ran.
+- `npm run select -- claims <run-dir>`: shadow claim check. For each ledger entry, PPLX Decider reads the cited page (whole, or its best-matching chunks up to 24,000 characters) and gives the probability that it supports the observation; entries below 0.5 are listed in `claims.json` as `flagged`. With no key or a failed call, support stays null with the reason; there is no fallback. On the step-4 ledgers it flagged 0 of 121 real entries, 91 of 97 with one number changed, and 113 of 121 pointed at the wrong page, at about $0.0001 per entry.
+- Both write calls, tokens and list cost to `selector-manifest.json`. The npm script injects the key from Infisical; never pass or print it. The decision model is never used on search snippets to choose fetches: that lowered primary-source share in the step-4 eval.
 - `npm run gptr-retrieve -- request.json <run-dir> [--cap-usd 1]`: qualification-only GPT Researcher source discovery under Infisical keys. It is not a route; no mode selects it. Read `references/gpt-researcher-retrieval.md` first.
 
 The deterministic gate checks only things it can prove without a model:
@@ -156,7 +159,7 @@ The deterministic gate checks only things it can prove without a model:
 - search/fetch budget overages,
 - malformed dates and required fields.
 
-The artifact gate additionally checks mode-specific run bundles: `styrir_plus` must include a normal Styrir ledger that passes the ledger gate, a `source-registry.json` that agrees with ledger source ids and URLs, and a gate result (warned as stale when its `ledgerSha256` no longer matches `ledger.json`); when its `plan.json` requests HTML through `htmlReport: true`, `outputs.htmlReport: true`, or `outputs.humanReadable: ["report.html"]`, it also requires `report.html` with the Styrir report marker and an Evidence Ledger section. `deep_search_local` must be a `deep-search-mcp` run directory with `run_manifest.json`, registered sources, recorded claims, and a `report.md` promoted by `render-report-bundle` with `"strict":true` whose `[claim:<id>]` markers resolve to `claims.jsonl`. These gates validate structure and provenance, not claim truth.
+The artifact gate additionally checks mode-specific run bundles: `styrir_plus` must include a normal Styrir ledger that passes the ledger gate, a `source-registry.json` that agrees with ledger source ids and URLs, and a gate result (warned as stale when its `ledgerSha256` no longer matches `ledger.json`); when its `plan.json` requests HTML through `htmlReport: true`, `outputs.htmlReport: true`, or `outputs.humanReadable: ["report.html"]`, it also requires `report.html` with the Styrir report marker and an Evidence Ledger section. It warns, without blocking, when no ledger entry cites an official, legal, product, academic, repo or local source (`no_primary_source_cited`). `deep_search_local` must be a `deep-search-mcp` run directory with `run_manifest.json`, registered sources, recorded claims, and a `report.md` promoted by `render-report-bundle` with `"strict":true` whose `[claim:<id>]` markers resolve to `claims.jsonl`. These gates validate structure and provenance, not claim truth.
 
 ## Escalation
 

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { validateLedger } from "./styrir-search-gate.ts";
+import { PRIMARY_SOURCE_TYPES, validateLedger } from "./styrir-search-gate.ts";
 
 type ArtifactMode = "styrir_plus" | "deep_search_local";
 type GateStatus = "pass" | "fail";
@@ -202,6 +202,17 @@ function validatePlus(blockers: ArtifactGateIssue[], warnings: ArtifactGateIssue
     }
     for (const gateWarning of ledgerResult.warnings) {
       warnings.push(issue(`ledger_${gateWarning.code}`, "ledger.json", gateWarning.message));
+    }
+    // Step-4 eval: runs that let snippet scores pick fetches cited few primary sources. Code checks the type; it never blocks.
+    const entries = Array.isArray(ledger.entries) ? ledger.entries.filter(isRecord) : [];
+    if (entries.length && !entries.some((e) => PRIMARY_SOURCE_TYPES.has(String(e.sourceType ?? e.source_type)))) {
+      warnings.push(
+        issue(
+          "no_primary_source_cited",
+          "ledger.json",
+          "No entry cites an official, legal, product, academic, repo or local source. Fetch one if the search results had one, or say in proofGaps why none exists.",
+        ),
+      );
     }
   }
   validateGateResult(blockers, warnings, runDir, ledgerText);

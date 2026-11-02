@@ -51,7 +51,7 @@ const ALLOWED_SOURCE_TYPES = new Set([
   "local",
 ]);
 
-const PRIMARY_SOURCE_TYPES = new Set(["official", "legal", "product", "academic", "repo", "local"]);
+export const PRIMARY_SOURCE_TYPES = new Set(["official", "legal", "product", "academic", "repo", "local"]);
 const ALLOWED_CONFIDENCE = new Set(["high", "medium", "low"]);
 const INFERENCE_RE = /\b(suggests?|indicates?|means|implies?|therefore|proves?|likely|it follows that)\b/i;
 const DOT_PLACEHOLDER = "<styrir-dot>";

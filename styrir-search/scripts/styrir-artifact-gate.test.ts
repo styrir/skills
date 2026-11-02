@@ -251,3 +251,23 @@ test("accepts a real rendered deep-search run", { skip: !existsSync(REAL_RUN) &&
 
   assert.equal(result.gateStatus, "pass", JSON.stringify(result.blockers));
 });
+
+test("warns, without blocking, when a styrir_plus ledger cites no primary source", () => {
+  const dir = makeRunDir();
+  const ledger = validLedger();
+  ledger.sources[0].sourceType = "news";
+  ledger.entries[0].sourceType = "news";
+  ledger.entries[0].confidence = "medium";
+  writeJson(join(dir, "plan.json"), { mode: "styrir_plus", facets: ["official docs"] });
+  writeJson(join(dir, "source-registry.json"), { sources: [{ id: "s1", url: "https://example.com", fetched: true }] });
+  writeJson(join(dir, "ledger.json"), ledger);
+  writeText(join(dir, "contradiction-sweep.md"), "# Contradiction Sweep\n\nNone found.");
+  writeJson(join(dir, "gate-result.json"), { gateStatus: "pass" });
+
+  const result = validateArtifactRun("styrir_plus", dir);
+
+  assert.equal(result.gateStatus, "pass");
+  assert.ok(result.warnings.some((w) => w.code === "no_primary_source_cited"));
+  writeJson(join(dir, "ledger.json"), validLedger());
+  assert.ok(!validateArtifactRun("styrir_plus", dir).warnings.some((w) => w.code === "no_primary_source_cited"));
+});

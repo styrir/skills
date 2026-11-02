@@ -17,4 +17,4 @@ Preset wrapper for ordinary Styrir Search.
 
 Use for normal bounded search with a JSON evidence ledger.
 
-Follow the base workflow: route with `styrir_search`, fetch/read sources before citing them, rank fetched passages with `npm run select -- passages <run-dir>`, build or normalize the ledger, run `styrir-search-gate`, and synthesize only from passed ledger entries. Do not escalate to `styrir_plus`, `deep_search_local`, or `nvidia_aiq_handoff` unless the user explicitly asks to re-route.
+Follow the base workflow: route with `styrir_search`, fetch/read sources before citing them, rank fetched passages with `npm run select -- passages <run-dir>`, build or normalize the ledger, run the shadow claim check (`npm run select -- claims <run-dir>`), run `styrir-search-gate`, and synthesize only from passed ledger entries. Do not escalate to `styrir_plus`, `deep_search_local`, or `nvidia_aiq_handoff` unless the user explicitly asks to re-route.

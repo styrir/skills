@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Styrir Plus v2 selector: PPLX Decider triage before fetch, passage ranking after fetch.
-// Wire format and question wording are the ones measured in styrir-os
-// agent-guidance/research/gptr-plus-decider-20261101/eval/run_eval.py (pplx_noul).
+// Styrir Search decision-model steps, both on fetched text: passage ranking after fetch, and a shadow
+// claim check of each ledger entry against its source. The passage question is the one measured in styrir-os
+// agent-guidance/research/gptr-plus-decider-20261101/eval/run_eval.py (pplx_noul). Choosing fetches from search
+// snippets was tried and removed: it fetched fewer primary sources (eval-step4-results.md there).
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -9,19 +10,20 @@ import { pathToFileURL } from "node:url";
 export const DECISIONS_URL = "https://nano-gpt.com/api/v1/decisions";
 export const MODEL = "perplexity/pplx-decider-v1.2";
 export const USD_PER_M_INPUT = 0.02; // list price; output is free
-export const TOTAL_FETCHES = 10; // styrir_plus maxFetches
-export const ROUND_CAPS: Record<number, number> = { 1: 7, 2: 3 };
 export const DEFAULT_THRESHOLD = 0.5;
 export const DEFAULT_KEEP = 40;
+export const CLAIM_FLAG = 0.5; // an entry its source supports with less than this is flagged for a recheck
+// Characters of the cited page sent as the state: the whole page when it fits, else its chunks that best match the
+// observation (BM25). Three chunks missed compound observations' numbers; 24K stays well inside the 32K-token training length.
+export const CLAIM_WINDOW_CHARS = 24_000;
 const CONCURRENCY = 8;
 const RETRY_STATUS = new Set([429, 500, 502, 503, 529]);
 
-export type Candidate = { url: string; title?: string; snippet?: string; query?: string };
 export type Scored = { score: number; tokens: number };
 export type Decider = (state: string) => Promise<Scored>;
 export type Stage = {
   stage: string;
-  selector: "pplx-decider-v1.2" | "bm25";
+  selector: "pplx-decider-v1.2" | "bm25" | "none";
   model: string | null;
   calls: number;
   inputTokens: number;
@@ -47,29 +49,52 @@ export function payload(question: string, state: string) {
   };
 }
 
+export function claimPayload(observation: string, state: string) {
+  return {
+    model: MODEL,
+    provider: { zdr: true },
+    state,
+    questions: {
+      a: {
+        type: "noul",
+        instructions: `Does this source text support this observation: ${observation}`,
+        criteria: {
+          true: "The text states this, or states facts that directly establish it",
+          false: "The text does not say this, says only part of it, says something different, or the observation goes beyond it",
+        },
+      },
+    },
+  };
+}
+
+type DeciderOpts = { fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void>; onModel?: (m: string) => void };
+export type Asker = (body: object) => Promise<Scored>;
+
 // One candidate per request (Perplexity: batching independent candidates hurts answers).
-export function nanoDecider(
-  key: string,
-  question: string,
-  opts: { fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void>; onModel?: (m: string) => void } = {},
-): Decider {
+export function nanoDecider(key: string, question: string, opts: DeciderOpts = {}): Decider {
+  const ask = nanoAsker(key, opts);
+  return (state) => ask(payload(question, state));
+}
+
+// Posts one noul request; retries overload and 5xx, never a 4xx.
+export function nanoAsker(key: string, opts: DeciderOpts = {}): Asker {
   const doFetch = opts.fetchImpl ?? fetch;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  return async (state) => {
+  return async (body) => {
     let err = "";
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const res = await doFetch(DECISIONS_URL, {
           method: "POST",
           headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-          body: JSON.stringify(payload(question, state)),
+          body: JSON.stringify(body),
         });
         if (res.ok) {
-          const body = await res.json();
-          const score = body?.answers?.a?.noul;
-          if (typeof score !== "number") throw new Error(`no noul answer: ${JSON.stringify(body).slice(0, 200)}`);
-          if (body.model) opts.onModel?.(body.model);
-          return { score, tokens: Number(body?.usage?.input_tokens) || 0 };
+          const out = await res.json();
+          const score = out?.answers?.a?.noul;
+          if (typeof score !== "number") throw new Error(`no noul answer: ${JSON.stringify(out).slice(0, 200)}`);
+          if (out.model) opts.onModel?.(out.model);
+          return { score, tokens: Number(out?.usage?.input_tokens) || 0 };
         }
         err = `HTTP ${res.status}`;
         if (!RETRY_STATUS.has(res.status)) break;
@@ -148,17 +173,8 @@ export async function scoreStage(
       fallbackReason: reason,
     },
   });
-  if (!decider) return bm25Stage("no NanoGPT key in the environment (run through infisical)");
-  const results: (Scored | Error)[] = new Array(texts.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, texts.length) }, async () => {
-      while (next < texts.length) {
-        const i = next++;
-        results[i] = await decider(texts[i]).catch((e: Error) => e);
-      }
-    }),
-  );
+  if (!decider) return bm25Stage(NO_KEY);
+  const results = await inPool(texts, decider);
   const tokens = results.reduce((n, r) => n + (r instanceof Error ? 0 : r.tokens), 0);
   const failed = results.filter((r): r is Error => r instanceof Error);
   if (failed.length) {
@@ -178,23 +194,24 @@ export async function scoreStage(
   };
 }
 
+const NO_KEY = "no NanoGPT key in the environment (run through infisical)";
+
+async function inPool<T>(items: T[], fn: (item: T) => Promise<Scored>): Promise<(Scored | Error)[]> {
+  const results: (Scored | Error)[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i]).catch((e: Error) => e);
+      }
+    }),
+  );
+  return results;
+}
+
 function cost(tokens: number) {
   return Math.round(tokens * USD_PER_M_INPUT * 1e4) / 1e10;
-}
-
-export function normalizeUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    u.hash = "";
-    for (const k of [...u.searchParams.keys()]) if (k.startsWith("utm_")) u.searchParams.delete(k);
-    return `${u.host.replace(/^www\./, "")}${u.pathname.replace(/\/$/, "")}${u.search}`.toLowerCase();
-  } catch {
-    return url.trim().toLowerCase();
-  }
-}
-
-export function triageText(c: Candidate) {
-  return `${c.title ?? ""}\n${c.url}\n${c.snippet ?? ""}`;
 }
 
 // Select: PPLX keeps scores >= threshold (it may return fewer than the cap); BM25 has no
@@ -234,37 +251,6 @@ export function recordStage(runDir: string, meta: Stage) {
   writeFileSync(path, `${JSON.stringify({ pricing: { model: MODEL, usdPerMillionInput: USD_PER_M_INPUT }, stages, totals }, null, 2)}\n`);
 }
 
-export async function triage(runDir: string, round: number, decider: Decider | null, threshold = DEFAULT_THRESHOLD, model = { name: null as string | null }) {
-  if (!ROUND_CAPS[round]) throw new Error("--round must be 1 or 2.");
-  const question = runQuestion(runDir);
-  const raw: Candidate[] = readJson(join(runDir, `search-results.r${round}.json`));
-  const seen = new Set<string>();
-  if (round === 2) for (const u of readJson(join(runDir, "triage.r1.json")).selected) seen.add(normalizeUrl(u));
-  const pool = raw.filter((c) => {
-    const k = normalizeUrl(c.url);
-    if (!c.url || seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-  const already = round === 1 ? 0 : fetchedFiles(runDir).length;
-  const cap = Math.min(ROUND_CAPS[round], TOTAL_FETCHES - already);
-  const { scores, meta } = await scoreStage(`triage.r${round}`, question, pool.map(triageText), decider, model);
-  const { ranked, selected } = select(pool, scores, meta.selector, threshold, cap);
-  const out = {
-    round,
-    question,
-    selector: meta.selector,
-    fallbackReason: meta.fallbackReason,
-    threshold: meta.selector === "bm25" ? null : threshold,
-    cap,
-    selected: selected.map((r) => r.item.url),
-    candidates: ranked.map((r) => ({ url: r.item.url, title: r.item.title ?? "", query: r.item.query ?? "", score: r.score })),
-  };
-  writeFileSync(join(runDir, `triage.r${round}.json`), `${JSON.stringify(out, null, 2)}\n`);
-  recordStage(runDir, meta);
-  return out;
-}
-
 export async function passages(runDir: string, decider: Decider | null, threshold = DEFAULT_THRESHOLD, keep = DEFAULT_KEEP, model = { name: null as string | null }) {
   const question = runQuestion(runDir);
   const items = fetchedFiles(runDir).flatMap((f) =>
@@ -292,25 +278,79 @@ export async function passages(runDir: string, decider: Decider | null, threshol
   return { ...out, kept: selected.length };
 }
 
+// The evidence the check reads: the cited page's best-matching chunks up to the budget, in page order.
+export function evidenceWindow(observation: string, pageText: string, budget = CLAIM_WINDOW_CHARS) {
+  const parts = chunk(pageText);
+  const s = bm25(observation, parts.map((p) => p.text));
+  const picked: number[] = [];
+  let used = 0;
+  for (const i of parts.map((_, i) => i).sort((a, b) => s[b] - s[a])) {
+    if (picked.length && used + parts[i].text.length > budget) break;
+    picked.push(i);
+    used += parts[i].text.length;
+  }
+  picked.sort((a, b) => a - b);
+  return { chunks: picked, text: picked.map((i) => parts[i].text).join("\n…\n") };
+}
+
+// Shadow claim check: does each ledger entry's source say what the entry says? It records and flags; it never
+// changes the ledger or a gate. No key or a failed call leaves that support null, with the reason.
+export async function claims(runDir: string, ask: Asker | null, model = { name: null as string | null }) {
+  const entries: { id: string; sourceId: string; observation: string }[] = readJson(join(runDir, "ledger.json")).entries ?? [];
+  const texts = new Map(fetchedFiles(runDir).map((f) => [f.replace(/\.(txt|md)$/, ""), readFileSync(join(runDir, "fetched", f), "utf8")]));
+  const items = entries.map((e) => ({ e, page: texts.get(e.sourceId) }));
+  const checkable = items.filter((x) => x.page !== undefined);
+  const windows = new Map(checkable.map((x) => [x.e.id, evidenceWindow(x.e.observation, x.page!)]));
+  const results = ask ? await inPool(checkable, (x) => ask(claimPayload(x.e.observation, windows.get(x.e.id)!.text))) : [];
+  const byId = new Map(checkable.map((x, i) => [x.e.id, results[i]]));
+  const rows = items.map(({ e, page }) => {
+    const r = byId.get(e.id);
+    const note = page === undefined ? `no fetched/${e.sourceId}.txt` : !ask ? NO_KEY : r instanceof Error ? r.message : null;
+    return { id: e.id, sourceId: e.sourceId, support: r && !(r instanceof Error) ? r.score : null, chunks: windows.get(e.id)?.chunks ?? [], note };
+  });
+  const tokens = results.reduce((n, r) => n + (r instanceof Error ? 0 : r.tokens), 0);
+  const out = {
+    checker: ask ? "pplx-decider-v1.2" : "none",
+    model: ask ? (model.name ?? MODEL) : null,
+    flagBelow: CLAIM_FLAG,
+    flagged: rows.filter((r) => r.support !== null && r.support < CLAIM_FLAG).map((r) => r.id),
+    unchecked: rows.filter((r) => r.support === null).map((r) => r.id),
+    entries: rows,
+  };
+  writeFileSync(join(runDir, "claims.json"), `${JSON.stringify(out, null, 2)}\n`);
+  recordStage(runDir, {
+    stage: "claims",
+    selector: ask ? "pplx-decider-v1.2" : "none",
+    model: out.model,
+    calls: results.length,
+    inputTokens: tokens,
+    listCostUsd: cost(tokens),
+    fallbackReason: ask ? null : NO_KEY,
+  });
+  return out;
+}
+
 async function main(argv: string[]) {
   const [cmd, runDir, ...rest] = argv;
   const flag = (name: string) => {
     const i = rest.indexOf(name);
     return i >= 0 ? rest[i + 1] : undefined;
   };
-  if (!runDir || (cmd !== "triage" && cmd !== "passages")) {
-    throw new Error("Usage: styrir-select.ts triage <run-dir> --round 1|2 [--threshold 0.5] | passages <run-dir> [--threshold 0.5] [--keep 40]");
+  if (!runDir || (cmd !== "passages" && cmd !== "claims")) {
+    throw new Error("Usage: styrir-select.ts passages <run-dir> [--threshold 0.5] [--keep 40] | claims <run-dir>");
   }
-  const threshold = Number(flag("--threshold") ?? DEFAULT_THRESHOLD);
   const key: string | undefined = process.env.nanogpt;
   const model = { name: null as string | null };
+  if (cmd === "claims") {
+    const out = await claims(runDir, key ? nanoAsker(key, { onModel: (m) => (model.name = m) }) : null, model);
+    const checked = out.entries.length - out.unchecked.length;
+    console.log(`claims: ${out.checker}; ${checked} of ${out.entries.length} entries checked, ${out.flagged.length} below ${CLAIM_FLAG}${out.flagged.length ? ` (${out.flagged.join(", ")})` : ""}`);
+    return;
+  }
+  const threshold = Number(flag("--threshold") ?? DEFAULT_THRESHOLD);
   const decider = key ? nanoDecider(key, runQuestion(runDir), { onModel: (m) => (model.name = m) }) : null;
-  const result =
-    cmd === "triage"
-      ? await triage(runDir, Number(flag("--round")), decider, threshold, model)
-      : await passages(runDir, decider, threshold, Number(flag("--keep") ?? DEFAULT_KEEP), model);
-  const n = "selected" in result ? `${result.selected.length} of ${result.candidates.length} candidates selected` : `${result.kept} of ${result.chunks.length} chunks kept`;
-  console.log(`${cmd}: ${result.selector}${result.fallbackReason ? ` (fallback: ${result.fallbackReason})` : ""}; ${n}`);
+  const result = await passages(runDir, decider, threshold, Number(flag("--keep") ?? DEFAULT_KEEP), model);
+  console.log(`passages: ${result.selector}${result.fallbackReason ? ` (fallback: ${result.fallbackReason})` : ""}; ${result.kept} of ${result.chunks.length} chunks kept`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
