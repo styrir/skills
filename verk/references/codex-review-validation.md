@@ -67,3 +67,9 @@ proves the original pending request remains byte-for-byte available. All 28
 adapter tests and skill validation pass. Codex serializes Stop per session;
 Verk's existing decision handling rejects duplicate answers. Common/Claude
 functions and Verk core remain unchanged.
+
+The crash-safe runtime at source `c6ad747` was refreshed through the same public
+plugin installer. The installed `codex_closeout.py` SHA-256 is
+`b77afec4104bd1d0319b44419f92f280eabadaec15337779a97c519a534bbaf6`,
+byte-identical to the package/source. All 28 tests pass from the installed bundle
+as well. The hook command/manifest and trust settings remain unchanged.
