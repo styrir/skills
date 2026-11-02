@@ -45,7 +45,8 @@ def approved_report(environment, decision, contract, head):
             raise ValueError("Independent review output is not owner-controlled")
     body = path.read_text()
     if (len(body) != row.get("chars")
-            or not re.search(r"(?m)^Reviewed:\s*(?:" + re.escape(head) + "|" + re.escape(head[:8]) + r")\s*$", body)
+            or not re.search(r"(?m)^(?:\d+\.\s*)?(?:#{1,6}\s*)?(?:\*\*)?Reviewed:\s*`?(?:"
+                             + re.escape(head) + "|" + re.escape(head[:8]) + r")`?(?:\*\*)?\s*$", body)
             or not re.search(r"(?m)^VERDICT:\s*approve[^\n]*\s*\Z", body)):
         raise ValueError("Independent approval report does not match its manifest/target")
     return path, hashlib.sha256(path.read_bytes()).hexdigest()

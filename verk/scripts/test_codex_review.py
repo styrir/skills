@@ -100,6 +100,13 @@ class DelegatedGoalTests(unittest.TestCase):
                 return self.decision
             with self.assertRaisesRegex(ValueError, 'current child receipts'):
                 self.invoke(call=call)
+
+    def test_installed_reviewer_markdown_target_heading_is_accepted(self):
+        for heading in [f'1. **Reviewed: {self.head[:8]}**', f'## Reviewed: `{self.head}`']:
+            body = heading + '\nIndependent fixture report.\nVERDICT: approve\n'
+            self.report.write_text(body)
+            self.manifest.write_text(json.dumps(dict(self.row, chars=len(body))) + '\n')
+            self.assertIsNotNone(codex_review.approved_report(self.env, self.decision, 'vk-1', self.head))
         self.report.chmod(0o644)
         target = self.report.with_suffix('.copy')
         self.report.rename(target)
