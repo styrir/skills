@@ -1,6 +1,5 @@
 """Codex's review-completion adapter; shared/Claude closeout stays unchanged."""
 import json
-import os
 from pathlib import Path
 import subprocess
 import time
@@ -54,15 +53,14 @@ def hook(payload, env):
         raise ValueError("Stop session differs from Codex execution identity")
     scoped = dict(env, CODEX_THREAD_ID=session)
     path = shared.state_path(Path(payload["cwd"]), scoped)
-    claim = path.with_suffix(f".{os.getpid()}.running")
     try:
-        path.rename(claim)
+        raw = path.read_text()
     except FileNotFoundError:
         return {}
     request = None
     result = {"status": "needs_action", "reason": "Malformed Codex closeout request"}
     try:
-        request = json.loads(claim.read_text())
+        request = json.loads(raw)
         if not isinstance(request, dict):
             raise ValueError("Malformed Codex closeout request")
         repo = Path(request["repo"]).resolve()
@@ -74,14 +72,12 @@ def hook(payload, env):
         result = observe(repo, scoped, request)
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         result = {"status": "needs_action", "reason": str(error)}
-    finally:
-        # Pending requests survive Stop. A completed receipt ends enforcement;
-        # interrupted/model-continued turns cannot consume the only reminder.
-        if isinstance(request, dict) and not path.exists() and result["status"] != "receipt":
-            shared.save(path, request)
-        claim.unlink(missing_ok=True)
     shared.save(path.with_suffix(".result.json"), result)
     if result["status"] == "receipt":
+        # Leave the marker in place through every fallible call and hard exit.
+        # Codex serializes Stop per session; Verk rejects duplicate answers.
+        if path.exists() and path.read_text() == raw:
+            path.unlink()
         return {"systemMessage": "Verk closeout: " + json.dumps(result)}
     return {"decision": "block", "reason": "Complete the requested Verk review before finishing. "
             + json.dumps(result) + ". Wait for the independent verdict, repair findings and rerun Codex closeout; "

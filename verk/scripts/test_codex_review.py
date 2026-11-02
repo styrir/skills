@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -146,6 +147,27 @@ class DelegatedGoalTests(unittest.TestCase):
         self.assertTrue(all(a['actor'] == 'codex:codex-delegation-test' for a in view['attempts']))
 
 class CodexStopTests(unittest.TestCase):
+    def test_hard_exit_during_stop_never_consumes_pending_review(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = dict(os.environ, CODEX_THREAD_ID='codex-crash-test', VERK_HOME=str(root / 'store'))
+            path = closeout.state_path(root, env)
+            request = {'repo': str(root), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git'}
+            closeout.save(path, request)
+            script = """
+import os,sys
+from pathlib import Path
+from unittest.mock import patch
+import closeout,codex_closeout
+def git(repo,*args):
+    return '' if args[0]=='status' else ('head' if args[-1]=='HEAD' else 'git')
+with patch.object(closeout,'git',side_effect=git), patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
+    codex_closeout.hook({'hook_event_name':'Stop','session_id':'codex-crash-test','cwd':sys.argv[1]},os.environ)
+"""
+            result = subprocess.run([sys.executable, '-c', script, str(root)], cwd=Path(__file__).parent, env=env)
+            self.assertEqual(result.returncode, 17)
+            self.assertEqual(json.loads(path.read_text()), request)
+
     def test_pending_survives_repeated_stops_and_receipt_ends_continuation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -7,7 +7,7 @@ production changes dispatch the Codex entrypoint and parse its explicit delegati
 flag. Shared functions, `verk.py` author identity, Claude behavior and Verk
 core/store/policy/reviewer code are unchanged.
 
-`python3 -m unittest discover -s verk/scripts -p 'test_*.py'`: **27 passed**.
+`python3 -m unittest discover -s verk/scripts -p 'test_*.py'`: **28 passed**.
 Skill Creator `quick_validate.py verk`: passed. Coverage includes missing,
 failed, rejected, altered and stale approval; wrong project/acceptance/harness;
 unfinished or changed child receipts; dirty/moved work; untrusted report paths;
@@ -55,3 +55,15 @@ The common author's `answer` refusal is unchanged. Claude retains its existing
 entrypoint/tests. No file in Verk core or another harness adapter was modified.
 The skill entry contract and desktop/Codex reference own these behavior changes;
 root routing/ownership is unchanged and unrelated dirty work is preserved.
+
+## Crash persistence follow-up
+
+The first independent adapter review approved the implementation (vk-r97 at
+8feee18) and identified an untested crash window around renaming the pending
+marker. Codex now reads that marker in place and removes it only after an actual
+receipt, rather than moving the only reminder while processing. A subprocess
+regression hard-exits with code 17 inside the handler before its Verk call and
+proves the original pending request remains byte-for-byte available. All 28
+adapter tests and skill validation pass. Codex serializes Stop per session;
+Verk's existing decision handling rejects duplicate answers. Common/Claude
+functions and Verk core remain unchanged.
