@@ -36,7 +36,7 @@ def approved_report(environment, decision, contract, head):
     if (row.get("contract") != contract or row.get("revision") != head
             or row.get("exit") != 0 or row.get("proposed") != "approve"
             or row.get("answered") is not False or row.get("at", 0) < decision["created_at"]
-            or row.get("decider", {}).get("verdict", "approve") != "approve"):
+            or (row.get("decider") or {}).get("verdict", "approve") != "approve"):
         return None
     # Only the installed independent reviewer's output, never an author-supplied
     # report argument. Symlinks and shared-writable files are not trusted input.

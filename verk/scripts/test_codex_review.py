@@ -112,7 +112,7 @@ class DelegatedGoalTests(unittest.TestCase):
         for heading in [f'1. **Reviewed: {self.head[:8]}**', f'## Reviewed: `{self.head}`']:
             body = heading + '\nIndependent fixture report.\nVERDICT: approve\n'
             self.report.write_text(body)
-            self.manifest.write_text(json.dumps(dict(self.row, chars=len(body))) + '\n')
+            self.manifest.write_text(json.dumps(dict(self.row, chars=len(body), decider=None)) + '\n')
             self.assertIsNotNone(codex_review.approved_report(self.env, self.decision, 'vk-1', self.head))
 
     def test_real_cli_goal_receipt_without_changing_policy_or_reviewer(self):
