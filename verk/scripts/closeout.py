@@ -17,7 +17,7 @@ def git(repo, *args):
 
 
 def call(repo, env, *args, timeout=30, structured=True):
-    command, cwd, scoped = invocation(["--repo", str(repo), *args], env)
+    command, cwd, scoped = invocation(["--harness", env.get("VERK_CLOSEOUT_HARNESS", "codex"), "--repo", str(repo), *args], env)
     result = subprocess.run(command, cwd=cwd, env=scoped, capture_output=True, text=True, timeout=timeout)
     if result.returncode:
         raise ValueError((result.stderr or result.stdout).strip()[-3000:] or f"Verk exited {result.returncode}")
@@ -30,11 +30,12 @@ def call(repo, env, *args, timeout=30, structured=True):
 
 
 def state_path(repo, env):
-    _, _, scoped = invocation(["--repo", str(repo), "brief", "--json"], env)
+    _, _, scoped = invocation(["--harness", env.get("VERK_CLOSEOUT_HARNESS", "codex"), "--repo", str(repo), "brief", "--json"], env)
     # Scratch stores keep their requests isolated too; this cache is never task truth.
     root = Path(env["VERK_HOME"]) / "codex-closeout" if env.get("VERK_HOME") else Path.home() / ".cache/verk-closeout"
     # ponytail: one pending request per session; add a queue if concurrent hook observations are needed.
-    return root / (scoped["VERK_SESSION"] + ".json")
+    prefix = "claude-code-" if env.get("VERK_CLOSEOUT_HARNESS") == "claude-code" else ""
+    return root / (prefix + scoped["VERK_SESSION"] + ".json")
 
 
 def save(path, data):
@@ -132,10 +133,12 @@ def hook(payload, env):
     session = payload.get("session_id")
     if not isinstance(session, str) or not session:
         raise ValueError("Stop payload has no session identity")
-    existing = env.get("CODEX_THREAD_ID") or env.get("CODEX_SESSION_ID")
+    claude = env.get("VERK_CLOSEOUT_HARNESS") == "claude-code"
+    existing = env.get("CLAUDE_CODE_SESSION_ID") if claude else env.get("CODEX_THREAD_ID") or env.get("CODEX_SESSION_ID")
     if existing and existing != session:
-        raise ValueError("Stop session differs from Codex execution identity")
-    scoped = dict(env, CODEX_THREAD_ID=session)
+        raise ValueError("Stop session differs from harness execution identity")
+    scoped = dict(env)
+    scoped["CLAUDE_CODE_SESSION_ID" if claude else "CODEX_THREAD_ID"] = session
     repo = Path(payload["cwd"]).resolve()
     path = state_path(repo, scoped)
     claim = path.with_suffix(f".{os.getpid()}.running")
@@ -166,9 +169,14 @@ def hook(payload, env):
 
 
 def main():
-    if sys.argv[1:] == ["hook-stop"]:
+    arguments = sys.argv[1:]
+    identity = argparse.ArgumentParser(add_help=False)
+    identity.add_argument("--harness", choices=("codex", "claude-code"), default="codex")
+    selected, arguments = identity.parse_known_args(arguments)
+    env = dict(os.environ, VERK_CLOSEOUT_HARNESS=selected.harness)
+    if arguments == ["hook-stop"]:
         try:
-            result = hook(json.load(sys.stdin), os.environ)
+            result = hook(json.load(sys.stdin), env)
         except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
             result = {"systemMessage": f"Verk closeout needs attention: {error}"}
         print(json.dumps(result))
@@ -181,9 +189,9 @@ def main():
     qualification.add_argument("--qualification", help="Committed diagnosis/checks/installed/operator/limits record")
     qualification.add_argument("--source-only", action="store_true", help="Acceptance requires no installed/live/operator qualification")
     parser.add_argument("--wait", type=int, default=30, choices=range(0, 61), metavar="0..60")
-    args = parser.parse_args()
+    args = parser.parse_args(arguments)
     try:
-        result = closeout(args.repo.resolve(), os.environ, args.id, args.proof, args.wait, args.qualification, args.source_only)
+        result = closeout(args.repo.resolve(), env, args.id, args.proof, args.wait, args.qualification, args.source_only)
         print(json.dumps(result))
         return 0 if result["status"] == "receipt" else 3
     except (ValueError, OSError, subprocess.SubprocessError) as error:

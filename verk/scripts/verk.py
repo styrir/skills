@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run Verk as the current Codex session, preserving normal CLI arguments."""
+"""Run Verk as the current author session, preserving normal CLI arguments."""
 import argparse
 import os
 from pathlib import Path
@@ -12,6 +12,7 @@ AUTHOR_VERBS = {"brief", "view", "add", "set", "need", "drop", "start", "checkpo
 
 def invocation(arguments, environment, bin_dir=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--harness", choices=("codex", "claude-code"), default="codex")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     options = parser.parse_args(arguments)
@@ -23,9 +24,10 @@ def invocation(arguments, environment, bin_dir=None):
         raise ValueError(f"{verb!r} is outside this author-session wrapper; use the operator's own interface if required.")
     if verb == "setup" and any(a == "--apply" or a.startswith("--apply=") for a in args[1:]):
         raise ValueError("Applying setup is the operator's action; this wrapper can show setup plans only.")
-    session = environment.get("CODEX_THREAD_ID") or environment.get("CODEX_SESSION_ID")
+    session = (environment.get("CLAUDE_CODE_SESSION_ID") if options.harness == "claude-code" else
+               environment.get("CODEX_THREAD_ID") or environment.get("CODEX_SESSION_ID"))
     if not session or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", session):
-        raise ValueError("Codex session identity is unavailable; no Verk command was run.")
+        raise ValueError(f"{options.harness} session identity is unavailable; no Verk command was run.")
     repo = options.repo.expanduser().resolve()
     if not repo.is_dir():
         raise ValueError(f"Repository directory does not exist: {repo}")
@@ -33,7 +35,7 @@ def invocation(arguments, environment, bin_dir=None):
     if not binary.is_file() or not os.access(binary, os.X_OK):
         raise ValueError(f"Installed executable is unavailable: {binary}")
     env = dict(environment)
-    env["VERK_ACTOR"] = f"codex:{session}"
+    env["VERK_ACTOR"] = f"{options.harness}:{session}"
     env["VERK_SESSION"] = session
     env.pop("VERK_REVIEWER", None)
     command = [str(binary), *(args[1:] if verb == "check" else args)]

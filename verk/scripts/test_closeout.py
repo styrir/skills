@@ -62,6 +62,23 @@ class CloseoutTests(unittest.TestCase):
         with patch.object(closeout, "call", side_effect=AssertionError("duplicate hook called Verk")):
             self.assertEqual(closeout.hook(payload, self.env), {})
 
+    def test_claude_pending_request_is_separate_and_stop_uses_claude_actor(self):
+        env = dict(self.env, VERK_CLOSEOUT_HARNESS="claude-code", CLAUDE_CODE_SESSION_ID="closeout-test")
+        path = closeout.state_path(self.repo, env)
+        self.assertNotEqual(path, closeout.state_path(self.repo, self.env))
+        closeout.save(path, {"repo": str(self.repo), "contract": "vk-1", "head": self.head,
+                             "common_dir": closeout.git(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir")})
+        payload = {"hook_event_name": "Stop", "session_id": "closeout-test", "cwd": str(self.repo)}
+        def invoke(repo, scoped, *args, **kwargs):
+            command, _, author = closeout.invocation(["--harness", scoped["VERK_CLOSEOUT_HARNESS"], "brief"], scoped)
+            self.assertEqual(author["VERK_ACTOR"], "claude-code:closeout-test")
+            return {}
+        with patch.object(closeout, "call", side_effect=invoke), patch.object(closeout, "observe", return_value={"status": "review_pending"}):
+            self.assertIn("review_pending", closeout.hook(payload, env)["systemMessage"])
+        self.assertFalse(path.exists())
+        with self.assertRaisesRegex(ValueError, "differs"):
+            closeout.hook(dict(payload, session_id="different"), env)
+
     def test_dirty_work_is_never_submitted(self):
         (self.repo / "proof.txt").write_text("uncommitted")
         with patch.object(closeout, "call", side_effect=AssertionError("dirty submission")):

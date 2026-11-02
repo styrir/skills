@@ -36,6 +36,18 @@ class SessionWrapperTests(unittest.TestCase):
         self.assertEqual(env["VERK_SESSION"], "test-session")
         self.assertNotIn("VERK_REVIEWER", env)
 
+    def test_claude_identity_is_explicit_and_author_only(self):
+        environment = {"CLAUDE_CODE_SESSION_ID": "claude-test", "CODEX_THREAD_ID": "codex-test",
+                       "VERK_REVIEWER": "1", "VERK_ACTOR": "operator:test"}
+        _, _, env = invocation(["--harness", "claude-code", "brief"], environment)
+        self.assertEqual(env["VERK_ACTOR"], "claude-code:claude-test")
+        self.assertEqual(env["VERK_SESSION"], "claude-test")
+        self.assertNotIn("VERK_REVIEWER", env)
+        with self.assertRaisesRegex(ValueError, "identity"):
+            invocation(["--harness", "claude-code", "brief"], {"CODEX_THREAD_ID": "wrong-harness"})
+        with self.assertRaises(ValueError):
+            invocation(["--harness", "claude-code", "answer", "vk-d1", "approved"], environment)
+
     def test_check_uses_the_installed_producer_with_the_same_identity(self):
         command, _, env = invocation(["check", "test", "--id", "vk-1"], {"CODEX_SESSION_ID": "fallback-session"})
         self.assertEqual(command, [str(BIN / "verk-check"), "test", "--id", "vk-1"])
