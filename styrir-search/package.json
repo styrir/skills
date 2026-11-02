@@ -7,6 +7,7 @@
     "test:gate": "node --experimental-strip-types --test scripts/styrir-search-gate.test.ts",
     "test:normalize": "node --experimental-strip-types --test scripts/styrir-ledger-normalize.test.ts",
     "test:gptr": "node --experimental-strip-types --test scripts/styrir-gptr-retrieve.test.ts",
+    "test:select": "node --experimental-strip-types --test scripts/styrir-select.test.ts",
     "test:route": "node --experimental-strip-types --test scripts/styrir-route.test.ts",
     "test:handoff": "node --experimental-strip-types --test scripts/styrir-handoff-manifest.test.ts",
     "test:artifact-gate": "node --experimental-strip-types --test scripts/styrir-artifact-gate.test.ts",
@@ -21,7 +22,8 @@
     "handoff": "node --experimental-strip-types scripts/styrir-handoff-manifest.ts",
     "progress": "node --experimental-strip-types scripts/styrir-progress-event.ts",
     "html-report": "node --experimental-strip-types scripts/styrir-html-report.ts",
-    "gptr-retrieve": "infisical run --silent --projectId 402716ac-2805-4864-b3ce-e11b838f78b3 --env prod --path /providers -- node --experimental-strip-types scripts/styrir-gptr-retrieve.ts"
+    "gptr-retrieve": "infisical run --silent --projectId 402716ac-2805-4864-b3ce-e11b838f78b3 --env prod --path /providers -- node --experimental-strip-types scripts/styrir-gptr-retrieve.ts",
+    "select": "infisical run --silent --projectId 402716ac-2805-4864-b3ce-e11b838f78b3 --env prod --path /providers -- node --experimental-strip-types scripts/styrir-select.ts"
   },
   "engines": {
     "node": ">=24"

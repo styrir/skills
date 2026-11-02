@@ -30,6 +30,8 @@
     "scripts/styrir-progress-event.ts",
     "scripts/styrir-progress-event.test.ts",
     "scripts/styrir-search-gate.ts",
+    "scripts/styrir-select.ts",
+    "scripts/styrir-select.test.ts",
     "scripts/styrir-search-gate.test.ts",
     "scripts/styrir-slash-presets.test.ts",
     "scripts/styrir-skill-portfolio.test.ts"

@@ -55,6 +55,19 @@ Default budget:
 
 Add planner facets, a source registry, a ledger that passes the normal Styrir gate, contradiction sweep, and gate result. Do not require report-grade notes or final report unless the route escalates.
 
+#### Plus v2 recipe: two rounds with triage (same 10/10 budget)
+
+Fetches are the binding limit, so spend them on what a decision model picks rather than on the first snippets that look right. Keep everything in one run dir with `request.json` (it holds `question`).
+
+1. **Round 1.** Plan about 6 facets and run those searches in parallel (up to `maxConcurrency`). Save every result as `search-results.r1.json`: an array of `{ "query", "url", "title", "snippet" }`.
+2. **Triage.** `npm run select -- triage <run-dir> --round 1` scores each result's title, URL and snippet and writes `triage.r1.json`. Fetch its `selected` URLs (at most 7; it may pick fewer). Save each fetched page's text as `fetched/<sourceId>.txt`.
+3. **Learnings and gaps.** From the fetched pages, write down what is now known and what is missing. Write up to 3 follow-up searches from those gaps; keep 1 search in reserve. Save their results as `search-results.r2.json`.
+4. **Triage round 2.** `npm run select -- triage <run-dir> --round 2` drops URLs already picked in round 1 and caps at 3 or the remaining fetch budget. Fetch its `selected` URLs into `fetched/`.
+5. **Passages.** `npm run select -- passages <run-dir>` splits fetched pages into 1000-character chunks with 10% overlap, scores each, and writes `passages.md` (best first) and `passages.json`. Read passages in that order when writing the ledger. It is a reading aid: every observation still comes from the fetched page, and every cited source still needs `fetched: true`.
+6. Gates as before.
+
+The selector is PPLX Decider v1.2 with a `noul` question on NanoGPT Decisions, threshold 0.5 (`--threshold` to change), chosen by the replay eval in styrir-os `agent-guidance/research/gptr-plus-decider-20261101/eval-results.md`. Without a `nanogpt` key, or if any call in a stage still fails after retries, that whole stage uses BM25 instead; the output's `selector` and `fallbackReason` say so. BM25 has no calibrated threshold and keeps the top non-zero scores. `selector-manifest.json` records calls, input tokens and list cost (about $0.0014 per 200 chunks) per stage; keep it with the run bundle. Public questions only.
+
 ### `deep_search_local`
 
 Use when the request is report-grade or high-stakes but should stay local and below a full external deep-research spend. This mode produces a handoff manifest and gated-report request for a local deep-search workflow; it is still bounded and should not turn into an open-ended research marathon.

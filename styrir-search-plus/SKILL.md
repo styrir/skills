@@ -17,4 +17,4 @@ Preset wrapper for broader Styrir Search.
 
 Use for contested or multi-facet search with a contradiction sweep.
 
-Follow the base workflow: route with `styrir_plus`, reserve follow-up budget, fetch/read sources before citing them, build or normalize the ledger, run `styrir-search-gate`, and report unresolved contradictions. Do not escalate to `deep_search_local` or `nvidia_aiq_handoff` unless the user explicitly asks to re-route.
+Follow the base workflow: route with `styrir_plus`, run the two-round triage recipe (about 6 facet searches, triage, up to 3 follow-ups from learnings and gaps, 1 search in reserve; see `references/modes-and-recipes.md`), fetch/read sources before citing them, build or normalize the ledger, run `styrir-search-gate`, and report unresolved contradictions. Do not escalate to `deep_search_local` or `nvidia_aiq_handoff` unless the user explicitly asks to re-route.

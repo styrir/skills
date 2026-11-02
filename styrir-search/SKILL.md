@@ -77,7 +77,7 @@ node --experimental-strip-types scripts/styrir-progress-event.ts path/to/run-dir
 ```
 
 4. Plan small search facets: entity-specific, comparison, official-source, contradiction, and gap follow-up.
-5. Treat search snippets as discovery only. Fetch/read a source before using it as evidence.
+5. Treat search snippets as discovery only. Fetch/read a source before using it as evidence. In `styrir_plus`, follow the two-round triage recipe in `references/modes-and-recipes.md`: `npm run select -- triage <run-dir> --round 1|2` picks what to fetch, and `npm run select -- passages <run-dir>` ranks fetched passages for the ledger writer.
 6. Build a JSON evidence ledger with atomic entries, source appendix, and proof gaps. If another agent produced YAML or legacy JSON, normalize it first:
 
 ```bash
@@ -143,6 +143,7 @@ Available scripts:
 - `npm run handoff -- request.json`: create a local deep-search or NVIDIA AI-Q handoff manifest.
 - `npm run progress -- <run-dir> <phase> <message> --mode <mode>`: append a JSONL progress event and print one compact status line.
 - `npm run html-report -- <run-dir> [output.html]`: render a static HTML report from a Styrir ledger bundle.
+- `npm run select -- triage <run-dir> --round 1|2` / `npm run select -- passages <run-dir>`: Styrir Plus v2 selector. PPLX Decider v1.2 (`noul`, one candidate per request, ZDR requested) scores search results before fetch and fetched chunks after; it falls back to BM25 with no `nanogpt` key or any failed call, records the selector in its output, and logs calls, tokens and list cost in `selector-manifest.json`. The npm script injects the key from Infisical; never pass or print it.
 - `npm run gptr-retrieve -- request.json <run-dir> [--cap-usd 1]`: qualification-only GPT Researcher source discovery under Infisical keys. It is not a route; no mode selects it. Read `references/gpt-researcher-retrieval.md` first.
 
 The deterministic gate checks only things it can prove without a model:
