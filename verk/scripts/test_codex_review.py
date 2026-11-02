@@ -80,6 +80,13 @@ class DelegatedGoalTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'owner-controlled'):
             self.invoke()
 
+        self.report.chmod(0o644)
+        target = self.report.with_suffix('.copy')
+        self.report.rename(target)
+        self.report.symlink_to(target)
+        with self.assertRaisesRegex(ValueError, 'owner-controlled'):
+            self.invoke()
+
     def test_project_acceptance_and_bound_children_must_still_match(self):
         with patch.object(codex_review.subprocess, 'run', side_effect=AssertionError('unexpected answer')):
             self.view['contract']['project'] = 'other'
@@ -107,12 +114,6 @@ class DelegatedGoalTests(unittest.TestCase):
             self.report.write_text(body)
             self.manifest.write_text(json.dumps(dict(self.row, chars=len(body))) + '\n')
             self.assertIsNotNone(codex_review.approved_report(self.env, self.decision, 'vk-1', self.head))
-        self.report.chmod(0o644)
-        target = self.report.with_suffix('.copy')
-        self.report.rename(target)
-        self.report.symlink_to(target)
-        with self.assertRaisesRegex(ValueError, 'owner-controlled'):
-            self.invoke()
 
     def test_real_cli_goal_receipt_without_changing_policy_or_reviewer(self):
         repo = self.root / 'repo'
