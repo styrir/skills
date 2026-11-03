@@ -282,7 +282,11 @@ export function providerKeys(env: Record<string, string | undefined>) {
 }
 
 // Allowlisted: other Infisical secrets in the parent environment never reach GPT Researcher.
-export function childEnv(env: Record<string, string | undefined>, keys: { nanogpt: string; tavily: string }): Record<string, string> {
+export function childEnv(
+  env: Record<string, string | undefined>,
+  keys: { nanogpt: string; tavily: string },
+  settings: Record<string, string> = GPTR_SETTINGS,
+): Record<string, string> {
   const out: Record<string, string> = {};
   for (const k of ["PATH", "HOME", "LANG", "TMPDIR", "VIRTUAL_ENV"]) {
     const v = env[k];
@@ -290,7 +294,7 @@ export function childEnv(env: Record<string, string | undefined>, keys: { nanogp
       out[k] = v;
     }
   }
-  return { ...out, ...GPTR_SETTINGS, OPENAI_API_KEY: keys.nanogpt, TAVILY_API_KEY: keys.tavily };
+  return { ...out, ...settings, OPENAI_API_KEY: keys.nanogpt, TAVILY_API_KEY: keys.tavily };
 }
 
 async function nanoBalance(key: string) {
@@ -352,7 +356,7 @@ function runShim(python: string, question: string, rawPath: string, env: Record<
 export function parseArgs(argv: string[], env: Record<string, string | undefined>) {
   const [requestPath, runDir, ...rest] = argv;
   if (!requestPath || !runDir) {
-    throw new Error("Usage: styrir-gptr-retrieve.ts <request.json> <run-dir> [--cap-usd 1] [--python <path>]");
+    throw new Error("Usage: styrir-gptr-retrieve.ts <request.json> <run-dir> [--cap-usd 1] [--python <path>] [--strategic-llm <nanogpt-model>]");
   }
   const flag = (name: string) => {
     const i = rest.indexOf(name);
@@ -362,7 +366,10 @@ export function parseArgs(argv: string[], env: Record<string, string | undefined
   if (!(capUsd > 0)) {
     throw new Error("--cap-usd must be a positive number.");
   }
-  return { requestPath, runDir, capUsd, python: flag("--python") ?? env.GPTR_PYTHON ?? "python3" };
+  // A deviation from the qualified settings, for when NanoGPT stops serving the qualified model; the manifest records it.
+  const strategic = flag("--strategic-llm");
+  const settings = strategic ? { ...GPTR_SETTINGS, STRATEGIC_LLM: `openai:${strategic}` } : GPTR_SETTINGS;
+  return { requestPath, runDir, capUsd, settings, python: flag("--python") ?? env.GPTR_PYTHON ?? "python3" };
 }
 
 async function main(argv: string[]) {
@@ -385,7 +392,7 @@ async function main(argv: string[]) {
   // The cap is enforced by polling the provider balance during the GPT Researcher phase. Reported usage can lag,
   // so a run can overshoot by up to one poll interval of spend; the final reading still flags overCap.
   const rawPath = join(args.runDir, "gptr-sources.raw.json");
-  const child = runShim(args.python, question, rawPath, childEnv(process.env, keys));
+  const child = runShim(args.python, question, rawPath, childEnv(process.env, keys, args.settings));
   let capHit = false;
   let polling = false;
   const poll = setInterval(async () => {
@@ -415,7 +422,8 @@ async function main(argv: string[]) {
     backend: "gpt_researcher_deep",
     question,
     objective: request.objective ?? null,
-    settings: GPTR_SETTINGS,
+    settings: args.settings,
+    settingsDeviation: args.settings === GPTR_SETTINGS ? null : { STRATEGIC_LLM: { qualified: GPTR_SETTINGS.STRATEGIC_LLM, used: args.settings.STRATEGIC_LLM } },
     judgeModel: JUDGE_MODEL,
   };
   const writeManifest = async (status: string, spend: object) => {

@@ -19,7 +19,7 @@ GPTR_PYTHON=/path/to/venv/bin/python npm run gptr-retrieve -- request.json <run-
 
 - **Python:** a venv with `gpt-researcher==0.16.0` (GPT Researcher v3.7.0, the version the bake-off qualified). Check the install with `$GPTR_PYTHON scripts/gptr_deep_sources.py --check`, which makes no network calls.
 - **Keys:** the npm script wraps the run in `infisical run` (`styrir` project, `prod`, `/providers`). The adapter reads only the injected `nanogpt` and `tavily` secrets and ignores ambient `OPENAI_API_KEY` and `TAVILY_API_KEY`. GPT Researcher's child process gets an allowlisted environment, so no other secret reaches it.
-- **Settings:** NanoGPT models (STRATEGIC `openai/gpt-6.1-sol`, SMART `openai/gpt-6.1-terra`, FAST `openai/gpt-6-luna`, embedding `text-embedding-3-small`), Tavily retriever, `keyword` context filter, breadth 4, depth 2, concurrency 4. These are fixed in `GPTR_SETTINGS`.
+- **Settings:** NanoGPT models (STRATEGIC `openai/gpt-6.1-sol`, SMART `openai/gpt-6.1-terra`, FAST `openai/gpt-6-luna`, embedding `text-embedding-3-small`), Tavily retriever, `keyword` context filter, breadth 4, depth 2, concurrency 4. These are fixed in `GPTR_SETTINGS`. `--strategic-llm <nanogpt-model>` replaces only the STRATEGIC model, and the manifest records it under `settingsDeviation`. Use it when NanoGPT stops serving the qualified model: from 2026-11-03, NanoGPT returned `content_policy_violation` for every prompt sent to `openai/gpt-6.1-sol`, including "Say hi."
 
 ## What it does
 

@@ -98,6 +98,11 @@ test("spend is the provider balance delta, split by phase, checked against the c
   assert.equal(parseArgs(["r.json", "out"], {}).capUsd, 1);
   assert.equal(parseArgs(["r.json", "out", "--cap-usd", "2"], { GPTR_PYTHON: "/v/bin/python" }).python, "/v/bin/python");
   assert.throws(() => parseArgs(["r.json", "out", "--cap-usd", "0"], {}), /cap-usd/);
+  assert.equal(parseArgs(["r.json", "out"], {}).settings.STRATEGIC_LLM, "openai:openai/gpt-6.1-sol");
+  const deviated = parseArgs(["r.json", "out", "--strategic-llm", "openai/gpt-6.1-terra"], {}).settings;
+  assert.equal(deviated.STRATEGIC_LLM, "openai:openai/gpt-6.1-terra");
+  assert.equal(deviated.SMART_LLM, "openai:openai/gpt-6.1-terra");
+  assert.equal(childEnv({}, { nanogpt: "n", tavily: "t" }, deviated).STRATEGIC_LLM, "openai:openai/gpt-6.1-terra");
 });
 
 test("keys come only from the Infisical names; other secrets do not reach GPT Researcher", () => {
