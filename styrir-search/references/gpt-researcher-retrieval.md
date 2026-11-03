@@ -19,7 +19,7 @@ GPTR_PYTHON=/path/to/venv/bin/python npm run gptr-retrieve -- request.json <run-
 
 - **Python:** a venv with `gpt-researcher==0.16.0` (GPT Researcher v3.7.0, the version the bake-off qualified). Check the install with `$GPTR_PYTHON scripts/gptr_deep_sources.py --check`, which makes no network calls.
 - **Keys:** the npm script wraps the run in `infisical run` (`styrir` project, `prod`, `/providers`). The adapter reads only the injected `nanogpt` and `tavily` secrets and ignores ambient `OPENAI_API_KEY` and `TAVILY_API_KEY`. GPT Researcher's child process gets an allowlisted environment, so no other secret reaches it.
-- **Settings:** NanoGPT models (STRATEGIC `openai/gpt-6.1-sol`, SMART `openai/gpt-6.1-terra`, FAST `openai/gpt-6-luna`, embedding `text-embedding-3-small`), Tavily retriever, `keyword` context filter, breadth 4, depth 2, concurrency 4. These are fixed in `GPTR_SETTINGS`. `--strategic-llm <nanogpt-model>` replaces only the STRATEGIC model, and the manifest records it under `settingsDeviation`. Use it when NanoGPT stops serving the qualified model: from 2026-11-03, NanoGPT returned `content_policy_violation` for every prompt sent to `openai/gpt-6.1-sol`, including "Say hi."
+- **Settings:** NanoGPT models (STRATEGIC `openai/gpt-6.1-sol`, SMART `openai/gpt-6.1-terra`, FAST `openai/gpt-6-luna`, embedding `text-embedding-3-small`), Tavily retriever, `keyword` context filter, breadth 4, depth 2, concurrency 4. These are fixed in `GPTR_SETTINGS`. `--judge-model <nanogpt-model>` replaces the judge model. `--strategic-llm <nanogpt-model>` replaces only the STRATEGIC model, and the manifest records it under `settingsDeviation`. Use it when NanoGPT stops serving the qualified model: from 2026-11-03, NanoGPT returned `content_policy_violation` for every prompt sent to `openai/gpt-6.1-sol` or `openai/gpt-6-luna`, including "Say hi." `openai/gpt-6.1-terra` was unaffected.
 
 ## What it does
 
@@ -27,7 +27,7 @@ GPTR_PYTHON=/path/to/venv/bin/python npm run gptr-retrieve -- request.json <run-
 2. Runs `scripts/gptr_deep_sources.py`, which calls `conduct_research()` and writes only `{url, title}` per source. It never calls `write_report()` or reads the research context, so no report text exists to leak into observations.
 3. Re-fetches every returned URL itself through Tavily extract and saves the text to `fetched/NNN.txt`. Statuses are `ok`, `empty`, `failed`, `error` and `missing`; anything other than `ok` counts as dead.
 4. Types each source by domain rule (`classifySource`), using the gate's `sourceType` vocabulary.
-5. Asks `openai/gpt-6-luna` on NanoGPT, one page at a time, whether the re-fetched page is on-topic. A failed or unparseable answer is recorded as `unknown` and the source is kept.
+5. Asks `openai/gpt-6-luna` on NanoGPT, one page at a time, whether the re-fetched page is on-topic. A failed or unparseable answer is recorded as `unknown` and the source is kept. If more than half the judged pages come back `unknown`, the run ends with status `judge_failed` and a non-zero exit, and `judgeErrors` counts each error.
 6. Drops dead pages, and drops off-topic pages unless they are primary (`legal`, `official`, `academic`). A primary page judged off-topic is kept but ranked last among primaries.
 7. Ranks primary sources first, then keeps GPT Researcher's order, and writes `candidate-sources.json`.
 
@@ -38,7 +38,7 @@ GPTR_PYTHON=/path/to/venv/bin/python npm run gptr-retrieve -- request.json <run-
 - `source-registry.json` lists every returned URL in the `styrir_plus` registry shape, with its `selection` (`candidate`, `dead` or `off_topic`) and judge `verdict`. Candidates keep their `s<n>` ids and dropped sources get `x<n>`, so a reviewer can audit each decision against the ledger.
 - `retrieval-manifest.json` records status, settings, judge model, counts, spend and effort.
   - `spend.nanogpt` is the before/after balance delta, split into `gptrCostUsd` and `judgeCostUsd`, with `capHit`, `overCap` and `pendingUsageAfter`.
-  - `spend.tavily` holds the per-key `GET /usage` deltas: `searchCredits` (the searches inside GPT Researcher), `extractCredits` (the adapter's re-fetch) and `totalCredits`, plus a pay-as-you-go estimate at $0.008 per credit. Other use of the same key during a run is counted too.
+  - `spend.tavily`: `extractCreditsCharged` is exact; Tavily reports the credits for each extract request (`include_usage`). Search credits, which are spent inside GPT Researcher, come only from the per-key `GET /usage` readings. That endpoint lags, and a 2026-11-03 run read a zero delta right after about 60 searches. So `usageBefore` and `usageAfter` are kept raw: re-read `GET /usage` later and diff it against `usageBefore`. Other use of the same key in the meantime is counted too. At pay-as-you-go rates a credit costs $0.008.
   - `effort` holds per-phase seconds (`gptrSeconds`, `refetchSeconds`, `judgeSeconds`) and `adapterMinutes`. `ledgerWritingMinutes` starts as `null`; whoever writes the ledger fills it in.
   - GPT Researcher's own cost estimate is recorded as `gptrCostEstimateUsd` for comparison only. It undercounted by 1.5–2.7× in the bake-off.
 - `fetched/` holds the re-fetched page text. Write ledger observations from these files, never from GPT Researcher output.

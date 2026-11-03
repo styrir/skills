@@ -14,6 +14,7 @@ import {
   parseVerdict,
   providerKeys,
   rankCandidates,
+  judgeFailed,
   sourceRegistry,
   tavilyCredits,
   type SourceRow,
@@ -131,12 +132,21 @@ test("CLI refuses to run without Infisical keys, before any network call", () =>
   assert.match(result.stderr, /Missing provider keys/);
 });
 
-test("Tavily credits count both GPT Researcher searches and adapter extracts", () => {
-  assert.deepEqual(
-    tavilyCredits({ usage: 100, search: 80, extract: 20 }, { usage: 172, search: 140, extract: 32 }),
-    { measured: true, totalCredits: 72, searchCredits: 60, extractCredits: 12, paygoEstimateUsd: 0.576 },
-  );
-  assert.equal(tavilyCredits(null, { usage: 1, search: 1, extract: 0 }).measured, false);
+test("Tavily credits keep exact extract charges and raw usage readings for a later re-read", () => {
+  const t = tavilyCredits({ usage: 100, search: 80, extract: 20 }, { usage: 172, search: 140, extract: 32 }, 29);
+  assert.equal(t.extractCreditsCharged, 29);
+  assert.deepEqual(t.usageDelta, { total: 72, search: 60, extract: 12 });
+  assert.deepEqual(t.usageBefore, { usage: 100, search: 80, extract: 20 });
+  assert.equal(tavilyCredits(null, null, 3).usageDelta, null);
+});
+
+test("a judge that mostly fails fails the run instead of keeping everything", () => {
+  assert.equal(judgeFailed(141, 141), true);
+  assert.equal(judgeFailed(100, 51), true);
+  assert.equal(judgeFailed(100, 3), false);
+  assert.equal(judgeFailed(0, 0), false);
+  assert.equal(parseArgs(["r.json", "out"], {}).judgeModel, "openai/gpt-6-luna");
+  assert.equal(parseArgs(["r.json", "out", "--judge-model", "openai/gpt-6.1-terra"], {}).judgeModel, "openai/gpt-6.1-terra");
 });
 
 test("source registry records a selection decision for every returned URL", () => {

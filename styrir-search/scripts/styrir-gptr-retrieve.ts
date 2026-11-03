@@ -120,17 +120,17 @@ async function pool<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>)
 
 export const JUDGE_MODEL = "openai/gpt-6-luna";
 
-export function nanoJudge(key: string) {
+export function nanoJudge(key: string, model = JUDGE_MODEL) {
   return async (prompt: string) => {
     const res = await fetch(`${GPTR_SETTINGS.OPENAI_BASE_URL}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: JUDGE_MODEL, temperature: 0, max_tokens: 512, messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify({ model, temperature: 0, max_tokens: 512, messages: [{ role: "user", content: prompt }] }),
     });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
     const body = await res.json();
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} ${body.error?.code ?? ""}`.trim());
+    }
     return String(body.choices?.[0]?.message?.content ?? "");
   };
 }
@@ -224,17 +224,18 @@ export interface TavilyReading {
   extract: number;
 }
 
-export function tavilyCredits(before: TavilyReading | null, after: TavilyReading | null) {
-  if (!before || !after) {
-    return { measured: false, totalCredits: null, searchCredits: null, extractCredits: null, paygoEstimateUsd: null };
-  }
-  const totalCredits = after.usage - before.usage;
+// /usage lags by minutes or more (a 2026-11-03 run read a zero delta after ~60 searches), so the raw readings are
+// kept for a later re-read. The adapter's own extract credits are exact: Tavily reports them per request.
+export function tavilyCredits(before: TavilyReading | null, after: TavilyReading | null, extractCreditsCharged: number) {
+  const usageDelta = before && after
+    ? { total: after.usage - before.usage, search: after.search - before.search, extract: after.extract - before.extract }
+    : null;
   return {
-    measured: true,
-    totalCredits,
-    searchCredits: after.search - before.search,
-    extractCredits: after.extract - before.extract,
-    paygoEstimateUsd: Math.round(totalCredits * TAVILY_PAYGO_USD_PER_CREDIT * 10000) / 10000,
+    extractCreditsCharged,
+    usageBefore: before,
+    usageAfter: after,
+    usageDelta,
+    usageNote: "Search credits come only from the /usage delta, which lags; re-read GET /usage later and diff against usageBefore.",
   };
 }
 
@@ -312,6 +313,7 @@ async function nanoBalance(key: string) {
 
 export async function refetch(urls: string[], key: string, runDir: string) {
   const status = new Map<string, { fetchStatus: FetchStatus; textFile?: string; head: string }>();
+  let credits = 0;
   mkdirSync(join(runDir, "fetched"), { recursive: true });
   for (let i = 0; i < urls.length; i += 20) {
     const batch = urls.slice(i, i + 20);
@@ -319,12 +321,13 @@ export async function refetch(urls: string[], key: string, runDir: string) {
       const res = await fetch("https://api.tavily.com/extract", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ urls: batch, format: "text" }),
+        body: JSON.stringify({ urls: batch, format: "text", include_usage: true }),
       });
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
       const body = await res.json();
+      credits += Number(body.usage?.credits ?? 0);
       for (const r of body.results ?? []) {
         const n = urls.indexOf(r.url);
         const text: string = r.raw_content ?? "";
@@ -344,7 +347,13 @@ export async function refetch(urls: string[], key: string, runDir: string) {
       }
     }
   }
-  return status;
+  return { status, credits };
+}
+
+// The fail-safe keeps sources the judge couldn't answer for, so a judge that fails wholesale would silently keep
+// everything. More than half unjudged fails the run instead.
+export function judgeFailed(judged: number, unknown: number): boolean {
+  return judged > 0 && unknown / judged > 0.5;
 }
 
 function runShim(python: string, question: string, rawPath: string, env: Record<string, string>) {
@@ -356,7 +365,10 @@ function runShim(python: string, question: string, rawPath: string, env: Record<
 export function parseArgs(argv: string[], env: Record<string, string | undefined>) {
   const [requestPath, runDir, ...rest] = argv;
   if (!requestPath || !runDir) {
-    throw new Error("Usage: styrir-gptr-retrieve.ts <request.json> <run-dir> [--cap-usd 1] [--python <path>] [--strategic-llm <nanogpt-model>]");
+    throw new Error(
+      "Usage: styrir-gptr-retrieve.ts <request.json> <run-dir> [--cap-usd 1] [--python <path>] " +
+        "[--strategic-llm <nanogpt-model>] [--judge-model <nanogpt-model>]",
+    );
   }
   const flag = (name: string) => {
     const i = rest.indexOf(name);
@@ -369,7 +381,7 @@ export function parseArgs(argv: string[], env: Record<string, string | undefined
   // A deviation from the qualified settings, for when NanoGPT stops serving the qualified model; the manifest records it.
   const strategic = flag("--strategic-llm");
   const settings = strategic ? { ...GPTR_SETTINGS, STRATEGIC_LLM: `openai:${strategic}` } : GPTR_SETTINGS;
-  return { requestPath, runDir, capUsd, settings, python: flag("--python") ?? env.GPTR_PYTHON ?? "python3" };
+  return { requestPath, runDir, capUsd, settings, judgeModel: flag("--judge-model") ?? JUDGE_MODEL, python: flag("--python") ?? env.GPTR_PYTHON ?? "python3" };
 }
 
 async function main(argv: string[]) {
@@ -424,10 +436,12 @@ async function main(argv: string[]) {
     objective: request.objective ?? null,
     settings: args.settings,
     settingsDeviation: args.settings === GPTR_SETTINGS ? null : { STRATEGIC_LLM: { qualified: GPTR_SETTINGS.STRATEGIC_LLM, used: args.settings.STRATEGIC_LLM } },
-    judgeModel: JUDGE_MODEL,
+    judgeModel: args.judgeModel,
+    judgeModelDeviation: args.judgeModel === JUDGE_MODEL ? null : { qualified: JUDGE_MODEL, used: args.judgeModel },
   };
+  let extractCreditsCharged = 0;
   const writeManifest = async (status: string, spend: object) => {
-    const tavily = tavilyCredits(tavilyBefore, await tavilyUsage(keys.tavily));
+    const tavily = tavilyCredits(tavilyBefore, await tavilyUsage(keys.tavily), extractCreditsCharged);
     const adapterMinutes = Math.round(seconds(started) / 6) / 10;
     writeFileSync(
       join(args.runDir, "retrieval-manifest.json"),
@@ -459,10 +473,21 @@ async function main(argv: string[]) {
   }
   const urls = [...titles.keys()];
   let mark = Date.now();
-  const fetched = await refetch(urls, keys.tavily, args.runDir);
+  const { status: fetched, credits } = await refetch(urls, keys.tavily, args.runDir);
+  extractCreditsCharged = credits;
   phases.refetchSeconds = seconds(mark);
   mark = Date.now();
-  const judge = nanoJudge(keys.nanogpt);
+  const judgeErrors = new Map<string, number>();
+  const nano = nanoJudge(keys.nanogpt, args.judgeModel);
+  const judge = async (prompt: string) => {
+    try {
+      return await nano(prompt);
+    } catch (error) {
+      const key = error instanceof Error ? error.message : String(error);
+      judgeErrors.set(key, (judgeErrors.get(key) ?? 0) + 1);
+      throw error;
+    }
+  };
   const rows: SourceRow[] = await pool(urls, 8, async (url) => {
     const f = fetched.get(url) ?? { fetchStatus: "missing" as FetchStatus, head: "" };
     const title = titles.get(url) ?? "";
@@ -492,11 +517,17 @@ async function main(argv: string[]) {
     candidates: candidates.length,
     primary: candidates.filter((c) => c.primary).length,
   };
-  Object.assign(manifest, { gptResearcher: raw.gpt_researcher, gptrCostEstimateUsd: raw.gptr_cost_estimate_usd, counts });
-  const status = spend.overCap ? "complete_over_cap" : "complete";
+  const judged = rows.filter((r) => r.verdict !== null).length;
+  Object.assign(manifest, {
+    gptResearcher: raw.gpt_researcher,
+    gptrCostEstimateUsd: raw.gptr_cost_estimate_usd,
+    counts,
+    judgeErrors: Object.fromEntries(judgeErrors),
+  });
+  const status = judgeFailed(judged, counts.unjudged) ? "judge_failed" : spend.overCap ? "complete_over_cap" : "complete";
   await writeManifest(status, spend);
   process.stdout.write(`${JSON.stringify({ status, ...counts, costUsd: spend.costUsd })}\n`);
-  if (spend.overCap) {
+  if (status !== "complete") {
     process.exitCode = 1;
   }
 }
