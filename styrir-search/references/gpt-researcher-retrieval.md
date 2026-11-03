@@ -72,6 +72,30 @@ These figures come from cached bake-off pages (re-fetched text), scored against 
 
 The judge catches the gross misses, such as animation-maker sites and wrong-sense pages, and keeps vocabulary-expanded sub-topics. The bake-off's labels were lenient on tangential pages, so the two disagree at the margin. Treat `dropped[]` as a first pass, not a verdict. A plain term-overlap filter was tried first and rejected: it would have dropped most on-topic Q2 pages, because GPT Researcher's sub-queries widen the vocabulary well beyond the question's words.
 
+## Live qualification run (2026-11-03, bake-off Q2, Verk vk-2571)
+
+This was the first full end-to-end run, at commit `8b7d95f`. Two settings deviated from the qualified ones, because NanoGPT now blocks the qualified models: STRATEGIC and judge both used `openai/gpt-6.1-terra`.
+
+| Measure | Result |
+|---|---|
+| Sources returned / dead / judged off-topic | 153 / 2 / 21 |
+| Candidates / primary | 130 / 31 (24%) |
+| Unjudged | 1 (a truncated reply) |
+| NanoGPT spend (balance delta) | $0.29: GPT Researcher $0.17, judge $0.12. Cap $1, not hit |
+| GPT Researcher's own estimate | $0.00 |
+| Tavily extract credits (exact) | 30 |
+| Tavily search credits | About 60, counted from GPT Researcher's 60 logged sub-queries. `/usage` did not move all day, even after the charged extracts |
+| Pay-as-you-go equivalent | About $0.29 + 90 credits × $0.008 = about $1.01 per run |
+| Adapter minutes | 9.7 (GPT Researcher 2.9, re-fetch 0.3, judge 6.5) |
+| Ledger-writing minutes | Not yet measured; no ledger has been written |
+
+The dropped pages were plausibly off-topic, such as Oracle chatbots, an "orb" App Store app and awesome-lists. The top ranks are Apple Metal, SwiftUI and WWDC sessions. The W3C Web Audio spec was still missing; the run found MDN's `AnalyserNode` page instead, so condition 3 still holds. With terra as the judge, the judge became the slowest phase, and it cost more than luna did on cached pages.
+
+Earlier attempts that day failed for provider reasons, at no NanoGPT cost:
+
+1. `gpt-6.1-sol` returned `content_policy_violation` for every prompt.
+2. With terra as STRATEGIC, `gpt-6-luna` as judge failed every call. The fail-safe kept all 141 pages as `unknown`. That gap is why `judge_failed` now exists.
+
 ## Conditions carried from the bake-off
 
 1. It is a source finder, not a curator. Candidates still need a person or agent to read them and write ledger entries.
