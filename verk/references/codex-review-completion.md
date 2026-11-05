@@ -24,6 +24,18 @@ trust; do not edit trust hashes. Handler tests and real host dispatch are separa
 observations. [Official Codex hooks documentation](https://learn.chatgpt.com/docs/hooks#stop)
 describes the native continuation response.
 
+## Missing checkout
+
+If the recorded checkout is gone, Stop does not reconcile, run checks or complete
+anything. It makes one read of `verk view` from a surviving directory: the
+`VERK_CLOSEOUT_READ_DIR` setting, then the host's cwd, then home. That directory
+gains no authority. Only the receipt named by the current `view.proof`, matching
+the request's contract, project, revision and artifact, clears the request; a
+historical entry at the same revision does not. Otherwise the request stays, Stop
+keeps blocking with `needs_action: checkout_missing`, and unchanged diagnostics
+shrink to a one-line count. `closeout.py recover --repo <dir> --id <contract>` is
+the same read in the foreground. User interruption is not acceptance.
+
 ## Explicit operator delegation
 
 When the operator asks Codex to finish reviews automatically, use

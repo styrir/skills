@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -202,6 +203,89 @@ class DelegatedGoalTests(unittest.TestCase):
         self.assertTrue(result['superseded'])
         self.assertEqual(json.loads(path.read_text()), other)
 
+    def missing_checkout(self, repo, env=None):
+        """Delete the checkout and record nothing else: what a cleanup leaves behind."""
+        shutil.rmtree(repo)
+        return {'hook_event_name': 'Stop', 'session_id': self.env['CODEX_THREAD_ID'], 'cwd': str(self.root / 'deleted-cwd')}
+
+    def spying(self):
+        verbs, real = [], closeout.call
+        def spy(*args, **kwargs):
+            verbs.append(args[2])
+            return real(*args, **kwargs)
+        return verbs, patch.object(closeout, 'call', side_effect=spy)
+
+    def test_missing_checkout_without_a_receipt_blocks_with_bounded_reads_only(self):
+        repo, goal, _ = self.approved_goal()
+        path = closeout.state_path(self.env)
+        closeout.save(path, dict(json.loads(path.read_text()), delegate_approved_goals=True))
+        request = json.loads(path.read_text())
+        payload = self.missing_checkout(repo)
+        verbs, spy = self.spying()
+        reasons = []
+        env = dict(self.env, VERK_CLOSEOUT_READ_DIR=str(self.root))
+        with spy, patch.object(codex_closeout, 'complete_goal', side_effect=AssertionError('completed')), \
+             patch.object(codex_closeout, 'complete', side_effect=AssertionError('completion route')):
+            for _ in range(3):
+                result = codex_closeout.hook(payload, env)
+                self.assertEqual(result['decision'], 'block')
+                reasons.append(result['reason'])
+        self.assertEqual(verbs, ['view', 'view', 'view'])  # one read per callback: no reconcile, check or answer
+        self.assertIn('checkout_missing', reasons[0])
+        self.assertIn('no checks or repair were started', reasons[0])
+        self.assertLess(len(reasons[2]), 100)
+        self.assertIn('unchanged (3 callbacks)', reasons[2])
+        self.assertEqual(json.loads(path.read_text()), request)
+        self.assertEqual(closeout.call(self.root, self.env, 'view', goal, '--json')['receipts'], [])
+
+    def test_missing_checkout_with_the_current_receipt_clears_from_any_surviving_directory(self):
+        repo, goal, head = self.approved_goal()
+        path = closeout.state_path(self.env)
+        request = dict(json.loads(path.read_text()), delegate_approved_goals=True)
+        closeout.save(path, request)
+        self.assertEqual(self.operate(repo, 'complete', '--id', goal)[1]['status'], 'receipt')
+        closeout.save(path, request)  # a later Stop still holds it, as after a crash between receipt and cleanup
+        for payload_cwd_survives in (False, True):
+            with self.subTest(payload_cwd_survives=payload_cwd_survives):
+                if not payload_cwd_survives:
+                    payload = self.missing_checkout(repo)
+                else:
+                    payload = dict(payload, cwd=str(self.root))
+                    closeout.save(path, request)
+                verbs, spy = self.spying()
+                with spy:
+                    result = codex_closeout.hook(payload, self.env)
+                self.assertNotIn('decision', result)
+                self.assertIn('checkout_missing', result['systemMessage'])
+                self.assertEqual(verbs, ['view'])
+                self.assertFalse(path.exists())
+
+    def test_a_historical_receipt_at_the_same_revision_does_not_clear_a_missing_checkout(self):
+        repo, goal, head = self.approved_goal()
+        path = closeout.state_path(self.env)
+        request = dict(json.loads(path.read_text()), delegate_approved_goals=True)
+        closeout.save(path, request)
+        self.assertEqual(self.operate(repo, 'complete', '--id', goal)[1]['status'], 'receipt')
+        closeout.call(self.root, self.env, 'set', goal, '--accept', 'Terms moved after the receipt', '--json')
+        view = closeout.call(self.root, self.env, 'view', goal, '--json')
+        self.assertEqual(view['proof']['status'], 'needs_recheck')
+        self.assertEqual(view['receipts'][-1]['revision'], head)  # it still matches, and must not count
+        closeout.save(path, request)
+        result = codex_closeout.hook(self.missing_checkout(repo), self.env)
+        self.assertEqual(result['decision'], 'block')
+        self.assertIn('needs_recheck', result['reason'])
+        self.assertTrue(path.exists())
+
+    def test_foreground_recovery_reads_from_the_chosen_directory_and_needs_a_missing_checkout(self):
+        repo, goal, _ = self.approved_goal()
+        code, message = self.operate(repo, 'recover', '--id', goal)
+        self.assertEqual(code, 2)
+        self.assertIn('checkout is present', message)
+        self.missing_checkout(repo)
+        code, result = self.operate(self.root, 'recover', '--id', goal)
+        self.assertEqual((code, result['operation'], result['needs_action']), (3, 'recover', 'checkout_missing'))
+        self.assertEqual(self.operate(self.root, '--harness', 'claude-code', 'recover', '--id', goal)[0], 2)
+
     def test_a_replacement_before_the_delegated_answer_stops_it(self):
         repo, goal, _ = self.approved_goal()
         path = closeout.state_path(self.env)
@@ -265,17 +349,41 @@ class CodexStopTests(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text()), newer)
             self.assertFalse(path.with_suffix('.result.json').exists())
 
-    def test_request_is_found_after_checkout_and_payload_cwd_are_gone(self):
+    def test_a_valid_receipt_must_be_the_current_proof_for_this_target(self):
+        request = {'contract': 'vk-1', 'project': 'p', 'head': 'H'}
+        current = {'id': 'vk-r2', 'revision': 'H', 'artifact': None}
+        view = {'contract': {'id': 'vk-1', 'project': 'p'}, 'proof': {'status': 'valid', 'receipt': 'vk-r2'}, 'receipts': [current]}
+        found = codex_closeout.current_receipt
+        self.assertEqual(found(view, request)['id'], 'vk-r2')
+        historical = {'id': 'vk-r1', 'revision': 'H', 'artifact': None}
+        for name, changed in {'needs recheck': {'proof': {'status': 'needs_recheck', 'receipt': 'vk-r1'}, 'receipts': [historical]},
+                              'proof names another revision': {'receipts': [historical, dict(current, revision='other')]},
+                              'proof names an absent receipt': {'receipts': [historical]},
+                              'no proof': {'proof': {'status': 'none'}, 'receipts': [historical]},
+                              'other contract': {'contract': {'id': 'vk-9', 'project': 'p'}},
+                              'other project': {'contract': {'id': 'vk-1', 'project': 'q'}}}.items():
+            with self.subTest(name):
+                self.assertIsNone(found(dict(view, **changed), request))
+        artifact = {'kind': 'path', 'path': 'a', 'object': 'o', 'revision': 'H'}
+        by_artifact = dict(view, receipts=[dict(current, revision=None, artifact=artifact)])
+        self.assertEqual(found(by_artifact, dict(request, artifact=artifact))['id'], 'vk-r2')
+        self.assertIsNone(found(by_artifact, dict(request, artifact=dict(artifact, object='other'))))
+
+    def test_unreadable_verk_stays_blocked_and_interruption_is_not_acceptance(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            env = dict(os.environ, CODEX_THREAD_ID='codex-gone-test', VERK_HOME=str(root / 'store'))
+            env = dict(os.environ, CODEX_THREAD_ID='codex-int-test', VERK_HOME=str(root / 'store'))
             path = closeout.state_path(env)
-            request = {'request_id': 'one', 'repo': str(root / 'deleted'), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git'}
+            request = {'request_id': 'one', 'repo': str(root / 'deleted'), 'contract': 'vk-1', 'head': 'H', 'common_dir': 'g'}
             closeout.save(path, request)
-            payload = {'hook_event_name': 'Stop', 'session_id': 'codex-gone-test', 'cwd': str(root / 'also-deleted')}
-            with patch.object(closeout, 'call', side_effect=AssertionError('no Verk write without a checkout')):
+            payload = {'hook_event_name': 'Stop', 'session_id': 'codex-int-test', 'cwd': str(root)}
+            with patch.object(closeout, 'call', side_effect=ValueError('store busy')):
                 result = codex_closeout.hook(payload, env)
             self.assertEqual(result['decision'], 'block')
+            self.assertIn('unreadable: store busy', result['reason'])
+            with patch.object(closeout, 'call', side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    codex_closeout.hook(payload, env)
             self.assertEqual(json.loads(path.read_text()), request)
 
     def test_hard_exit_during_stop_never_consumes_pending_review(self):

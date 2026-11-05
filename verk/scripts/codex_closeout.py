@@ -34,6 +34,83 @@ def ready(repo, request):
         raise ValueError("Ready work changed; re-qualify and request closeout at current HEAD")
 
 
+def checkout_present(repo):
+    if not repo.is_dir():
+        return False
+    try:
+        shared.git(repo, "rev-parse", "--git-dir")
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def current_receipt(view, request):
+    """Only the receipt Verk names as current proof, for this request's own target. A matching historical entry is not proof."""
+    proof = view.get("proof") or {}
+    described = view.get("contract") or {}
+    if (proof.get("status") != "valid" or described.get("id") != request["contract"]
+            or (request.get("project") and described.get("project") != request["project"])):
+        return None
+    receipt = next((r for r in view.get("receipts", []) if r.get("id") == proof.get("receipt")), None)
+    if not receipt:
+        return None
+    artifact = receipt.get("artifact") or {}
+    if request["head"] not in (receipt.get("revision"), artifact.get("revision")):
+        return None
+    wanted = request.get("artifact") or {}
+    if any(artifact.get(key) != value for key, value in wanted.items()):
+        return None
+    return receipt
+
+
+def recover(read_dir, env, request, path):
+    """The missing-checkout branch: one Verk read and no writes to Verk. The directory only hosts the read; it runs nothing and answers nothing."""
+    contract = request["contract"]
+    try:
+        view = shared.call(read_dir, env, "view", contract, "--json", timeout=5)
+        receipt = current_receipt(view, request)
+        proof = (view.get("proof") or {}).get("status")
+    except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
+        receipt, proof = None, f"unreadable: {str(error)[:200]}"
+    if receipt:
+        return {"status": "receipt", "contract": contract, "receipt": receipt["id"], "revision": request["head"], "recovered": "checkout_missing"}
+    result = {"status": "needs_action", "needs_action": "checkout_missing", "contract": contract, "revision": request["head"], "proof": proof,
+              "reason": "The recorded checkout is gone and no current receipt covers this request; no checks or repair were started",
+              "request_id": request.get("request_id")}
+    # Unchanged diagnostics are counted, not repeated.
+    try:
+        with shared.request_lock(path):
+            previous = json.loads(path.with_suffix(".result.json").read_text())
+    except (OSError, ValueError):
+        previous = {}
+    unchanged = isinstance(previous, dict) and {k: v for k, v in previous.items() if k != "repeat"} == result
+    return dict(result, repeat=shared.number(previous.get("repeat")) + 1 if unchanged else 1)
+
+
+def read_directory(env, payload_cwd=None):
+    """The surviving directory that hosts recovery's read: explicit choice first, then the host's cwd, then home."""
+    for candidate in (env.get("VERK_CLOSEOUT_READ_DIR"), payload_cwd, str(Path.home())):
+        if candidate and Path(candidate).is_dir():
+            return Path(candidate).resolve()
+    raise ValueError("No surviving directory to read Verk from")
+
+
+def recover_pending(read_dir, env, contract):
+    """The explicit foreground route to recover(), hosted by the directory the caller chose."""
+    path = shared.state_path(env)
+    with shared.request_lock(path):
+        request = shared.read_request(path)
+    if request is None:
+        raise ValueError("No pending closeout request in this session")
+    if checkout_present(Path(request["repo"]).resolve()):
+        raise ValueError("The recorded checkout is present; use closeout or reconcile there")
+    if shared.call(read_dir, env, "view", contract, "--json", timeout=5)["contract"]["id"] != request["contract"]:
+        raise ValueError(f"The pending closeout request is not for {contract}")
+    result = recover(read_dir, env, request, path)
+    shared.settle(path, request, result, consume=result["status"] == "receipt")
+    return result
+
+
 def complete_pending(repo, env, contract, wait=0):
     """The explicit foreground route to complete(), for the pending request of this session and contract."""
     path = shared.state_path(env)
@@ -87,9 +164,12 @@ def hook(payload, env):
         if request is None:
             return {}
         repo = Path(request["repo"]).resolve()
-        ready(repo, request)
-        shared.call(repo, scoped, "reconcile", "--id", request["contract"], "--json", timeout=5)
-        result = complete(repo, scoped, request)
+        if checkout_present(repo):
+            ready(repo, request)
+            shared.call(repo, scoped, "reconcile", "--id", request["contract"], "--json", timeout=5)
+            result = complete(repo, scoped, request)
+        else:
+            result = recover(read_directory(scoped, payload.get("cwd")), scoped, request, path)
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         result = {"status": "needs_action", "reason": str(error)}
     if request is None:  # Unreadable: keep it and block, as nothing could be checked.
@@ -104,6 +184,11 @@ def hook(payload, env):
             result = {"status": "needs_action", "reason": "A newer closeout request replaced the one this Stop checked; it stays pending"}
         elif result["status"] == "receipt":
             return {"systemMessage": "Verk closeout: " + json.dumps(result)}
+    if result.get("needs_action") == "checkout_missing":
+        if result.get("repeat", 1) > 1:
+            return {"decision": "block", "reason": f"Verk closeout: still checkout_missing for {result['contract']}, unchanged ({result['repeat']} callbacks)."}
+        return {"decision": "block", "reason": "Verk closeout is blocked: " + json.dumps(result)
+                + ". Restore the checkout or request closeout again from a current one. Do not start checks or repair from this callback, and do not ask for terminal chores."}
     return {"decision": "block", "reason": "Complete the requested Verk review before finishing. "
             + json.dumps(result) + ". Wait for the independent verdict, repair findings and rerun Codex closeout; "
             "use the recorded operator delegation for an independently approved goal. Do not ask for terminal chores."}

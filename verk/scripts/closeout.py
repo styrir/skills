@@ -457,7 +457,7 @@ def hook(payload, env):
     return {"systemMessage": "Verk closeout: " + json.dumps(result)}
 
 
-OPERATIONS = ("observe", "reconcile", "complete")
+OPERATIONS = ("observe", "reconcile", "complete", "recover")
 
 
 def operation(name, arguments, harness, env):
@@ -465,11 +465,12 @@ def operation(name, arguments, harness, env):
         "observe": "Pure read of current state: writes nothing and starts nothing.",
         "reconcile": "Explicitly ask Verk to act on ready evidence, then report.",
         "complete": "Codex only: finish an independently approved goal under the pending request's recorded delegation.",
+        "recover": "Codex only: with the recorded checkout gone, read Verk from --repo, any surviving directory, for the receipt of the pending request. Starts nothing.",
     }[name])
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--id", required=True)
     parser.add_argument("--wait", type=int, default=0, choices=range(0, 61), metavar="0..60")
-    if name != "complete":
+    if name not in ("complete", "recover"):
         parser.add_argument("--revision", help="Revision the receipt must cover; defaults to HEAD")
     args = parser.parse_args(arguments)
     repo = args.repo.resolve()
@@ -479,6 +480,11 @@ def operation(name, arguments, harness, env):
                 raise ValueError("Delegated goal completion is Codex-only")
             from codex_closeout import complete_pending
             result = complete_pending(repo, env, args.id, args.wait)
+        elif name == "recover":
+            if harness != "codex":
+                raise ValueError("Missing-checkout recovery is Codex-only")
+            from codex_closeout import recover_pending
+            result = recover_pending(repo, env, args.id)
         else:
             head = args.revision or git(repo, "rev-parse", "HEAD")
             result = (observe if name == "observe" else reconcile)(repo, env, args.id, head, args.wait)
