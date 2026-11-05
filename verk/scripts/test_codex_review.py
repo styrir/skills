@@ -167,7 +167,7 @@ class DelegatedGoalTests(unittest.TestCase):
 
     def test_observing_a_delegated_request_twice_changes_and_completes_nothing(self):
         repo, goal, head = self.approved_goal()
-        path = closeout.state_path(repo, self.env)
+        path = closeout.state_path(self.env)
         closeout.save(path, dict(json.loads(path.read_text()), delegate_approved_goals=True))
         before = self.snapshot(repo)
         for _ in range(2):
@@ -192,7 +192,7 @@ class DelegatedGoalTests(unittest.TestCase):
 
     def test_complete_needs_the_recorded_delegation_and_reconcile_is_labelled(self):
         repo, goal, _ = self.approved_goal()
-        path = closeout.state_path(repo, self.env)
+        path = closeout.state_path(self.env)
         before = path.read_text()
         code, result = self.operate(repo, 'complete', '--id', goal)
         self.assertEqual((code, result['status'], result['operation']), (3, 'review_pending', 'complete'))
@@ -216,11 +216,47 @@ class DelegatedGoalTests(unittest.TestCase):
         self.assertTrue(all(a['actor'] == 'codex:codex-delegation-test' for a in view['attempts']))
 
 class CodexStopTests(unittest.TestCase):
+    def test_foreground_replacement_during_stop_keeps_the_new_request(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = dict(os.environ, CODEX_THREAD_ID='codex-race-test', VERK_HOME=str(root / 'store'))
+            path = closeout.state_path(env)
+            first = {'request_id': 'one', 'repo': str(root), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git'}
+            newer = dict(first, request_id='two', head='newer')
+            closeout.save(path, first)
+            def replaced(*args, **kwargs):
+                with closeout.request_lock(path):
+                    closeout.save(path, newer)
+                return {'status': 'receipt', 'receipt': 'vk-r1'}
+            def git(repo, *args):
+                return '' if args[0] == 'status' else ('head' if args[-1] == 'HEAD' else 'git')
+            payload = {'hook_event_name': 'Stop', 'session_id': 'codex-race-test', 'cwd': str(root)}
+            with patch.object(closeout, 'git', side_effect=git), patch.object(closeout, 'call', return_value={}), \
+                 patch.object(codex_closeout, 'complete', side_effect=replaced):
+                result = codex_closeout.hook(payload, env)
+            self.assertEqual(result['decision'], 'block')
+            self.assertIn('newer closeout request', result['reason'])
+            self.assertEqual(json.loads(path.read_text()), newer)
+            self.assertFalse(path.with_suffix('.result.json').exists())
+
+    def test_request_is_found_after_checkout_and_payload_cwd_are_gone(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = dict(os.environ, CODEX_THREAD_ID='codex-gone-test', VERK_HOME=str(root / 'store'))
+            path = closeout.state_path(env)
+            request = {'request_id': 'one', 'repo': str(root / 'deleted'), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git'}
+            closeout.save(path, request)
+            payload = {'hook_event_name': 'Stop', 'session_id': 'codex-gone-test', 'cwd': str(root / 'also-deleted')}
+            with patch.object(closeout, 'call', side_effect=AssertionError('no Verk write without a checkout')):
+                result = codex_closeout.hook(payload, env)
+            self.assertEqual(result['decision'], 'block')
+            self.assertEqual(json.loads(path.read_text()), request)
+
     def test_hard_exit_during_stop_never_consumes_pending_review(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             env = dict(os.environ, CODEX_THREAD_ID='codex-crash-test', VERK_HOME=str(root / 'store'))
-            path = closeout.state_path(root, env)
+            path = closeout.state_path(env)
             request = {'repo': str(root), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git'}
             closeout.save(path, request)
             script = """
@@ -241,7 +277,7 @@ with patch.object(closeout,'git',side_effect=git), patch.object(closeout,'call',
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             env = dict(os.environ, CODEX_THREAD_ID='codex-stop-test', VERK_HOME=str(root / 'store'))
-            path = closeout.state_path(root, env)
+            path = closeout.state_path(env)
             request = {'repo': str(root), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git',
                        'delegate_approved_goals': True}
             closeout.save(path, request)
@@ -265,7 +301,7 @@ with patch.object(closeout,'git',side_effect=git), patch.object(closeout,'call',
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             env = dict(os.environ, CODEX_THREAD_ID='codex-stale-test', VERK_HOME=str(root / 'store'))
-            path = closeout.state_path(root, env)
+            path = closeout.state_path(env)
             closeout.save(path, {'repo': str(root), 'contract': 'vk-1', 'head': 'old', 'common_dir': 'git'})
             payload = {'hook_event_name': 'Stop', 'session_id': 'codex-stale-test', 'cwd': str(root)}
             with patch.object(closeout, 'git', return_value='changed'), \

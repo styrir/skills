@@ -10,6 +10,14 @@ import sys
 AUTHOR_VERBS = {"brief", "view", "add", "set", "need", "drop", "start", "checkpoint", "ask", "reconcile", "setup", "help"}
 
 
+def session_identity(harness, environment):
+    session = (environment.get("CLAUDE_CODE_SESSION_ID") if harness == "claude-code" else
+               environment.get("CODEX_THREAD_ID") or environment.get("CODEX_SESSION_ID"))
+    if not session or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", session):
+        raise ValueError(f"{harness} session identity is unavailable; no Verk command was run.")
+    return session
+
+
 def invocation(arguments, environment, bin_dir=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--harness", choices=("codex", "claude-code"), default="codex")
@@ -24,10 +32,7 @@ def invocation(arguments, environment, bin_dir=None):
         raise ValueError(f"{verb!r} is outside this author-session wrapper; use the operator's own interface if required.")
     if verb == "setup" and any(a == "--apply" or a.startswith("--apply=") for a in args[1:]):
         raise ValueError("Applying setup is the operator's action; this wrapper can show setup plans only.")
-    session = (environment.get("CLAUDE_CODE_SESSION_ID") if options.harness == "claude-code" else
-               environment.get("CODEX_THREAD_ID") or environment.get("CODEX_SESSION_ID"))
-    if not session or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", session):
-        raise ValueError(f"{options.harness} session identity is unavailable; no Verk command was run.")
+    session = session_identity(options.harness, environment)
     repo = options.repo.expanduser().resolve()
     if not repo.is_dir():
         raise ValueError(f"Repository directory does not exist: {repo}")

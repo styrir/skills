@@ -1,9 +1,11 @@
+import fcntl
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import patch
@@ -55,6 +57,11 @@ class CloseoutTests(unittest.TestCase):
         result = closeout.closeout(self.repo, resumed, contract, "proof.txt", 0, source_only=True)
         self.assertEqual(result["status"], "review_pending")
         self.assertNotEqual(result["reviews"], [old_review])
+        record = json.loads(closeout.state_path(resumed).read_text())
+        self.assertEqual({k: record[k] for k in ("harness", "session", "store", "contract", "project", "head")},
+                         {"harness": "codex", "session": "resumed-session", "store": self.env["VERK_HOME"], "contract": contract, "project": "synthetic", "head": self.head})
+        self.assertRegex(record["request_id"], r"^[0-9a-f]{32}$")
+        self.assertEqual(sorted(record["bindings"]), ["acceptanceVersion", "policyVersion", "subjectsVersion"])
         decision = closeout.call(self.repo, resumed, "view", result["reviews"][0], "--json")
         self.assertEqual(decision["target"]["revision"], self.head)
         self.env = resumed
@@ -100,8 +107,8 @@ class CloseoutTests(unittest.TestCase):
 
     def test_claude_pending_request_is_separate_and_stop_uses_claude_actor(self):
         env = dict(self.env, VERK_CLOSEOUT_HARNESS="claude-code", CLAUDE_CODE_SESSION_ID="closeout-test")
-        path = closeout.state_path(self.repo, env)
-        self.assertNotEqual(path, closeout.state_path(self.repo, self.env))
+        path = closeout.state_path(env)
+        self.assertNotEqual(path, closeout.state_path(self.env))
         closeout.save(path, {"repo": str(self.repo), "contract": "vk-1", "head": self.head,
                              "common_dir": closeout.git(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir")})
         payload = {"hook_event_name": "Stop", "session_id": "closeout-test", "cwd": str(self.repo)}
@@ -114,6 +121,103 @@ class CloseoutTests(unittest.TestCase):
         self.assertFalse(path.exists())
         with self.assertRaisesRegex(ValueError, "differs"):
             closeout.hook(dict(payload, session_id="different"), env)
+
+    def pending(self, **fields):
+        path = closeout.state_path(self.env)
+        request = dict({"request_id": "one", "repo": str(self.repo), "contract": "vk-1", "head": self.head,
+                        "common_dir": closeout.git(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}, **fields)
+        closeout.save(path, request)
+        return path, request, {"hook_event_name": "Stop", "session_id": "closeout-test", "cwd": str(self.repo)}
+
+    def test_lock_excludes_a_second_writer_until_released(self):
+        path, _, _ = self.pending()
+        order = []
+        def writer():
+            with closeout.request_lock(path):
+                order.append("second")
+        with closeout.request_lock(path):
+            thread = threading.Thread(target=writer)
+            thread.start()
+            thread.join(0.3)
+            self.assertTrue(thread.is_alive())
+            order.append("first")
+        thread.join(5)
+        self.assertEqual(order, ["first", "second"])
+
+    def test_stop_holds_no_lock_during_child_calls(self):
+        path, _, payload = self.pending()
+        def free(*args, **kwargs):
+            descriptor = os.open(path.with_suffix(".lock"), os.O_RDWR)
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)  # raises if the hook still held it
+            finally:
+                os.close(descriptor)
+            return {"state": "available", "reviews": [{"decision": "vk-d1", "lifecycle": "open", "verdict": None}]}
+        with patch.object(closeout, "call", side_effect=free) as invoke:
+            self.assertIn("review_pending", closeout.hook(payload, self.env)["systemMessage"])
+        self.assertTrue(invoke.called)
+
+    def test_foreground_replacement_during_stop_keeps_the_new_request(self):
+        path, _, payload = self.pending()
+        newer = {"request_id": "two", "repo": str(self.repo), "contract": "vk-2", "head": self.head, "common_dir": "x"}
+        def replaced(*args, **kwargs):
+            with closeout.request_lock(path):
+                closeout.save(path, newer)
+            return {"state": "satisfied", "receipts": [{"id": "vk-r1", "revision": self.head}]}
+        with patch.object(closeout, "call", side_effect=replaced):
+            self.assertIn("newer request", closeout.hook(payload, self.env)["systemMessage"])
+        self.assertEqual(json.loads(path.read_text()), newer)
+        self.assertFalse(path.with_suffix(".result.json").exists())
+
+    def test_duplicate_stop_during_a_stop_replays_nothing(self):
+        _, _, payload = self.pending()
+        inner = []
+        def overlapping(*args, **kwargs):
+            if not inner:
+                inner.append(closeout.hook(payload, self.env))
+            return {"state": "available", "reviews": [{"decision": "vk-d1", "lifecycle": "open", "verdict": None}]}
+        with patch.object(closeout, "call", side_effect=overlapping) as invoke:
+            self.assertIn("review_pending", closeout.hook(payload, self.env)["systemMessage"])
+        self.assertEqual(inner, [{}])
+        self.assertEqual(invoke.call_count, 2)  # reconcile and view, once each
+
+    def test_failed_stop_keeps_the_request_and_retries_on_the_next_stop(self):
+        path, request, payload = self.pending()
+        with patch.object(closeout, "call", side_effect=subprocess.TimeoutExpired("verk", 5)):
+            result = json.loads(closeout.hook(payload, self.env)["systemMessage"].removeprefix("Verk closeout: "))
+        self.assertEqual((result["status"], result["retained"]), ("needs_action", True))
+        self.assertEqual(json.loads(path.read_text()), request)
+        receipt = {"state": "satisfied", "receipts": [{"id": "vk-r1", "revision": self.head}]}
+        with patch.object(closeout, "call", return_value=receipt):
+            self.assertIn("receipt", closeout.hook(payload, self.env)["systemMessage"])
+        self.assertFalse(path.exists())
+
+    def test_hard_exit_keeps_the_request_and_its_claim_expires(self):
+        path, request, payload = self.pending()
+        script = """
+import json,os,sys
+from unittest.mock import patch
+import closeout
+with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
+    closeout.hook(json.loads(sys.argv[1]),os.environ)
+"""
+        env = dict(self.env, VERK_CLOSEOUT_HARNESS="codex")
+        done = subprocess.run([sys.executable, "-c", script, json.dumps(payload)], cwd=Path(__file__).parent, env=env)
+        self.assertEqual(done.returncode, 17)
+        kept = json.loads(path.read_text())
+        self.assertEqual(kept["request_id"], request["request_id"])
+        with patch.object(closeout, "call", side_effect=AssertionError("replayed inside the claim")):
+            self.assertEqual(closeout.hook(payload, self.env), {})
+        closeout.save(path, dict(kept, stop_claim=kept["stop_claim"] - closeout.CLAIM_SECONDS - 1))
+        receipt = {"state": "satisfied", "receipts": [{"id": "vk-r1", "revision": self.head}]}
+        with patch.object(closeout, "call", return_value=receipt):
+            self.assertIn("receipt", closeout.hook(payload, self.env)["systemMessage"])
+
+    def test_missing_checkout_keeps_the_request_without_verk_calls(self):
+        path, request, payload = self.pending(repo=str(Path(self.tmp.name) / "deleted"))
+        with patch.object(closeout, "call", side_effect=AssertionError("no checkout, no Verk write")):
+            self.assertIn("retained", closeout.hook(dict(payload, cwd=str(Path(self.tmp.name) / "gone")), self.env)["systemMessage"])
+        self.assertEqual(json.loads(path.read_text()), request)
 
     def test_dirty_work_is_never_submitted(self):
         (self.repo / "proof.txt").write_text("uncommitted")
@@ -129,7 +233,7 @@ class CloseoutTests(unittest.TestCase):
                 closeout.hook(payload, self.env)
 
     def test_changed_ready_work_is_consumed_without_mutation(self):
-        path = closeout.state_path(self.repo, self.env)
+        path = closeout.state_path(self.env)
         closeout.save(path, {"repo": str(self.repo), "contract": "vk-1", "head": self.head,
                              "common_dir": closeout.git(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir")})
         (self.repo / "proof.txt").write_text("new work")
@@ -285,7 +389,7 @@ class CloseoutTests(unittest.TestCase):
         self.assertLess(args.index(checkpoint), next(i for i, a in enumerate(args) if a[0] == "check"))
 
     def test_observing_another_receipt_preserves_pending_work(self):
-        path = closeout.state_path(self.repo, self.env)
+        path = closeout.state_path(self.env)
         pending = {"repo": str(self.repo), "contract": "vk-pending"}
         closeout.save(path, pending)
         view = {"contract": {"id": "vk-done"}, "state": "satisfied"}

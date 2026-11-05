@@ -35,21 +35,18 @@ def ready(repo, request):
 
 def complete_pending(repo, env, contract, wait=0):
     """The explicit foreground route to complete(), for the pending request of this session and contract."""
-    path = shared.state_path(repo, env)
-    try:
-        raw = path.read_text()
-    except FileNotFoundError:
-        raise ValueError("No pending closeout request in this session") from None
-    request = json.loads(raw)
+    path = shared.state_path(env)
+    with shared.request_lock(path):
+        request = shared.read_request(path)
+    if request is None:
+        raise ValueError("No pending closeout request in this session")
     canonical = shared.call(repo, env, "view", contract, "--json")["contract"]["id"]
-    if not isinstance(request, dict) or request.get("contract") != canonical:
+    if request.get("contract") != canonical:
         raise ValueError(f"The pending closeout request is not for {canonical}")
     target = Path(request["repo"]).resolve()
     ready(target, request)
     result = complete(target, env, request, wait)
-    shared.save(path.with_suffix(".result.json"), result)
-    if result["status"] == "receipt" and path.exists() and path.read_text() == raw:
-        path.unlink()
+    shared.settle(path, request, result, consume=result["status"] == "receipt")
     return result
 
 
@@ -59,14 +56,15 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
     result = shared.closeout(repo, env, contract, proof, 0, qualification, source_only)
     if result["status"] != "review_pending":
         return result
-    path = shared.state_path(repo, env)
-    request = json.loads(path.read_text())
-    request["delegate_approved_goals"] = delegate_approved_goals
-    shared.save(path, request)
+    path = shared.state_path(env)
+    with shared.request_lock(path):
+        request = shared.read_request(path)
+        if request is None:
+            return result  # A Stop already settled it.
+        request = dict(request, delegate_approved_goals=delegate_approved_goals)
+        shared.save(path, request)
     result = complete(repo, env, request, wait)
-    shared.save(path.with_suffix(".result.json"), result)
-    if result["status"] == "receipt" and json.loads(path.read_text()) == request:
-        path.unlink()
+    shared.settle(path, request, result, consume=result["status"] == "receipt")
     return result
 
 
@@ -80,29 +78,27 @@ def hook(payload, env):
     if not session or existing and existing != session:
         raise ValueError("Stop session differs from Codex execution identity")
     scoped = dict(env, CODEX_THREAD_ID=session)
-    path = shared.state_path(Path(payload["cwd"]), scoped)
-    try:
-        raw = path.read_text()
-    except FileNotFoundError:
-        return {}
+    path = shared.state_path(scoped)
     request = None
     result = {"status": "needs_action", "reason": "Malformed Codex closeout request"}
     try:
-        request = json.loads(raw)
-        if not isinstance(request, dict):
-            raise ValueError("Malformed Codex closeout request")
+        with shared.request_lock(path):
+            request = shared.read_request(path)
+        if request is None:
+            return {}
         repo = Path(request["repo"]).resolve()
         ready(repo, request)
         shared.call(repo, scoped, "reconcile", "--id", request["contract"], "--json", timeout=5)
         result = complete(repo, scoped, request)
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         result = {"status": "needs_action", "reason": str(error)}
-    shared.save(path.with_suffix(".result.json"), result)
-    if result["status"] == "receipt":
-        # Leave the marker in place through every fallible call and hard exit.
-        # Codex serializes Stop per session; Verk rejects duplicate answers.
-        if path.exists() and path.read_text() == raw:
-            path.unlink()
+    if request is None:  # Unreadable: keep it and block, as nothing could be checked.
+        with shared.request_lock(path):
+            shared.save(path.with_suffix(".result.json"), result)
+    # Leave the marker in place through every fallible call and hard exit; only the same request is settled.
+    elif not shared.settle(path, request, result, consume=result["status"] == "receipt"):
+        result = {"status": "needs_action", "reason": "A newer closeout request replaced the one this Stop checked; it stays pending"}
+    elif result["status"] == "receipt":
         return {"systemMessage": "Verk closeout: " + json.dumps(result)}
     return {"decision": "block", "reason": "Complete the requested Verk review before finishing. "
             + json.dumps(result) + ". Wait for the independent verdict, repair findings and rerun Codex closeout; "
