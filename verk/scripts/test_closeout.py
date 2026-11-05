@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -62,6 +63,41 @@ class CloseoutTests(unittest.TestCase):
         with patch.object(closeout, "call", side_effect=AssertionError("duplicate hook called Verk")):
             self.assertEqual(closeout.hook(payload, self.env), {})
 
+    def test_lapsed_attempt_cannot_checkpoint_or_prove_later_work(self):
+        binary = Path.home() / ".local/bin/verk"
+        env = dict(self.env, VERK_LEASE_TTL_MS="2500")
+        subprocess.run([str(binary), "bind", "synthetic", "--approve-policy", "--json"], cwd=self.repo, env=env,
+                       check=True, capture_output=True)
+        rival_env = dict(env, CODEX_THREAD_ID="rival-session")
+        real_call = closeout.call
+        for rival in ("same session, other contract", "other session, same contract"):
+            with self.subTest(rival=rival):
+                a = real_call(self.repo, env, "add", "Synthetic A", "--kind", "code", "--accept", "A", "--start", "--json")["id"]
+                b = real_call(self.repo, env, "add", "Synthetic B", "--kind", "code", "--accept", "B", "--json")["id"]
+                def delayed(repo, scoped, *args, **kwargs):
+                    if args[0] == "check":
+                        time.sleep(3)  # A's lease lapses during a long check
+                        if rival.startswith("same"):
+                            real_call(repo, scoped, "start", b, "--json")
+                        else:
+                            real_call(repo, rival_env, "start", a, "--json")
+                        return None
+                    data = real_call(repo, scoped, *args, **kwargs)
+                    if args[0] == "view" and data.get("contract", {}).get("id") == a:
+                        data["policy"]["checks"] = [{"name": "unit", "status": "none"}]
+                    return data
+                with patch.object(closeout, "call", side_effect=delayed):
+                    with self.assertRaises(ValueError):
+                        closeout.closeout(self.repo, env, a, "proof.txt", 0, source_only=True)
+                later = real_call(self.repo, env, "view", b, "--json")
+                self.assertIsNone(later["checkpoint"])
+                self.assertEqual(later["receipts"], [])
+                self.assertFalse(later["proof"] and later["proof"].get("evidence"))
+                notes = [c["next"] for c in [real_call(self.repo, env, "view", a, "--json")["checkpoint"]] if c]
+                self.assertFalse(any("Approved checks passed" in n for n in notes))
+                if rival.startswith("same"):
+                    real_call(self.repo, env, "checkpoint", b, "--next", "fixture reset", "--json")
+
     def test_claude_pending_request_is_separate_and_stop_uses_claude_actor(self):
         env = dict(self.env, VERK_CLOSEOUT_HARNESS="claude-code", CLAUDE_CODE_SESSION_ID="closeout-test")
         path = closeout.state_path(self.repo, env)
@@ -105,7 +141,8 @@ class CloseoutTests(unittest.TestCase):
         self.assertEqual(json.loads(path.with_suffix(".result.json").read_text())["status"], "needs_action")
 
     def test_required_checks_use_only_the_approved_producer(self):
-        view = {"contract": {"id": "vk-1"}, "state": "active", "attempts": [{"actor": "codex:closeout-test"}],
+        view = {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"},
+                "attempts": [{"id": "vk-1.1", "state": "active", "actor": "codex:closeout-test"}],
                 "policy": {"checks": [{"name": "unit", "status": "none"}, {"name": "lint", "status": "passed"}]}}
         with patch.object(closeout, "call", return_value=view) as invoke, patch.object(closeout, "observe", return_value={"status": "receipt"}):
             closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
@@ -116,7 +153,8 @@ class CloseoutTests(unittest.TestCase):
         self.assertGreater(int(check[5]), 0)
         self.assertEqual([a[1] for a in args if a[0] == "check"], ["unit", "lint"])
         checkpoint = next(a for a in args if a[0] == "checkpoint")
-        self.assertIn("Source-only acceptance explicitly declared", checkpoint[2])
+        self.assertTrue(all(a[1] == "vk-1.1" for a in args if a[0] == "checkpoint"))
+        self.assertIn("Source-only acceptance explicitly declared", checkpoint[3])
         self.assertIn("--keep", checkpoint)
         self.assertLess(args.index(checkpoint), args.index(check))
         result = [a for a in args if a[0] == "checkpoint"][-1]
@@ -137,13 +175,14 @@ class CloseoutTests(unittest.TestCase):
         self.assertFalse(any("Approved checks passed" in str(c.args) for c in failed.call_args_list))
 
     def test_qualification_and_additional_proof_reach_the_checkpoint_before_checks(self):
-        view = {"contract": {"id": "vk-1"}, "state": "active",
+        view = {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"},
+                "attempts": [{"id": "vk-1.1", "state": "active"}],
                 "policy": {"checks": [{"name": "unit", "status": "none"}]}}
         with patch.object(closeout, "call", return_value=view) as invoke, patch.object(closeout, "observe", return_value={"status": "receipt"}):
             closeout.closeout(self.repo, self.env, "vk-1", "extra.txt", 0, qualification="proof.txt")
         args = [c.args[2:] for c in invoke.call_args_list]
         checkpoint = next(a for a in args if a[0] == "checkpoint")
-        self.assertIn("Qualification record: proof.txt", checkpoint[2])
+        self.assertIn("Qualification record: proof.txt", checkpoint[3])
         self.assertEqual([checkpoint[i + 1] for i, a in enumerate(checkpoint) if a == "--proof"], ["extra.txt", "proof.txt"])
         self.assertLess(args.index(checkpoint), next(i for i, a in enumerate(args) if a[0] == "check"))
 

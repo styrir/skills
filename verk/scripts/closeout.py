@@ -67,6 +67,17 @@ def observe(repo, env, contract, head, wait, call_timeout=10):
         time.sleep(min(2, max(0, deadline - time.monotonic())))
 
 
+def current(repo, env, contract, attempt):
+    """Re-observe before acting: a lapsed lease may let other work take this contract during long checks."""
+    view = call(repo, env, "view", contract, "--json")
+    attempts = view.get("attempts", [])
+    rival = [a["id"] for a in attempts if a.get("state") == "active" and a.get("id") != attempt]
+    if rival or not any(a.get("id") == attempt for a in attempts):
+        raise ValueError(f"Attempt {attempt} is no longer current for {contract}"
+                         f"{' (now ' + ', '.join(rival) + ')' if rival else ''}; closeout stopped without writing")
+    return view
+
+
 def closeout(repo, env, contract, proof, wait, qualification=None, source_only=False):
     repo = repo.resolve()
     path = state_path(repo, env)
@@ -88,28 +99,35 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
                         for r in view.get("reviews", []) if r["lifecycle"] == "open"]
         current_review = any(r.get("target", {}).get("revision") == head for r in open_reviews)
         if not current_review:
-            # checkpoint acts on the selected attempt: start refuses to replace another held task.
-            call(repo, env, "start", contract, "--json")
+            # start refuses to replace another held task; every later write names the attempt it returned.
+            attempt = (call(repo, env, "start", contract, "--json").get("attempt") or {}).get("id")
+            if not attempt:
+                raise ValueError(f"Verk start returned no attempt for {contract}")
             checks = view["policy"]["checks"]
             proofs = list(dict.fromkeys(p for p in [proof, qualification] if p))
             if not checks and not proofs:
                 raise ValueError("Review-only code needs --proof pointing to a committed repository file")
             declaration = f"Qualification record: {qualification}" if qualification else "Source-only acceptance explicitly declared"
-            checkpoint = ["checkpoint", "--next", f"Independent review of ready work. {declaration}"]
+            checkpoint = ["checkpoint", attempt, "--next", f"Independent review of ready work. {declaration}"]
             for item in proofs:
                 checkpoint.extend(["--proof", item])
             # Persist the declaration and evidence before any check can open a review.
             call(repo, env, *checkpoint, *(["--keep"] if checks else []), "--json")
+            admitted = False
             for check in checks:
+                if current(repo, env, contract, attempt)["state"] == "satisfied":
+                    admitted = True  # a receipt was admitted meanwhile; observe it instead of running more checks
+                    break
                 # Public check status spans revisions; only a current-HEAD review proves reuse is safe.
                 # Producer deadline ends its check process group before this outer timeout.
                 until = str(int((time.time() + 590) * 1000))
                 call(repo, env, "check", check["name"], "--id", contract, "--until", until, timeout=600, structured=False)
         if git(repo, "rev-parse", "HEAD") != head or git(repo, "status", "--porcelain"):
             raise ValueError("Ready work changed during closeout; inspect evidence before requesting it again")
-        if not current_review and checks:
+        if not current_review and checks and not admitted:
             names = ", ".join(check["name"] for check in checks)
-            call(repo, env, "checkpoint", "--keep", "--next",
+            current(repo, env, contract, attempt)
+            call(repo, env, "checkpoint", attempt, "--keep", "--next",
                  f"Independent review. {declaration}. Approved checks passed at {head}: {names}", "--json")
         call(repo, env, "reconcile", "--id", contract, "--json")
     result = observe(repo, env, contract, head, wait)
