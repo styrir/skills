@@ -60,31 +60,27 @@ python3 scripts/humanize.py finalize \
   --verifier path/to/verifier-verdict.json \
   --outdir /tmp/vph-run
 
-python3 scripts/humanize.py approve \
-  --audit /tmp/vph-run/audit.json \
-  --finding <finding_id> \
-  --profile-dir "$VOICE_PROFILE_DIR/<profile>"
 ```
 
 Harnesses must not hand-assemble accepted revisions. Noninteractive agents cannot invoke `approve`.
 
-## Private storage
+## Private storage and consent
 
-```text
-$VOICE_PROFILE_DIR/<profile-name>/
-  corpus/
-  profile.yaml
-  consent/
-  approvals/
-  evaluation/
-```
-
-Default root when unset: `~/.local/share/voice-preserving-humanizer/profiles/`.
-Create directories `0700` and files `0600`. Never put private corpus or raw evaluation outputs in this skill tree or Git.
-
-## Consent (DR-13)
+Use `$VOICE_PROFILE_DIR/<profile-name>/` (default `~/.local/share/voice-preserving-humanizer/profiles/`) with directories `0700` and files `0600`. Never put private corpus or raw evaluation outputs in this skill tree or Git.
 
 Before any raw corpus/source handoff: resolve exact backend/model; disclose harness/route/backend/transcript posture; require user consent for the exact tuple; bind handoff manifests to payload + consent hashes. Dynamic routing is limited to fixtures, hash-bound redactions, or overlap-scanned profile summaries without excerpts.
+
+## Capability and privacy preflight
+
+Before collecting corpus text or promising a revised document, verify that the deterministic engine can apply edits, emit a candidate, consume a verifier verdict, and finalize an accepted document. Command names and schema validation alone are insufficient. If `resolve` or `finalize` is only a scaffold, stop before raw corpus materialization and explain the implementation prerequisite. Profile setup may proceed only as a separately disclosed task.
+
+Use metadata-only inspection before raw-corpus consent: hashes, counts, JSON shape, role sequences, length distributions, and malformed-record counts, but no excerpts. Obtain explicit consent to the exact fixed backend tuple before reading raw samples. Choosing to build a profile is not itself consent.
+
+Freeze five to ten included samples and at least two held-out authentic samples before qualitative analysis. Record a deterministic selection rule and hashes. Held-out text must never inform profile hypotheses, prompts, revisions, or repairs.
+
+Historical corpus behavior does not override a current user preference. Record conflict as counterevidence and preserve the current direction explicitly. An enforceable hypothesis still requires evidence from at least two included samples, an acceptable contrast, `quality_inversion: false`, and explicit author-specific confirmation.
+
+For Brooks's current revisions, avoid introducing em dashes; use semicolons, parentheses, commas, or sentence breaks according to syntax and rhythm. This is voice direction, not detector evasion. If the source has no em dashes, do not manufacture a dash-removal edit.
 
 ## What this skill is not
 
