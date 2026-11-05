@@ -81,8 +81,10 @@ class CloseoutTests(unittest.TestCase):
             with self.subTest(rival=rival):
                 a = real_call(self.repo, env, "add", "Synthetic A", "--kind", "code", "--accept", "A", "--start", "--json")["id"]
                 b = real_call(self.repo, env, "add", "Synthetic B", "--kind", "code", "--accept", "B", "--json")["id"]
+                ran = []
                 def delayed(repo, scoped, *args, **kwargs):
                     if args[0] == "check":
+                        ran.append(args[1])
                         time.sleep(3)  # A's lease lapses during a long check
                         if rival.startswith("same"):
                             real_call(repo, scoped, "start", b, "--json")
@@ -91,11 +93,12 @@ class CloseoutTests(unittest.TestCase):
                         return None
                     data = real_call(repo, scoped, *args, **kwargs)
                     if args[0] == "view" and data.get("contract", {}).get("id") == a:
-                        data["policy"]["checks"] = [{"name": "unit", "status": "none"}]
+                        data["policy"]["checks"] = [{"name": "unit", "status": "none", "evidence": [self.evidence()] if ran else []}]
                     return data
                 with patch.object(closeout, "call", side_effect=delayed):
-                    with self.assertRaises(ValueError):
+                    with self.assertRaisesRegex(ValueError, "working on" if rival.startswith("same") else "reacquired"):
                         closeout.closeout(self.repo, env, a, "proof.txt", 0, source_only=True)
+                self.assertEqual(ran, ["unit"])
                 later = real_call(self.repo, env, "view", b, "--json")
                 self.assertIsNone(later["checkpoint"])
                 self.assertEqual(later["receipts"], [])
@@ -305,10 +308,9 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
         self.assertEqual(json.loads(path.with_suffix(".result.json").read_text())["status"], "needs_action")
 
     def test_required_checks_use_only_the_approved_producer(self):
-        view = {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"},
-                "attempts": [{"id": "vk-1.1", "state": "active", "actor": "codex:closeout-test"}],
-                "policy": {"checks": [{"name": "unit", "status": "none"}, {"name": "lint", "status": "passed"}]}}
-        with patch.object(closeout, "call", return_value=view) as invoke, patch.object(closeout, "observe", return_value={"status": "receipt"}):
+        old_pass = self.evidence(revision="0" * 40)  # lint "passed" at another revision: must run again
+        invoke = self.producing([{"name": "unit", "status": "none"}, {"name": "lint", "status": "passed", "evidence": [old_pass]}])
+        with patch.object(closeout, "call", side_effect=invoke) as invoke, patch.object(closeout, "observe", return_value={"status": "receipt"}):
             closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
         args = [c.args[2:] for c in invoke.call_args_list]
         check = next(a for a in args if a[0] == "check")
@@ -332,11 +334,87 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
         def fail_check(repo, env, *args, **kwargs):
             if args[0] == "check":
                 raise ValueError("producer failed")
-            return view
+            return self.producing([{"name": "unit", "status": "none"}])(repo, env, *args, **kwargs)
         with patch.object(closeout, "call", side_effect=fail_check) as failed:
             with self.assertRaisesRegex(ValueError, "producer failed"):
                 closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
         self.assertFalse(any("Approved checks passed" in str(c.args) for c in failed.call_args_list))
+
+    def test_qualification_and_additional_proof_reach_the_checkpoint_before_checks(self):
+        invoke = self.producing([{"name": "unit", "status": "none"}])
+        with patch.object(closeout, "call", side_effect=invoke) as invoke, patch.object(closeout, "observe", return_value={"status": "receipt"}):
+            closeout.closeout(self.repo, self.env, "vk-1", "extra.txt", 0, qualification="proof.txt")
+        args = [c.args[2:] for c in invoke.call_args_list]
+        checkpoint = next(a for a in args if a[0] == "checkpoint")
+        self.assertIn("Qualification record: proof.txt", checkpoint[3])
+        self.assertEqual([checkpoint[i + 1] for i, a in enumerate(checkpoint) if a == "--proof"], ["extra.txt", "proof.txt"])
+        self.assertLess(args.index(checkpoint), next(i for i, a in enumerate(args) if a[0] == "check"))
+
+    def producing(self, checks):
+        """Verk as seen by closeout: each check it runs then shows as admitted at HEAD in later views."""
+        ran = set()
+        def invoke(repo, env, *args, **kwargs):
+            if args[0] == "check":
+                ran.add(args[1])
+            shown = [dict(c, evidence=c.get("evidence", []) + ([self.evidence()] if c["name"] in ran else [])) for c in checks]
+            return {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"},
+                    "attempts": [{"id": "vk-1.1", "state": "active"}], "policy": {"checks": shown}}
+        return invoke
+
+    def views(self, *evidence_by_view):
+        """Closeout's successive views of one check, the last repeating."""
+        seen = iter(evidence_by_view)
+        latest = []
+        calls = []
+        def invoke(repo, env, *args, **kwargs):
+            nonlocal latest
+            calls.append(args)
+            if args[0] == "view":
+                latest = next(seen, latest)
+            return {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"}, "attempts": [{"id": "vk-1.1", "state": "active"}],
+                    "policy": {"checks": [{"name": "unit", "status": "passed", "evidence": latest}]}}
+        return invoke, calls
+
+    def test_evidence_invalidated_during_an_earlier_check_is_not_skipped(self):
+        # First view admitted; the next, read after an earlier run could have moved terms, is not: the producer must run.
+        good = self.evidence()
+        invoke, calls = self.views([good], [self.evidence(bindings_current=False)], [self.evidence(bindings_current=False), good])
+        with patch.object(closeout, "call", side_effect=invoke), patch.object(closeout, "observe", return_value={"status": "review_pending", "reviews": []}):
+            closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
+        self.assertEqual([a[1] for a in calls if a[0] == "check"], ["unit"])
+
+    def test_no_passed_note_when_admission_lapses_after_the_last_check(self):
+        good = self.evidence()
+        invoke, calls = self.views([good], [good], [self.evidence(bindings_current=False)])
+        with patch.object(closeout, "call", side_effect=invoke), patch.object(closeout, "observe", side_effect=AssertionError("went on")):
+            with self.assertRaisesRegex(ValueError, "no longer shows unit admitted"):
+                closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
+        self.assertFalse(any("Approved checks passed" in str(a) for a in calls))
+
+    def test_a_verk_without_evidence_lists_is_refused_before_any_check(self):
+        view = {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"}, "attempts": [{"id": "vk-1.1", "state": "active"}],
+                "policy": {"checks": [{"name": "unit", "status": "passed"}]}}
+        with patch.object(closeout, "call", return_value=view) as invoke:
+            with self.assertRaisesRegex(ValueError, "no per-check evidence"):
+                closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
+        self.assertFalse(any(c.args[2] == "check" for c in invoke.call_args_list))
+
+    def test_a_check_that_left_the_policy_is_not_claimed(self):
+        view = {"policy": {"checks": []}}
+        with self.assertRaisesRegex(ValueError, "no longer in the policy"):
+            closeout.check_named(view, "unit", self.head)
+
+    def test_covering_review_starts_nothing_and_differing_policy_kind_refuses(self):
+        view = {"contract": {"id": "vk-1", "acceptance_version": 1, "subjects_version": 0}, "state": "active",
+                "reviews": [{"decision": "vk-d1", "lifecycle": "open"}], "policy": {"version": 9, "kind_version": 2, "checks": [{"name": "unit", "evidence": []}]}}
+        decision = {"lifecycle": "open", "contracts": ["vk-1"], "target": {"revision": self.head},
+                    "bindings": {"acceptanceVersion": 1, "subjectsVersion": 0, "policyVersion": 2}}
+        def invoke(repo, env, *args, **kwargs):
+            return decision if args[1] == "vk-d1" else view
+        with patch.object(closeout, "call", side_effect=invoke) as called, patch.object(closeout, "observe", return_value={"status": "review_pending", "reviews": ["vk-d1"]}):
+            closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
+        self.assertEqual({c.args[2] for c in called.call_args_list}, {"view", "reconcile"})
+        self.assertFalse(closeout.review_covers(view, dict(decision, bindings=dict(decision["bindings"], policyVersion=9)), self.head))
 
     def evidence(self, **changes):
         return dict({"id": "vk-e1", "revision": self.head, "status": "accepted", "reason": None, "bindings_current": True}, **changes)
@@ -370,10 +448,11 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
             self.submit_with([self.evidence(status="rejected", reason="dirty")])
 
     def test_a_review_is_reused_only_for_exactly_this_target(self):
-        view = {"contract": {"id": "vk-1", "acceptance_version": 2, "subjects_version": 1}, "policy": {"version": 3}}
+        view = {"contract": {"id": "vk-1", "acceptance_version": 2, "subjects_version": 1}, "policy": {"version": 9, "kind_version": 3}}
         good = {"lifecycle": "open", "contracts": ["vk-1"], "target": {"revision": self.head},
                 "bindings": {"acceptanceVersion": 2, "subjectsVersion": 1, "policyVersion": 3}}
         self.assertTrue(closeout.review_covers(view, good, self.head))
+        self.assertFalse(closeout.review_covers({"contract": view["contract"], "policy": {"version": 3}}, good, self.head))
         self.assertTrue(closeout.review_covers(view, dict(good, target={"artifact": {"revision": self.head}}), self.head))
         for name, changed in {"revision": {"target": {"revision": "0" * 40}},
                               "artifact revision": {"target": {"artifact": {"revision": "0" * 40}}},
@@ -435,18 +514,6 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
             result = closeout.observe(self.repo, self.env, "vk-1", self.head, 0)
         self.assertEqual(result["status"], "review_pending")
         self.assertEqual(result["outcomes"]["outcome"], "disagreement_gate_rejected")
-
-    def test_qualification_and_additional_proof_reach_the_checkpoint_before_checks(self):
-        view = {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"},
-                "attempts": [{"id": "vk-1.1", "state": "active"}],
-                "policy": {"checks": [{"name": "unit", "status": "none"}]}}
-        with patch.object(closeout, "call", return_value=view) as invoke, patch.object(closeout, "observe", return_value={"status": "receipt"}):
-            closeout.closeout(self.repo, self.env, "vk-1", "extra.txt", 0, qualification="proof.txt")
-        args = [c.args[2:] for c in invoke.call_args_list]
-        checkpoint = next(a for a in args if a[0] == "checkpoint")
-        self.assertIn("Qualification record: proof.txt", checkpoint[3])
-        self.assertEqual([checkpoint[i + 1] for i, a in enumerate(checkpoint) if a == "--proof"], ["extra.txt", "proof.txt"])
-        self.assertLess(args.index(checkpoint), next(i for i, a in enumerate(args) if a[0] == "check"))
 
     def test_observing_another_receipt_preserves_pending_work(self):
         path = closeout.state_path(self.env)

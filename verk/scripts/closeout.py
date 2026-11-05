@@ -232,6 +232,15 @@ def admitted_at(check, head):
                for e in check.get("evidence", []))
 
 
+def check_named(view, name, head):
+    check = next((c for c in view["policy"]["checks"] if c["name"] == name), None)
+    if check is None:
+        raise ValueError(f"Check {name} is no longer in the policy; nothing was claimed for it at {head}")
+    if "evidence" not in check:  # Fail closed: without this list a zero exit can't be told from admission.
+        raise ValueError("The installed Verk shows no per-check evidence; update Verk before closeout")
+    return check
+
+
 def review_covers(view, decision, head):
     """An open review of exactly this target: same contract, revision or artifact revision, acceptance, subjects and policy."""
     target, bound = decision.get("target") or {}, decision.get("bindings") or {}
@@ -240,7 +249,7 @@ def review_covers(view, decision, head):
             and (target.get("revision") or (target.get("artifact") or {}).get("revision")) == head
             and bound.get("acceptanceVersion") == contract.get("acceptance_version")
             and bound.get("subjectsVersion") == contract.get("subjects_version")
-            and bound.get("policyVersion") == view["policy"].get("version"))
+            and bound.get("policyVersion") == view["policy"].get("kind_version"))
 
 
 def closeout(repo, env, contract, proof, wait, qualification=None, source_only=False, delegate_approved_goals=False):
@@ -280,26 +289,31 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
             # Persist the declaration and evidence before any check can open a review.
             call(repo, env, *checkpoint, *(["--keep"] if checks else []), "--json")
             admitted = False
-            for check in checks:
-                if current(repo, env, contract, attempt)["state"] == "satisfied":
+            for name in [check["name"] for check in checks]:
+                # Decide from a fresh view each time: an earlier check can run for minutes, and terms can move meanwhile.
+                seen = current(repo, env, contract, attempt)
+                if seen["state"] == "satisfied":
                     admitted = True  # a receipt was admitted meanwhile; observe it instead of running more checks
                     break
-                if admitted_at(check, head):
+                if admitted_at(check_named(seen, name, head), head):
                     continue  # Verk already admitted this check for this revision under the current bindings
                 # Producer deadline ends its check process group before this outer timeout.
                 until = str(int((time.time() + 590) * 1000))
-                call(repo, env, "check", check["name"], "--id", contract, "--until", until, timeout=600, structured=False)
-                seen = current(repo, env, contract, attempt)
-                ran = next((c for c in seen["policy"]["checks"] if c["name"] == check["name"]), {})
-                # A Verk older than per-check evidence shows no list to confirm against.
-                if "evidence" in ran and not admitted_at(ran, head):
+                call(repo, env, "check", name, "--id", contract, "--until", until, timeout=600, structured=False)
+                ran = check_named(current(repo, env, contract, attempt), name, head)
+                if not admitted_at(ran, head):
                     why = [e.get("reason") or e.get("status") for e in ran["evidence"] if e.get("revision") == head]
-                    raise ValueError(f"Check {check['name']} exited 0 but Verk did not admit it at {head}: {', '.join(why) or 'no evidence recorded'}")
+                    raise ValueError(f"Check {name} exited 0 but Verk did not admit it at {head}: {', '.join(why) or 'no evidence recorded'}")
         if git(repo, "rev-parse", "HEAD") != head or git(repo, "status", "--porcelain"):
             raise ValueError("Ready work changed during closeout; inspect evidence before requesting it again")
         if not current_review and checks and not admitted:
             names = ", ".join(check["name"] for check in checks)
-            current(repo, env, contract, attempt)
+            # What this note claims must still hold after the last check, for every check.
+            seen = current(repo, env, contract, attempt)
+            if seen["state"] != "satisfied":
+                stale = [check["name"] for check in checks if not admitted_at(check_named(seen, check["name"], head), head)]
+                if stale:
+                    raise ValueError(f"Verk no longer shows {', '.join(stale)} admitted at {head}; run closeout again under the current terms")
             call(repo, env, "checkpoint", attempt, "--keep", "--next",
                  f"Independent review. {declaration}. Approved checks passed at {head}: {names}", "--json")
         call(repo, env, "reconcile", "--id", contract, "--json")
@@ -322,7 +336,7 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
                         "common_dir": common_dir,
                         "bindings": {"acceptanceVersion": described.get("acceptance_version"),
                                      "subjectsVersion": described.get("subjects_version"),
-                                     "policyVersion": (view.get("policy") or {}).get("version")},
+                                     "policyVersion": (view.get("policy") or {}).get("kind_version")},
                         "delegate_approved_goals": delegate_approved_goals,
                         "qualification": qualification, "source_only": source_only})
             result = dict(result, request_id=request_id)
