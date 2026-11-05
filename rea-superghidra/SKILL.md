@@ -89,3 +89,9 @@ link manifest. Upstream updates should not overwrite it. Recheck the source map
 and live schemas after a version change; update only the affected routing advice.
 Do not copy whole upstream manuals into this skill or bulk-install unrelated
 skills from an upstream repository.
+
+To reproduce the macOS ARM64 smoke fixture without executing it, run
+`python3 scripts/build_fixture.py --output /absolute/new-fixture-directory` from
+this skill's directory. The committed C source is built twice in separate
+directories; differing bytes fail the check. See [qualification](qualification.md)
+for the observed compiler/SDK, exact analysis parameters, addresses and limits.
