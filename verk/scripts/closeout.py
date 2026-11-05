@@ -36,7 +36,9 @@ def state_path(env):
     """Derived from harness, session and store only, so a request can be found after its checkout is gone."""
     harness = env.get("VERK_CLOSEOUT_HARNESS", "codex")
     # Scratch stores keep their requests isolated too; this cache is never task truth.
-    root = Path(env["VERK_HOME"]) / "codex-closeout" if env.get("VERK_HOME") else Path.home() / ".cache/verk-closeout"
+    home = env.get("VERK_HOME")
+    scratch = home and Path(home).expanduser().resolve() != (Path.home() / ".verk").resolve()
+    root = Path(home) / "codex-closeout" if scratch else Path.home() / ".cache/verk-closeout"
     # ponytail: one pending request per session; add a queue if concurrent hook observations are needed.
     prefix = "claude-code-" if harness == "claude-code" else ""
     return root / (prefix + session_identity(harness, env) + ".json")
@@ -73,20 +75,22 @@ def same_request(first, second):
 
 
 def settle(path, request, result, consume=False):
-    """Apply a finished observation only if its request is still the current one. False: it was replaced or already settled."""
+    """Apply a finished observation only if its request is still current. Returns applied, replaced or gone."""
     with request_lock(path):
         try:
             current = read_request(path)
         except ValueError:
-            return False
+            return "replaced"
+        if current is None:
+            return "gone"
         if not same_request(current, request):
-            return False
+            return "replaced"
         save(path.with_suffix(".result.json"), result)
         if consume:
             path.unlink()
         elif "stop_claim" in current:
             save(path, {k: v for k, v in current.items() if k != "stop_claim"})
-    return True
+    return "applied"
 
 
 def save(path, data):
@@ -239,9 +243,10 @@ def review_covers(view, decision, head):
             and bound.get("policyVersion") == view["policy"].get("version"))
 
 
-def closeout(repo, env, contract, proof, wait, qualification=None, source_only=False):
+def closeout(repo, env, contract, proof, wait, qualification=None, source_only=False, delegate_approved_goals=False):
     repo = repo.resolve()
     path = state_path(env)
+    began = time.time_ns()  # Overlapping closeouts settle by when they began, not by which finished last.
     head = git(repo, "rev-parse", "HEAD")
     if git(repo, "status", "--porcelain"):
         raise ValueError("Closeout requires a committed, clean worktree")
@@ -299,28 +304,31 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
                  f"Independent review. {declaration}. Approved checks passed at {head}: {names}", "--json")
         call(repo, env, "reconcile", "--id", contract, "--json")
     result = observe(repo, env, contract, head, wait)
-    # Observed outside the lock, applied inside it. A foreground request replaces whatever was pending.
+    # Observed outside the lock, applied inside it, and only if no closeout that began later has already settled.
     common_dir = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
     with request_lock(path):
+        try:
+            previous = read_request(path)
+        except ValueError:
+            previous = None
+        if previous and previous.get("began", 0) > began:
+            return dict(result, superseded=True)
         if result["status"] == "review_pending":
             described = view["contract"]
-            save(path, {"request_id": uuid.uuid4().hex, "store": env.get("VERK_HOME") or str(Path.home() / ".verk"),
+            request_id = uuid.uuid4().hex
+            save(path, {"request_id": request_id, "began": began, "store": env.get("VERK_HOME") or str(Path.home() / ".verk"),
                         "harness": env.get("VERK_CLOSEOUT_HARNESS", "codex"), "session": path.stem.removeprefix("claude-code-"),
                         "repo": str(repo), "contract": contract, "project": described.get("project"), "head": head,
                         "common_dir": common_dir,
                         "bindings": {"acceptanceVersion": described.get("acceptance_version"),
                                      "subjectsVersion": described.get("subjects_version"),
                                      "policyVersion": (view.get("policy") or {}).get("version")},
-                        "delegate_approved_goals": False,
+                        "delegate_approved_goals": delegate_approved_goals,
                         "qualification": qualification, "source_only": source_only})
-        else:
-            try:
-                previous = read_request(path)
-            except ValueError:
-                previous = None
-            if previous and previous.get("contract") == contract and previous.get("repo") == str(repo):
-                path.unlink()
-    save(path.with_suffix(".result.json"), result)
+            result = dict(result, request_id=request_id)
+        elif previous and previous.get("contract") == contract and previous.get("repo") == str(repo):
+            path.unlink()
+        save(path.with_suffix(".result.json"), result)
     return result
 
 
@@ -357,22 +365,28 @@ def hook(payload, env):
             return {}
         request = dict(request, stop_claim=time.time())
         save(path, request)
-    consume = True
     try:
-        repo = Path(request["repo"]).resolve()
-        if (git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir") != request["common_dir"] or
-                git(repo, "rev-parse", "HEAD") != request["head"] or git(repo, "status", "--porcelain")):
-            result = {"status": "needs_action", "contract": request["contract"], "reason": "Ready work changed; request closeout again after checking it"}
-        else:
-            call(repo, scoped, "reconcile", "--id", request["contract"], "--json", timeout=5)
-            result = observe(repo, scoped, request["contract"], request["head"], 0, call_timeout=5)
+        repo, contract, head, common_dir = Path(request["repo"]).resolve(), request["contract"], request["head"], request["common_dir"]
     except KeyError as error:
         result = {"status": "needs_action", "contract": request.get("contract"), "reason": f"Malformed closeout request: {error}"}
-    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        settle(path, request, result, consume=True)
+        return {"systemMessage": "Verk closeout: " + json.dumps(result)}
+    consume = True
+    try:
+        if (git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir") != common_dir or
+                git(repo, "rev-parse", "HEAD") != head or git(repo, "status", "--porcelain")):
+            result = {"status": "needs_action", "contract": contract, "reason": "Ready work changed; request closeout again after checking it"}
+        else:
+            call(repo, scoped, "reconcile", "--id", contract, "--json", timeout=5)
+            result = observe(repo, scoped, contract, head, 0, call_timeout=5)
+    except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         # Claude's Stop is nonblocking: report it, keep the request, and try once more on the next Stop.
         consume = False
-        result = {"status": "needs_action", "contract": request.get("contract"), "retained": True, "reason": str(error)}
-    if not settle(path, request, result, consume):
+        result = {"status": "needs_action", "contract": contract, "retained": True, "reason": str(error)}
+    settled = settle(path, request, result, consume)
+    if settled == "gone":
+        return {}  # Another Stop or foreground closeout already settled it.
+    if settled == "replaced":
         return {"systemMessage": "Verk closeout: a newer request replaced the one this Stop checked; it stays pending."}
     return {"systemMessage": "Verk closeout: " + json.dumps(result)}
 

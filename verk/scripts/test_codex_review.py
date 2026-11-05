@@ -190,6 +190,18 @@ class DelegatedGoalTests(unittest.TestCase):
         self.assertEqual((code, done['status'], done['operation']), (0, 'receipt', 'complete'), done)
         self.assertFalse(path.exists())
 
+    def test_delegation_is_never_applied_to_a_request_this_closeout_did_not_write(self):
+        path = closeout.state_path(self.env)
+        other = {'request_id': 'other', 'contract': 'vk-other', 'repo': str(self.root), 'head': 'h', 'common_dir': 'g', 'delegate_approved_goals': False}
+        def replaced(*args, **kwargs):
+            closeout.save(path, other)
+            return {'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1'], 'request_id': 'mine'}
+        with patch.object(closeout, 'closeout', side_effect=replaced), \
+             patch.object(codex_closeout, 'complete', side_effect=AssertionError('completed under another request')):
+            result = codex_closeout.closeout(self.root, self.env, 'vk-1', None, 0, source_only=True, delegate_approved_goals=True)
+        self.assertTrue(result['superseded'])
+        self.assertEqual(json.loads(path.read_text()), other)
+
     def test_complete_needs_the_recorded_delegation_and_reconcile_is_labelled(self):
         repo, goal, _ = self.approved_goal()
         path = closeout.state_path(self.env)

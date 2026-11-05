@@ -53,16 +53,15 @@ def complete_pending(repo, env, contract, wait=0):
 def closeout(repo, env, contract, proof, wait, qualification=None, source_only=False, delegate_approved_goals=False):
     if env.get("VERK_CLOSEOUT_HARNESS", "codex") != "codex":
         raise ValueError("This review-completion adapter is Codex-only")
-    result = shared.closeout(repo, env, contract, proof, 0, qualification, source_only)
-    if result["status"] != "review_pending":
+    result = shared.closeout(repo, env, contract, proof, 0, qualification, source_only, delegate_approved_goals)
+    if result["status"] != "review_pending" or result.get("superseded"):
         return result
     path = shared.state_path(env)
     with shared.request_lock(path):
         request = shared.read_request(path)
-        if request is None:
-            return result  # A Stop already settled it.
-        request = dict(request, delegate_approved_goals=delegate_approved_goals)
-        shared.save(path, request)
+    # Only the request this closeout wrote, with the delegation written alongside it: never another's.
+    if request is None or request.get("request_id") != result.get("request_id"):
+        return dict(result, superseded=True)
     result = complete(repo, env, request, wait)
     shared.settle(path, request, result, consume=result["status"] == "receipt")
     return result
@@ -95,11 +94,15 @@ def hook(payload, env):
     if request is None:  # Unreadable: keep it and block, as nothing could be checked.
         with shared.request_lock(path):
             shared.save(path.with_suffix(".result.json"), result)
-    # Leave the marker in place through every fallible call and hard exit; only the same request is settled.
-    elif not shared.settle(path, request, result, consume=result["status"] == "receipt"):
-        result = {"status": "needs_action", "reason": "A newer closeout request replaced the one this Stop checked; it stays pending"}
-    elif result["status"] == "receipt":
-        return {"systemMessage": "Verk closeout: " + json.dumps(result)}
+    else:
+        # Leave the marker in place through every fallible call and hard exit; only the same request is settled.
+        settled = shared.settle(path, request, result, consume=result["status"] == "receipt")
+        if settled == "gone":
+            return {}  # An overlapping Stop or foreground closeout already settled it.
+        if settled == "replaced":
+            result = {"status": "needs_action", "reason": "A newer closeout request replaced the one this Stop checked; it stays pending"}
+        elif result["status"] == "receipt":
+            return {"systemMessage": "Verk closeout: " + json.dumps(result)}
     return {"decision": "block", "reason": "Complete the requested Verk review before finishing. "
             + json.dumps(result) + ". Wait for the independent verdict, repair findings and rerun Codex closeout; "
             "use the recorded operator delegation for an independently approved goal. Do not ask for terminal chores."}

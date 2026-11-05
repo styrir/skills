@@ -219,6 +219,66 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
             self.assertIn("retained", closeout.hook(dict(payload, cwd=str(Path(self.tmp.name) / "gone")), self.env)["systemMessage"])
         self.assertEqual(json.loads(path.read_text()), request)
 
+    def overlapped(self, during, status):
+        """A closeout whose observation sees `during` happen first, as an overlapping closeout finishing mid-run."""
+        view = {"contract": {"id": "vk-1"}, "state": "satisfied", "receipts": []}
+        result = {"status": status, "contract": "vk-1", "reviews": ["vk-d1"]}
+        def observed(*args, **kwargs):
+            during()
+            return result
+        with patch.object(closeout, "call", return_value=view), patch.object(closeout, "observe", side_effect=observed):
+            return closeout.closeout(self.repo, self.env, "vk-1", "proof.txt", 0, source_only=True)
+
+    def test_an_older_closeout_neither_deletes_nor_overwrites_a_newer_request(self):
+        path, _, _ = self.pending()
+        for status in ("needs_action", "review_pending"):
+            with self.subTest(status):
+                newer = {}
+                def later_closeout():
+                    newer.update(json.loads(path.read_text()), request_id="newer", began=time.time_ns() + 10**12, contract="vk-1", repo=str(self.repo))
+                    closeout.save(path, newer)
+                result = self.overlapped(later_closeout, status)
+                self.assertTrue(result["superseded"])
+                self.assertEqual(json.loads(path.read_text()), newer)
+
+    def test_a_later_closeout_replaces_an_earlier_one_and_cleans_up_after_itself(self):
+        path, _, _ = self.pending(began=1, repo=str(self.repo.resolve()))
+        self.assertEqual(self.overlapped(lambda: None, "needs_action")["status"], "needs_action")
+        self.assertFalse(path.exists())
+        path, _, _ = self.pending(began=1)
+        result = self.overlapped(lambda: None, "review_pending")
+        self.assertEqual(json.loads(path.read_text())["request_id"], result["request_id"])
+
+    def test_foreground_result_is_written_inside_the_lock(self):
+        path, _, _ = self.pending(began=1)
+        real_save = closeout.save
+        def checked(target, data):
+            descriptor = os.open(path.with_suffix(".lock"), os.O_RDWR)
+            try:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            finally:
+                os.close(descriptor)
+            real_save(target, data)
+        with patch.object(closeout, "save", side_effect=checked) as saved:
+            self.overlapped(lambda: None, "needs_action")
+        self.assertTrue(saved.called)
+
+    def test_a_verk_fault_during_stop_is_retained_and_a_settled_request_stays_quiet(self):
+        path, request, payload = self.pending()
+        with patch.object(closeout, "call", return_value={}):  # no state: Verk's answer, not the request, is malformed
+            self.assertIn("retained", closeout.hook(payload, self.env)["systemMessage"])
+        self.assertEqual(json.loads(path.read_text()), request)
+        def settled_elsewhere(*args, **kwargs):
+            path.unlink(missing_ok=True)
+            return {"state": "available", "reviews": [{"decision": "vk-d1", "lifecycle": "open", "verdict": None}]}
+        with patch.object(closeout, "call", side_effect=settled_elsewhere):
+            self.assertEqual(closeout.hook(payload, self.env), {})
+
+    def test_default_store_named_explicitly_is_the_same_request(self):
+        env = {"CODEX_THREAD_ID": "closeout-test"}
+        self.assertEqual(closeout.state_path(env), closeout.state_path(dict(env, VERK_HOME=str(Path.home() / ".verk"))))
+
     def test_dirty_work_is_never_submitted(self):
         (self.repo / "proof.txt").write_text("uncommitted")
         with patch.object(closeout, "call", side_effect=AssertionError("dirty submission")):
