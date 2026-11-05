@@ -537,11 +537,13 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
             ("disagreement_reviewer_rejected", {}, {"proposed": "reject", "decider": approve}, []),
             ("process_failure", {}, {"proposed": "retry", "exit": 143}, []),
             ("unavailable", {}, {"proposed": "unavailable", "decider": {"error": "no key"}}, []),
-            ("stale_bindings", {"lifecycle": "withdrawn"}, None, []),
+            ("review_withdrawn", {"lifecycle": "withdrawn"}, None, []),
             ("stale_bindings", None, None, [{"name": "unit", "evidence": [self.evidence(bindings_current=False)]}]),
             ("review_rejected", answered("rejected"), {"proposed": "reject", "decider": reject}, []),
             ("check_rejected", None, None, [{"name": "unit", "evidence": [self.evidence(status="rejected", reason="failed")]}]),
             ("approved_awaiting_answer", {}, {"proposed": "approve", "decider": approve}, [{"name": "unit", "evidence": [current]}]),
+            ("answered_no_receipt", answered("approved"), {"proposed": "approve", "decider": approve}, [{"name": "unit", "evidence": [current]}]),
+            ("stale_target", {}, {"proposed": "approve", "decider": approve, "revision": "0" * 40}, []),
             ("review_pending", {}, None, [{"name": "unit", "evidence": [current]}]),
         ]
         for expected, review, row, checks in cases:
@@ -549,19 +551,42 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
                 seen = self.outcome(review, row, checks)
                 self.assertEqual(seen["outcome"], expected)
                 self.assertEqual(seen["next_action"], closeout.NEXT_ACTION[expected])
-        self.assertEqual(len({c[0] for c in cases}), 9)
+        self.assertEqual(len({c[0] for c in cases}), 12)
+
+    def test_an_answer_against_the_reviewer_keeps_the_disagreement_visible(self):
+        approve, reject = {"verdict": "approve", "clauses": []}, {"verdict": "reject", "clauses": []}
+        overruled = self.outcome({"lifecycle": "answered", "verdict": "approved"}, {"proposed": "reject", "decider": approve})
+        self.assertEqual((overruled["review"], overruled["answer"], overruled["gate"], overruled["disagreement"]),
+                         ("reject", "approved", "approve", "disagreement_reviewer_rejected"))
+        rejected = self.outcome({"lifecycle": "answered", "verdict": "rejected"}, {"proposed": "approve", "decider": reject})
+        self.assertEqual((rejected["review"], rejected["answer"], rejected["disagreement"]), ("approve", "rejected", "disagreement_gate_rejected"))
+        after_failure = self.outcome({"lifecycle": "answered", "verdict": "approved"}, {"proposed": "retry", "exit": 1})
+        self.assertEqual((after_failure["review"], after_failure["answer"], after_failure["outcome"]), ("process_failure", "approved", "answered_no_receipt"))
+        self.assertEqual(self.outcome({"lifecycle": "answered", "verdict": "approved"})["review"], "not_recorded")
 
     def test_outcome_fields_stay_separate_and_a_receipt_keeps_the_disagreement_visible(self):
         reject = {"verdict": "reject", "clauses": [{"clause": "c", "met": 0.1}]}
         seen = self.outcome({"lifecycle": "answered", "verdict": "approved"}, {"proposed": "approve", "decider": reject, "chars": 900, "revision": self.head},
-                            [{"name": "unit", "evidence": [self.evidence(status="used")]}, {"name": "lint", "evidence": []}, {"name": "old"}], receipt="vk-r1")
+                            [{"name": "unit", "evidence": [self.evidence(status="used")]}, {"name": "lint", "evidence": []}, {"name": "old"},
+                             {"name": "moved", "evidence": [self.evidence(revision="0" * 40)]}], receipt="vk-r1")
         self.assertEqual((seen["outcome"], seen["review"], seen["gate"], seen["receipt"], seen["disagreement"]),
                          ("receipt", "approve", "reject", "vk-r1", "disagreement_gate_rejected"))
-        self.assertEqual(seen["admission"], [{"check": "unit", "state": "admitted"}, {"check": "lint", "state": "none"}, {"check": "old", "state": "unknown"}])
-        self.assertEqual(seen["coverage"], {"reviewed_revision": self.head, "report_chars": 900, "gate_clauses": reject["clauses"]})
+        self.assertEqual([a["state"] for a in seen["admission"]], ["admitted", "none", "unknown", "other_revision"])
+        self.assertEqual(seen["coverage"], {"reviewed_revision": self.head, "requested_revision": self.head, "covers_requested_revision": True,
+                                            "report_chars": 900, "gate_clauses": reject["clauses"], "checks_admitted": ["unit"],
+                                            "checks_not_admitted": ["lint", "moved", "old"]})
         gate = {"verdict": "unsure", "clauses": []}
         self.assertEqual(self.outcome({}, {"proposed": "approve", "decider": gate})["gate"], "unsure")
         self.assertEqual(self.outcome({})["gate"], "not_run")
+
+    def test_a_damaged_manifest_never_fails_observation(self):
+        day = Path(self.env["VERK_HOME"]) / "reviews" / "2026-11-05"
+        day.mkdir(parents=True, exist_ok=True)
+        (day / "verdicts.jsonl").write_bytes(b"\xff\xfe not utf-8\n")
+        (Path(self.env["VERK_HOME"]) / "reviews" / "2026-11-06").mkdir()
+        (Path(self.env["VERK_HOME"]) / "reviews" / "2026-11-06" / "verdicts.jsonl").write_text(
+            json.dumps({"decision": "vk-d1", "at": "soon", "exit": 0, "proposed": "approve"}) + "\n")
+        self.assertEqual(closeout.verdict_row(self.env, "vk-d1")["proposed"], "approve")
 
     def test_observe_reports_outcomes_without_changing_its_status(self):
         view = {"state": "available", "reviews": [{"decision": "vk-d1", "lifecycle": "open", "verdict": None}], "policy": {"checks": []}}

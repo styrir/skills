@@ -134,7 +134,7 @@ def verdict_row(env, decision):
     for manifest in (Path(env.get("VERK_HOME", Path.home() / ".verk")) / "reviews").glob("*/verdicts.jsonl"):
         try:
             lines = [] if manifest.is_symlink() else manifest.read_text().splitlines()
-        except OSError:
+        except (OSError, ValueError):  # Diagnostic only: an unreadable manifest must never fail closeout.
             continue
         for line in lines:
             try:
@@ -143,7 +143,7 @@ def verdict_row(env, decision):
                 continue  # A reviewer may still be appending its last line.
             if isinstance(row, dict) and row.get("decision") == decision:
                 rows.append(row)
-    return max(rows, key=lambda r: r.get("at") or 0, default=None)
+    return max(rows, key=lambda r: number(r.get("at")), default=None)
 
 
 NEXT_ACTION = {
@@ -155,7 +155,10 @@ NEXT_ACTION = {
     "stale_bindings": "Terms or policy changed after this evidence. Run closeout again under the current terms.",
     "review_rejected": "The review rejected the work. Read the report, repair, and request closeout again.",
     "check_rejected": "Verk rejected a check run. Fix the cause it names and run the check again.",
-    "approved_awaiting_answer": "Approved, and waiting for whoever may answer this review.",
+    "approved_awaiting_answer": "The reviewer approved; the review waits for whoever may answer it.",
+    "answered_no_receipt": "The review was answered approved, but no receipt covers this revision. Inspect Verk view, then close out at the current HEAD.",
+    "stale_target": "This review judged another revision. Run closeout again at the current HEAD.",
+    "review_withdrawn": "The review was withdrawn. Inspect Verk view, then request closeout again if the work is still wanted.",
     "review_pending": "Wait for the independent verdict.",
     "needs_action": "Inspect Verk view.",
 }
@@ -166,47 +169,64 @@ def outcomes(env, view, head, receipt=None):
     reviews = view.get("reviews") or []
     latest = reviews[-1] if reviews else None
     row = verdict_row(env, latest.get("decision")) if latest else None
-    if not latest:
-        review = "none"
-    elif latest.get("lifecycle") == "withdrawn":
-        review = "withdrawn"
-    elif latest.get("lifecycle") == "answered":
-        review = {"approved": "approve", "rejected": "reject"}.get(latest.get("verdict"), "unavailable")
-    elif not row:
-        review = "pending"
+    # What the reviewer concluded and what Verk's answer says are different facts: an operator can answer against the reviewer.
+    if not row:
+        review = "none" if not latest else "pending" if latest.get("lifecycle") == "open" else "not_recorded"
     elif row.get("exit") != 0 or row.get("proposed") == "retry":
         review = "process_failure"
     else:
         review = row["proposed"] if row.get("proposed") in ("approve", "reject") else "unavailable"
+    lifecycle = (latest or {}).get("lifecycle")
+    answer = ("none" if not latest else "open" if lifecycle == "open" else "withdrawn" if lifecycle == "withdrawn"
+              else latest.get("verdict") or "none")
     decider = (row or {}).get("decider")
     gate = "not_run" if not decider else "unavailable" if decider.get("error") else decider.get("verdict", "unavailable")
     admission = []
     for check in (view.get("policy") or {}).get("checks", []):
         runs = check.get("evidence")
         state = ("unknown" if runs is None else "admitted" if admitted_at(check, head) else "none" if not runs
-                 else "stale" if any(e.get("bindings_current") is False or e.get("revision") != head for e in runs)
-                 and not any(e.get("revision") == head and e.get("bindings_current") and e.get("status") in ("rejected", "pending") for e in runs)
-                 else "rejected" if any(e.get("status") == "rejected" for e in runs) else "pending")
+                 else "stale" if any(e.get("bindings_current") is False for e in runs)
+                 and not any(e.get("bindings_current") and e.get("status") in ("rejected", "pending") for e in runs)
+                 else "rejected" if any(e.get("status") == "rejected" for e in runs)
+                 else "pending" if any(e.get("status") == "pending" for e in runs) else "other_revision")
         admission.append({"check": check.get("name"), "state": state})
     states = {a["state"] for a in admission}
-    outcome = ("receipt" if receipt
-               else "disagreement_gate_rejected" if review == "approve" and gate == "reject"
-               else "disagreement_reviewer_rejected" if review == "reject" and gate == "approve"
-               else "process_failure" if review == "process_failure"
-               else "unavailable" if review == "unavailable"
-               else "stale_bindings" if review == "withdrawn" or "stale" in states
-               else "review_rejected" if review == "reject"
-               else "check_rejected" if "rejected" in states
-               else "approved_awaiting_answer" if review == "approve"
-               else "review_pending" if review == "pending"
-               else "needs_action")
-    disagreement = outcome if outcome.startswith("disagreement") else None
-    if not disagreement and {review, gate} == {"approve", "reject"}:
-        disagreement = "disagreement_gate_rejected" if review == "approve" else "disagreement_reviewer_rejected"
-    return {"outcome": outcome, "review": review, "gate": gate, "admission": admission, "receipt": receipt,
-            "disagreement": disagreement, "coverage": {"reviewed_revision": (row or {}).get("revision"),
-                                                       "report_chars": (row or {}).get("chars"),
-                                                       "gate_clauses": (decider or {}).get("clauses")},
+    reviewed = (row or {}).get("revision")
+    disagreement = ("disagreement_gate_rejected" if review == "approve" and gate == "reject"
+                    else "disagreement_reviewer_rejected" if review == "reject" and gate == "approve" else None)
+    other_target = bool(reviewed and reviewed != head)
+    if receipt:
+        outcome = "receipt"
+    elif other_target and answer in ("open", "approved"):
+        outcome = "stale_target"
+    elif disagreement:
+        outcome = disagreement
+    elif answer == "rejected":
+        outcome = "review_rejected"
+    elif answer == "approved":
+        outcome = "stale_bindings" if "stale" in states else "answered_no_receipt"
+    elif answer == "withdrawn":
+        outcome = "review_withdrawn"
+    elif review in ("process_failure", "unavailable"):
+        outcome = review
+    elif "stale" in states:
+        outcome = "stale_bindings"
+    elif review == "reject":
+        outcome = "review_rejected"
+    elif "rejected" in states:
+        outcome = "check_rejected"
+    elif review == "approve":
+        outcome = "approved_awaiting_answer"
+    elif review == "pending":
+        outcome = "review_pending"
+    else:
+        outcome = "needs_action"
+    return {"outcome": outcome, "review": review, "answer": answer, "gate": gate, "admission": admission, "receipt": receipt,
+            "disagreement": disagreement,
+            "coverage": {"reviewed_revision": reviewed, "requested_revision": head, "covers_requested_revision": None if not reviewed else not other_target,
+                         "report_chars": (row or {}).get("chars"), "gate_clauses": (decider or {}).get("clauses"),
+                         "checks_admitted": sorted(a["check"] for a in admission if a["state"] == "admitted"),
+                         "checks_not_admitted": sorted(a["check"] for a in admission if a["state"] != "admitted")},
             "next_action": NEXT_ACTION[outcome]}
 
 
