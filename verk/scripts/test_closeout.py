@@ -220,6 +220,58 @@ class CloseoutTests(unittest.TestCase):
             with self.subTest(name):
                 self.assertFalse(closeout.review_covers(view, dict(good, **changed), self.head))
 
+    def outcome(self, review, row=None, checks=(), receipt=None):
+        day = Path(self.env["VERK_HOME"]) / "reviews" / "2026-11-05"
+        day.mkdir(parents=True, exist_ok=True)
+        (day / "verdicts.jsonl").write_text(json.dumps(dict({"decision": "vk-d1", "at": 1, "exit": 0}, **row)) + "\ngarbage\n" if row else "")
+        view = {"reviews": [dict({"decision": "vk-d1", "lifecycle": "open", "verdict": None}, **review)] if review is not None else [],
+                "policy": {"checks": list(checks)}}
+        return closeout.outcomes(self.env, view, self.head, receipt)
+
+    def test_each_review_situation_has_its_own_outcome(self):
+        approve, reject = {"verdict": "approve", "clauses": [{"clause": "c", "met": 0.9}]}, {"verdict": "reject", "clauses": [{"clause": "c", "met": 0.1}]}
+        answered = lambda verdict: {"lifecycle": "answered", "verdict": verdict}
+        current = self.evidence()
+        cases = [
+            ("disagreement_gate_rejected", {}, {"proposed": "approve", "decider": reject}, []),
+            ("disagreement_gate_rejected", answered("approved"), {"proposed": "approve", "decider": reject}, []),
+            ("disagreement_reviewer_rejected", {}, {"proposed": "reject", "decider": approve}, []),
+            ("process_failure", {}, {"proposed": "retry", "exit": 143}, []),
+            ("unavailable", {}, {"proposed": "unavailable", "decider": {"error": "no key"}}, []),
+            ("stale_bindings", {"lifecycle": "withdrawn"}, None, []),
+            ("stale_bindings", None, None, [{"name": "unit", "evidence": [self.evidence(bindings_current=False)]}]),
+            ("review_rejected", answered("rejected"), {"proposed": "reject", "decider": reject}, []),
+            ("check_rejected", None, None, [{"name": "unit", "evidence": [self.evidence(status="rejected", reason="failed")]}]),
+            ("approved_awaiting_answer", {}, {"proposed": "approve", "decider": approve}, [{"name": "unit", "evidence": [current]}]),
+            ("review_pending", {}, None, [{"name": "unit", "evidence": [current]}]),
+        ]
+        for expected, review, row, checks in cases:
+            with self.subTest(expected, review=review):
+                seen = self.outcome(review, row, checks)
+                self.assertEqual(seen["outcome"], expected)
+                self.assertEqual(seen["next_action"], closeout.NEXT_ACTION[expected])
+        self.assertEqual(len({c[0] for c in cases}), 9)
+
+    def test_outcome_fields_stay_separate_and_a_receipt_keeps_the_disagreement_visible(self):
+        reject = {"verdict": "reject", "clauses": [{"clause": "c", "met": 0.1}]}
+        seen = self.outcome({"lifecycle": "answered", "verdict": "approved"}, {"proposed": "approve", "decider": reject, "chars": 900, "revision": self.head},
+                            [{"name": "unit", "evidence": [self.evidence(status="used")]}, {"name": "lint", "evidence": []}, {"name": "old"}], receipt="vk-r1")
+        self.assertEqual((seen["outcome"], seen["review"], seen["gate"], seen["receipt"], seen["disagreement"]),
+                         ("receipt", "approve", "reject", "vk-r1", "disagreement_gate_rejected"))
+        self.assertEqual(seen["admission"], [{"check": "unit", "state": "admitted"}, {"check": "lint", "state": "none"}, {"check": "old", "state": "unknown"}])
+        self.assertEqual(seen["coverage"], {"reviewed_revision": self.head, "report_chars": 900, "gate_clauses": reject["clauses"]})
+        gate = {"verdict": "unsure", "clauses": []}
+        self.assertEqual(self.outcome({}, {"proposed": "approve", "decider": gate})["gate"], "unsure")
+        self.assertEqual(self.outcome({})["gate"], "not_run")
+
+    def test_observe_reports_outcomes_without_changing_its_status(self):
+        view = {"state": "available", "reviews": [{"decision": "vk-d1", "lifecycle": "open", "verdict": None}], "policy": {"checks": []}}
+        self.outcome({}, {"proposed": "approve", "decider": {"verdict": "reject", "clauses": []}})
+        with patch.object(closeout, "call", return_value=view):
+            result = closeout.observe(self.repo, self.env, "vk-1", self.head, 0)
+        self.assertEqual(result["status"], "review_pending")
+        self.assertEqual(result["outcomes"]["outcome"], "disagreement_gate_rejected")
+
     def test_qualification_and_additional_proof_reach_the_checkpoint_before_checks(self):
         view = {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"},
                 "attempts": [{"id": "vk-1.1", "state": "active"}],

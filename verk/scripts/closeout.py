@@ -47,24 +47,110 @@ def save(path, data):
     temporary.replace(path)
 
 
+def verdict_row(env, decision):
+    """The reviewer's latest manifest line for a decision. Diagnostic input only: Verk stays the authority."""
+    rows = []
+    for manifest in (Path(env.get("VERK_HOME", Path.home() / ".verk")) / "reviews").glob("*/verdicts.jsonl"):
+        try:
+            lines = [] if manifest.is_symlink() else manifest.read_text().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue  # A reviewer may still be appending its last line.
+            if isinstance(row, dict) and row.get("decision") == decision:
+                rows.append(row)
+    return max(rows, key=lambda r: r.get("at") or 0, default=None)
+
+
+NEXT_ACTION = {
+    "receipt": "None: a receipt covers this revision.",
+    "disagreement_gate_rejected": "The reviewer approved but the automated gate rejected. Read both, then repair or ask the operator; do not wait.",
+    "disagreement_reviewer_rejected": "The reviewer rejected though the automated gate approved. Read the report and repair the work.",
+    "process_failure": "The reviewer process failed before judging. It retries on its next run; nothing was assessed.",
+    "unavailable": "The reviewer could not assess this. It stays open; retry explicitly or ask the operator. This is not a rejection.",
+    "stale_bindings": "Terms or policy changed after this evidence. Run closeout again under the current terms.",
+    "review_rejected": "The review rejected the work. Read the report, repair, and request closeout again.",
+    "check_rejected": "Verk rejected a check run. Fix the cause it names and run the check again.",
+    "approved_awaiting_answer": "Approved, and waiting for whoever may answer this review.",
+    "review_pending": "Wait for the independent verdict.",
+    "needs_action": "Inspect Verk view.",
+}
+
+
+def outcomes(env, view, head, receipt=None):
+    """Review, gate, admission and receipt as separate facts, plus the one outcome they add up to. Reads only."""
+    reviews = view.get("reviews") or []
+    latest = reviews[-1] if reviews else None
+    row = verdict_row(env, latest.get("decision")) if latest else None
+    if not latest:
+        review = "none"
+    elif latest.get("lifecycle") == "withdrawn":
+        review = "withdrawn"
+    elif latest.get("lifecycle") == "answered":
+        review = {"approved": "approve", "rejected": "reject"}.get(latest.get("verdict"), "unavailable")
+    elif not row:
+        review = "pending"
+    elif row.get("exit") != 0 or row.get("proposed") == "retry":
+        review = "process_failure"
+    else:
+        review = row["proposed"] if row.get("proposed") in ("approve", "reject") else "unavailable"
+    decider = (row or {}).get("decider")
+    gate = "not_run" if not decider else "unavailable" if decider.get("error") else decider.get("verdict", "unavailable")
+    admission = []
+    for check in (view.get("policy") or {}).get("checks", []):
+        runs = check.get("evidence")
+        state = ("unknown" if runs is None else "admitted" if admitted_at(check, head) else "none" if not runs
+                 else "stale" if any(e.get("bindings_current") is False or e.get("revision") != head for e in runs)
+                 and not any(e.get("revision") == head and e.get("bindings_current") and e.get("status") in ("rejected", "pending") for e in runs)
+                 else "rejected" if any(e.get("status") == "rejected" for e in runs) else "pending")
+        admission.append({"check": check.get("name"), "state": state})
+    states = {a["state"] for a in admission}
+    outcome = ("receipt" if receipt
+               else "disagreement_gate_rejected" if review == "approve" and gate == "reject"
+               else "disagreement_reviewer_rejected" if review == "reject" and gate == "approve"
+               else "process_failure" if review == "process_failure"
+               else "unavailable" if review == "unavailable"
+               else "stale_bindings" if review == "withdrawn" or "stale" in states
+               else "review_rejected" if review == "reject"
+               else "check_rejected" if "rejected" in states
+               else "approved_awaiting_answer" if review == "approve"
+               else "review_pending" if review == "pending"
+               else "needs_action")
+    disagreement = outcome if outcome.startswith("disagreement") else None
+    if not disagreement and {review, gate} == {"approve", "reject"}:
+        disagreement = "disagreement_gate_rejected" if review == "approve" else "disagreement_reviewer_rejected"
+    return {"outcome": outcome, "review": review, "gate": gate, "admission": admission, "receipt": receipt,
+            "disagreement": disagreement, "coverage": {"reviewed_revision": (row or {}).get("revision"),
+                                                       "report_chars": (row or {}).get("chars"),
+                                                       "gate_clauses": (decider or {}).get("clauses")},
+            "next_action": NEXT_ACTION[outcome]}
+
+
 def observe(repo, env, contract, head, wait, call_timeout=10):
-    """Pure read: Verk view only. No writes, producers, reconciliation or delegated completion."""
+    """Pure read: Verk view and the reviewer's manifest only. No writes, producers, reconciliation or delegated completion."""
     deadline = time.monotonic() + wait
     while True:
         view = call(repo, env, "view", contract, "--json", timeout=call_timeout)
         if view["state"] == "satisfied":
             receipt = next((r for r in reversed(view["receipts"]) if r["revision"] == head), None)
             if receipt:
-                return {"status": "receipt", "contract": contract, "receipt": receipt["id"], "revision": head}
-            return {"status": "needs_action", "contract": contract, "reason": "Receipt does not cover current HEAD"}
+                return {"status": "receipt", "contract": contract, "receipt": receipt["id"], "revision": head,
+                        "outcomes": outcomes(env, view, head, receipt["id"])}
+            return {"status": "needs_action", "contract": contract, "reason": "Receipt does not cover current HEAD",
+                    "outcomes": outcomes(env, view, head)}
         reviews = view.get("reviews", [])
         pending = [r["decision"] for r in reviews if r["lifecycle"] == "open"]
         if not pending and any(r["verdict"] == "rejected" and r["lifecycle"] == "answered" for r in reviews):
-            return {"status": "needs_action", "contract": contract, "reason": "Independent review rejected the work; inspect the review report"}
+            return {"status": "needs_action", "contract": contract, "reason": "Independent review rejected the work; inspect the review report",
+                    "outcomes": outcomes(env, view, head)}
         if not pending:
-            return {"status": "needs_action", "contract": contract, "reason": "No receipt or open review; inspect Verk view", "state": view["state"]}
+            return {"status": "needs_action", "contract": contract, "reason": "No receipt or open review; inspect Verk view", "state": view["state"],
+                    "outcomes": outcomes(env, view, head)}
         if time.monotonic() >= deadline:
-            return {"status": "review_pending", "contract": contract, "reviews": pending}
+            return {"status": "review_pending", "contract": contract, "reviews": pending, "outcomes": outcomes(env, view, head)}
         time.sleep(min(2, max(0, deadline - time.monotonic())))
 
 
