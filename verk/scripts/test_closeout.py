@@ -278,9 +278,65 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
         with patch.object(closeout, "call", side_effect=settled_elsewhere):
             self.assertEqual(closeout.hook(payload, self.env), {})
 
-    def test_default_store_named_explicitly_is_the_same_request(self):
-        env = {"CODEX_THREAD_ID": "closeout-test"}
-        self.assertEqual(closeout.state_path(env), closeout.state_path(dict(env, VERK_HOME=str(Path.home() / ".verk"))))
+    def test_an_older_closeout_cannot_revive_a_request_a_newer_one_settled(self):
+        path, _, _ = self.pending()
+        def newer_settled():
+            closeout.mark_settled(path, {"began": time.time_ns() + 10**12})
+            path.unlink(missing_ok=True)
+        result = self.overlapped(newer_settled, "review_pending")
+        self.assertTrue(result["superseded"])
+        self.assertFalse(path.exists())
+
+    def test_a_stop_that_consumes_a_request_also_blocks_older_closeouts(self):
+        path, _, payload = self.pending(began=time.time_ns() + 10**12)
+        receipt = {"state": "satisfied", "receipts": [{"id": "vk-r1", "revision": self.head}]}
+        with patch.object(closeout, "call", return_value=receipt):
+            self.assertIn("receipt", closeout.hook(payload, self.env)["systemMessage"])
+        self.assertTrue(self.overlapped(lambda: None, "review_pending")["superseded"])
+        self.assertFalse(path.exists())
+
+    def test_moved_checkout_request_clears_when_closeout_observes_its_receipt(self):
+        path, _, _ = self.pending(began=1, repo="/moved/from/here")
+        self.overlapped(lambda: None, "receipt")
+        self.assertFalse(path.exists())
+
+    def test_interruption_during_stop_keeps_the_request_and_claims_nothing_forever(self):
+        path, request, payload = self.pending()
+        with patch.object(closeout, "call", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                closeout.hook(payload, self.env)
+        kept = json.loads(path.read_text())
+        self.assertEqual(kept["request_id"], request["request_id"])
+        self.assertFalse(path.with_suffix(".result.json").exists())
+        closeout.save(path, dict(kept, stop_claim=kept["stop_claim"] - closeout.CLAIM_SECONDS - 1))
+        with patch.object(closeout, "call", return_value={"state": "satisfied", "receipts": [{"id": "vk-r1", "revision": self.head}]}):
+            self.assertIn("receipt", closeout.hook(payload, self.env)["systemMessage"])
+
+    def test_interruption_during_foreground_closeout_writes_no_request(self):
+        path, request, _ = self.pending()
+        with patch.object(closeout, "call", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                closeout.closeout(self.repo, self.env, "vk-1", "proof.txt", 0, source_only=True)
+        self.assertEqual(json.loads(path.read_text()), request)
+
+    def test_nonnumeric_times_do_not_crash_stop(self):
+        _, _, payload = self.pending(stop_claim="soon", began="later")
+        with patch.object(closeout, "call", return_value={"state": "satisfied", "receipts": [{"id": "vk-r1", "revision": self.head}]}):
+            self.assertIn("receipt", closeout.hook(payload, self.env)["systemMessage"])
+
+    def test_pending_request_records_the_reviewed_artifact_and_checkout_identity(self):
+        artifact = {"path": "a.bin", "revision": self.head}
+        view = {"contract": {"id": "vk-1", "project": "p", "acceptance_version": 1, "subjects_version": 0}, "state": "satisfied", "receipts": [],
+                "policy": {"kind_version": 2, "checks": []}}
+        def invoke(repo, env, *args, **kwargs):
+            return {"target": {"artifact": artifact}} if args[1] == "vk-d1" else view
+        with patch.object(closeout, "call", side_effect=invoke), patch.object(closeout, "observe", return_value={"status": "review_pending", "reviews": ["vk-d1"]}):
+            closeout.closeout(self.repo, self.env, "vk-1", "proof.txt", 0, source_only=True)
+        record = json.loads(closeout.state_path(self.env).read_text())
+        self.assertEqual(record["artifact"], artifact)
+        self.assertEqual(record["repo"], str(self.repo.resolve()))
+        self.assertTrue(record["common_dir"].endswith(".git"))
+        self.assertEqual(record["bindings"], {"acceptanceVersion": 1, "subjectsVersion": 0, "policyVersion": 2})
 
     def test_dirty_work_is_never_submitted(self):
         (self.repo / "proof.txt").write_text("uncommitted")

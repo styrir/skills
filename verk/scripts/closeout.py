@@ -36,9 +36,7 @@ def state_path(env):
     """Derived from harness, session and store only, so a request can be found after its checkout is gone."""
     harness = env.get("VERK_CLOSEOUT_HARNESS", "codex")
     # Scratch stores keep their requests isolated too; this cache is never task truth.
-    home = env.get("VERK_HOME")
-    scratch = home and Path(home).expanduser().resolve() != (Path.home() / ".verk").resolve()
-    root = Path(home) / "codex-closeout" if scratch else Path.home() / ".cache/verk-closeout"
+    root = Path(env["VERK_HOME"]).expanduser() / "codex-closeout" if env.get("VERK_HOME") else Path.home() / ".cache/verk-closeout"
     # ponytail: one pending request per session; add a queue if concurrent hook observations are needed.
     prefix = "claude-code-" if harness == "claude-code" else ""
     return root / (prefix + session_identity(harness, env) + ".json")
@@ -74,6 +72,33 @@ def same_request(first, second):
     return first.get("request_id") == second.get("request_id") and plain(first) == plain(second)
 
 
+def number(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
+
+
+def settled_before(path):
+    """The start time of the latest closeout settled in this session. Survives deletion, so an older run can't revive a settled request."""
+    try:
+        return int(path.with_suffix(".settled").read_text())
+    except (FileNotFoundError, ValueError):
+        return 0
+
+
+def mark_settled(path, request):
+    began = number(request.get("began"))
+    if began > settled_before(path):
+        path.with_suffix(".settled").write_text(str(began))
+
+
+def request_is_current(path, request):
+    """For the last moment before an irreversible child call: is this still the session's request?"""
+    with request_lock(path):
+        try:
+            return same_request(read_request(path), request)
+        except ValueError:
+            return False
+
+
 def settle(path, request, result, consume=False):
     """Apply a finished observation only if its request is still current. Returns applied, replaced or gone."""
     with request_lock(path):
@@ -87,6 +112,7 @@ def settle(path, request, result, consume=False):
             return "replaced"
         save(path.with_suffix(".result.json"), result)
         if consume:
+            mark_settled(path, current)
             path.unlink()
         elif "stop_claim" in current:
             save(path, {k: v for k, v in current.items() if k != "stop_claim"})
@@ -320,12 +346,15 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
     result = observe(repo, env, contract, head, wait)
     # Observed outside the lock, applied inside it, and only if no closeout that began later has already settled.
     common_dir = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    target = {}
+    if result["status"] == "review_pending" and result.get("reviews"):
+        target = call(repo, env, "view", result["reviews"][-1], "--json").get("target") or {}
     with request_lock(path):
         try:
             previous = read_request(path)
         except ValueError:
             previous = None
-        if previous and previous.get("began", 0) > began:
+        if max(number((previous or {}).get("began")), settled_before(path)) > began:
             return dict(result, superseded=True)
         if result["status"] == "review_pending":
             described = view["contract"]
@@ -333,14 +362,15 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
             save(path, {"request_id": request_id, "began": began, "store": env.get("VERK_HOME") or str(Path.home() / ".verk"),
                         "harness": env.get("VERK_CLOSEOUT_HARNESS", "codex"), "session": path.stem.removeprefix("claude-code-"),
                         "repo": str(repo), "contract": contract, "project": described.get("project"), "head": head,
-                        "common_dir": common_dir,
+                        "artifact": target.get("artifact"), "common_dir": common_dir,
                         "bindings": {"acceptanceVersion": described.get("acceptance_version"),
                                      "subjectsVersion": described.get("subjects_version"),
                                      "policyVersion": (view.get("policy") or {}).get("kind_version")},
                         "delegate_approved_goals": delegate_approved_goals,
                         "qualification": qualification, "source_only": source_only})
             result = dict(result, request_id=request_id)
-        elif previous and previous.get("contract") == contract and previous.get("repo") == str(repo):
+        elif previous and previous.get("contract") == contract:  # Contract IDs are store-wide, so a moved checkout still matches.
+            mark_settled(path, dict(previous, began=began))
             path.unlink()
         save(path.with_suffix(".result.json"), result)
     return result
@@ -375,7 +405,7 @@ def hook(payload, env):
         if request is None:
             return {}
         # A duplicate Stop while one is working replays nothing. A claim left by a hard exit expires, and the request survives it.
-        if time.time() - request.get("stop_claim", 0) < CLAIM_SECONDS:
+        if time.time() - number(request.get("stop_claim")) < CLAIM_SECONDS:
             return {}
         request = dict(request, stop_claim=time.time())
         save(path, request)

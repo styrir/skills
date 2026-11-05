@@ -52,7 +52,7 @@ def approved_report(environment, decision, contract, head):
     return path, hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def complete_goal(repo, environment, view, decision, head, call, git):
+def complete_goal(repo, environment, view, decision, head, call, git, still_current=None):
     if environment.get("VERK_CLOSEOUT_HARNESS", "codex") != "codex":
         raise ValueError("Delegated goal completion is Codex-only")
     if view["contract"]["kind"] != "goal":
@@ -95,6 +95,8 @@ def complete_goal(repo, environment, view, decision, head, call, git):
         raise ValueError("Review is assigned to another operator")
     author = scoped["VERK_ACTOR"]
     scoped["VERK_ACTOR"] = operator
+    if still_current and not still_current():
+        return False  # The delegating request was replaced: its authority doesn't reach this answer.
     reason = f"Codex operator-delegated completion by {author}; independent approval {decision['id']}; report SHA256 {digest}"
     result = subprocess.run([command[0], "answer", decision["id"], reason, "--report", str(path), "--json"],
                             cwd=cwd, env=scoped, capture_output=True, text=True, timeout=10)

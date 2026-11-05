@@ -19,7 +19,8 @@ def complete(repo, env, request, wait=0):
             view = shared.call(repo, env, "view", request["contract"], "--json", timeout=5)
             for review in result["reviews"]:
                 decision = shared.call(repo, env, "view", review, "--json", timeout=5)
-                if complete_goal(repo, env, view, decision, request["head"], shared.call, shared.git):
+                current = lambda: shared.request_is_current(shared.state_path(env), request)
+                if complete_goal(repo, env, view, decision, request["head"], shared.call, shared.git, current):
                     return shared.observe(repo, env, request["contract"], request["head"], 0)
         if time.monotonic() >= deadline:
             return result

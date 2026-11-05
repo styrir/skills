@@ -202,6 +202,20 @@ class DelegatedGoalTests(unittest.TestCase):
         self.assertTrue(result['superseded'])
         self.assertEqual(json.loads(path.read_text()), other)
 
+    def test_a_replacement_before_the_delegated_answer_stops_it(self):
+        repo, goal, _ = self.approved_goal()
+        path = closeout.state_path(self.env)
+        request = dict(json.loads(path.read_text()), delegate_approved_goals=True)
+        closeout.save(path, request)
+        real = codex_review.invocation
+        def replaced_then_invocation(*args, **kwargs):
+            closeout.save(path, dict(request, request_id='newer', delegate_approved_goals=False))  # arrives while the goal is being checked
+            return real(*args, **kwargs)
+        with patch.object(codex_review, 'invocation', side_effect=replaced_then_invocation):
+            result = codex_closeout.complete(repo, self.env, request)
+        self.assertEqual(result['status'], 'review_pending')
+        self.assertEqual(closeout.call(repo, self.env, 'view', goal, '--json')['receipts'], [])
+
     def test_complete_needs_the_recorded_delegation_and_reconcile_is_labelled(self):
         repo, goal, _ = self.approved_goal()
         path = closeout.state_path(self.env)
