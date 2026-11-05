@@ -216,6 +216,12 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
         with patch.object(closeout, "call", return_value=receipt):
             self.assertIn("receipt", closeout.hook(payload, self.env)["systemMessage"])
 
+    def test_another_repository_at_the_recorded_path_keeps_the_request(self):
+        path, request, payload = self.pending(common_dir="/somewhere/else/.git")
+        with patch.object(closeout, "call", side_effect=AssertionError("wrong repository, no Verk write")):
+            self.assertIn("no longer holds this repository", closeout.hook(payload, self.env)["systemMessage"])
+        self.assertEqual(json.loads(path.read_text()), request)
+
     def test_missing_checkout_keeps_the_request_without_verk_calls(self):
         path, request, payload = self.pending(repo=str(Path(self.tmp.name) / "deleted"))
         with patch.object(closeout, "call", side_effect=AssertionError("no checkout, no Verk write")):

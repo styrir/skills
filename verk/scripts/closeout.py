@@ -437,8 +437,10 @@ def hook(payload, env):
         return {"systemMessage": "Verk closeout: " + json.dumps(result)}
     consume = True
     try:
-        if (git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir") != common_dir or
-                git(repo, "rev-parse", "HEAD") != head or git(repo, "status", "--porcelain")):
+        if git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir") != common_dir:
+            # The path now holds another repository, or the checkout moved: a location change isn't a verdict on the work.
+            raise ValueError("The recorded checkout no longer holds this repository; the request stays pending")
+        if git(repo, "rev-parse", "HEAD") != head or git(repo, "status", "--porcelain"):
             result = {"status": "needs_action", "contract": contract, "reason": "Ready work changed; request closeout again after checking it"}
         else:
             call(repo, scoped, "reconcile", "--id", contract, "--json", timeout=5)
