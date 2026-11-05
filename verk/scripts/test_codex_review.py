@@ -302,6 +302,39 @@ class DelegatedGoalTests(unittest.TestCase):
         self.assertEqual((code, result['operation'], result['needs_action']), (3, 'recover', 'checkout_missing'))
         self.assertEqual(self.operate(self.root, '--harness', 'claude-code', 'recover', '--id', goal)[0], 2)
 
+    def test_recover_needs_a_selected_directory_and_runs_from_a_deleted_cwd(self):
+        repo, goal, path, _ = self.receipted_request()
+        shutil.rmtree(repo)
+        script = Path(__file__).with_name('closeout.py')
+        omitted = subprocess.run([sys.executable, str(script), 'recover', '--id', goal], cwd=self.root, env=self.env,
+                                 capture_output=True, text=True, timeout=60)
+        self.assertEqual(omitted.returncode, 2)
+        self.assertIn('--repo', omitted.stderr)
+        self.assertTrue(path.exists())
+        gone = self.root / 'gone-cwd'
+        gone.mkdir()
+        launcher = 'import os,subprocess,sys; os.chdir(sys.argv[1]); os.rmdir(sys.argv[1]); sys.exit(subprocess.run(sys.argv[2:]).returncode)'
+        done = subprocess.run([sys.executable, '-c', launcher, str(gone), sys.executable, str(script), 'recover', '--id', goal, '--repo', str(self.root)],
+                              env=self.env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(json.loads(done.stdout)['status'], 'receipt')
+        self.assertFalse(path.exists())
+
+    def test_stop_runs_from_a_deleted_process_cwd(self):
+        repo, goal, path, _ = self.receipted_request()
+        shutil.rmtree(repo)
+        gone = self.root / 'gone-cwd'
+        gone.mkdir()
+        script = Path(__file__).with_name('closeout.py')
+        launcher = 'import os,subprocess,sys; os.chdir(sys.argv[1]); os.rmdir(sys.argv[1]); sys.exit(subprocess.run(sys.argv[2:], input=os.environ["PAYLOAD"], text=True).returncode)'
+        payload = json.dumps({'hook_event_name': 'Stop', 'session_id': self.env['CODEX_THREAD_ID'], 'cwd': str(gone)})
+        env = dict(self.env, VERK_CLOSEOUT_READ_DIR=str(self.root), PAYLOAD=payload)
+        done = subprocess.run([sys.executable, '-c', launcher, str(gone), sys.executable, str(script), 'hook-stop'],
+                              env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn('checkout_missing', json.loads(done.stdout)['systemMessage'])
+        self.assertFalse(path.exists())
+
     def test_a_replacement_before_the_delegated_answer_stops_it(self):
         repo, goal, _ = self.approved_goal()
         path = closeout.state_path(self.env)

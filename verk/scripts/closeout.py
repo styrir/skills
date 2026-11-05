@@ -467,14 +467,15 @@ def operation(name, arguments, harness, env):
         "complete": "Codex only: finish an independently approved goal under the pending request's recorded delegation.",
         "recover": "Codex only: with the recorded checkout gone, read Verk from --repo, any surviving directory, for the receipt of the pending request. Starts nothing.",
     }[name])
-    parser.add_argument("--repo", type=Path, default=Path.cwd())
+    # Recovery's directory is always the caller's explicit choice, and a deleted cwd must not stop it.
+    parser.add_argument("--repo", type=Path, required=name == "recover")
     parser.add_argument("--id", required=True)
     parser.add_argument("--wait", type=int, default=0, choices=range(0, 61), metavar="0..60")
     if name not in ("complete", "recover"):
         parser.add_argument("--revision", help="Revision the receipt must cover; defaults to HEAD")
     args = parser.parse_args(arguments)
-    repo = args.repo.resolve()
     try:
+        repo = (args.repo or Path.cwd()).resolve()
         if name == "complete":
             if harness != "codex":
                 raise ValueError("Delegated goal completion is Codex-only")
@@ -514,7 +515,7 @@ def main():
     if arguments[:1] and arguments[0] in OPERATIONS:
         return operation(arguments[0], arguments[1:], selected.harness, env)
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument("--repo", type=Path)
     parser.add_argument("--id", required=True)
     parser.add_argument("--proof")
     parser.add_argument("--delegate-approved-goals", action="store_true",
@@ -525,14 +526,15 @@ def main():
     parser.add_argument("--wait", type=int, default=30, choices=range(0, 61), metavar="0..60")
     args = parser.parse_args(arguments)
     try:
+        repo = (args.repo or Path.cwd()).resolve()
         if selected.harness == "codex":
             from codex_closeout import closeout as runner
-            result = runner(args.repo.resolve(), env, args.id, args.proof, args.wait, args.qualification, args.source_only,
+            result = runner(repo, env, args.id, args.proof, args.wait, args.qualification, args.source_only,
                             args.delegate_approved_goals)
         else:
             if args.delegate_approved_goals:
                 raise ValueError("Delegated goal completion is Codex-only")
-            result = closeout(args.repo.resolve(), env, args.id, args.proof, args.wait, args.qualification, args.source_only)
+            result = closeout(repo, env, args.id, args.proof, args.wait, args.qualification, args.source_only)
         print(json.dumps(result))
         return 0 if result["status"] == "receipt" else 3
     except (ValueError, OSError, subprocess.SubprocessError) as error:

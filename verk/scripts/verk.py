@@ -21,7 +21,7 @@ def session_identity(harness, environment):
 def invocation(arguments, environment, bin_dir=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--harness", choices=("codex", "claude-code"), default="codex")
-    parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument("--repo", type=Path)
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     options = parser.parse_args(arguments)
     args = options.arguments
@@ -33,7 +33,7 @@ def invocation(arguments, environment, bin_dir=None):
     if verb == "setup" and any(a == "--apply" or a.startswith("--apply=") for a in args[1:]):
         raise ValueError("Applying setup is the operator's action; this wrapper can show setup plans only.")
     session = session_identity(options.harness, environment)
-    repo = options.repo.expanduser().resolve()
+    repo = (options.repo or Path.cwd()).expanduser().resolve()
     if not repo.is_dir():
         raise ValueError(f"Repository directory does not exist: {repo}")
     binary = (bin_dir or Path.home() / ".local" / "bin") / ("verk-check" if verb == "check" else "verk")
