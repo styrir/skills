@@ -1,4 +1,4 @@
 interface:
-  display_name: "Beads"
-  short_description: "Project task tracking with bd"
-  default_prompt: "Use $beads to inspect ready work and manage durable project tasks."
+  display_name: "Beads (retired)"
+  short_description: "Legacy pointer to Verk task tracking"
+  default_prompt: "Use the Verk skill instead of the retired $beads integration."

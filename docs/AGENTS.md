@@ -12,7 +12,7 @@ Owns durable documentation under `docs/`, including implementation plans, review
 
 ## Local Contracts
 
-- Keep durable contracts, decisions, and reproducible evidence here; keep transient execution state in `.pipeline/` and durable task state in Beads.
+- Keep durable contracts, decisions, and reproducible evidence here; keep transient execution state in `.pipeline/` and durable task state in Verk.
 - Add YAML `summary:` and `read_when:` frontmatter to task-scoped guidance documents.
 - Do not duplicate root rules in every document. Route readers to the narrowest applicable source.
 - Preserve raw reviewer/model artifacts separately from their synthesis. A synthesis must identify source artifacts and their checksums.
@@ -35,4 +35,4 @@ Owns durable documentation under `docs/`, including implementation plans, review
 
 | Scope | Child DOX | Covers |
 |---|---|---|
-| `agent-guidance/` | `docs/agent-guidance/AGENTS.md` | Progressive-disclosure workflow, Beads/shared-server operation, planning, artifacts, and closeout. |
+| `agent-guidance/` | `docs/agent-guidance/AGENTS.md` | Progressive-disclosure workflow, Verk contracts and leases, planning, artifacts, and closeout. |

@@ -1,172 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-INIT="$SCRIPT_DIR/styrir-init.sh"
-[[ -x "$INIT" ]] || { printf 'missing executable initializer: %s\n' "$INIT" >&2; exit 1; }
-
-fixture_parent="$(mktemp -d "${TMPDIR:-/tmp}/styrir-init-test.XXXXXX")"
-fixture="$fixture_parent/random-project-$RANDOM-$RANDOM/nested-target"
-mkdir -p -- "$(dirname -- "$fixture")"
-fixture="$(cd -- "$(dirname -- "$fixture")" && pwd -P)/$(basename -- "$fixture")"
-cleanup() {
-  if [[ "${KEEP_FIXTURE:-0}" == "1" ]]; then
-    printf 'fixture retained: %s\n' "$fixture_parent"
-  elif [[ -n "$fixture_parent" && -d "$fixture_parent" ]]; then
-    rm -rf -- "$fixture_parent"
+fixture="$(mktemp -d "${TMPDIR:-/tmp}/styrir-init-retired.XXXXXX")"
+trap 'rm -rf -- "$fixture"' EXIT
+mkdir -p "$fixture/bin" "$fixture/existing"
+printf 'preserve me\n' > "$fixture/existing/sentinel"
+for command_name in bd git; do
+  printf '#!/usr/bin/env bash\nprintf called >> "$STYRIR_TEST_CALLS"\nexit 99\n' > "$fixture/bin/$command_name"
+  chmod +x "$fixture/bin/$command_name"
+done
+export STYRIR_TEST_CALLS="$fixture/calls"
+export PATH="$fixture/bin:$PATH"
+bash "$SCRIPT_DIR/styrir-init.sh" --help >/dev/null
+for target in "$fixture/new" "$fixture/existing"; do
+  if bash "$SCRIPT_DIR/styrir-init.sh" --target "$target" > "$fixture/output" 2>&1; then
+    echo 'retired initializer unexpectedly succeeded'; exit 1
   fi
-}
-trap cleanup EXIT
-
-mkdir -p -- "$fixture/.preexisting-hidden/subdir" "$fixture/visible-folder/subdir" "$fixture/visible folder/Unicode-Þór"
-printf 'hidden sentinel\n' > "$fixture/.preexisting-hidden/sentinel.txt"
-printf 'visible sentinel\n' > "$fixture/visible-folder/sentinel.txt"
-printf 'space unicode sentinel\n' > "$fixture/visible folder/Unicode-Þór/sentinel file.txt"
-printf 'dot file sentinel\n' > "$fixture/.env.example"
-printf 'visible file sentinel\n' > "$fixture/README.seed"
-
-snapshot_before="$(python3 - "$fixture" <<'PY'
-from pathlib import Path
-import hashlib, sys
-root=Path(sys.argv[1])
-for rel in ['.preexisting-hidden/sentinel.txt','visible-folder/sentinel.txt','visible folder/Unicode-Þór/sentinel file.txt','.env.example','README.seed']:
- p=root/rel
- print(rel, hashlib.sha256(p.read_bytes()).hexdigest())
-PY
-)"
-
-"$INIT" --target "$fixture" --project-name "Random Fixture" --prefix random-fixture
-first_status="$(git -C "$fixture" status --porcelain=v1)"
-[[ -n "$first_status" ]] || { echo 'expected uncommitted generated files'; exit 1; }
-[[ -z "$(git -C "$fixture" diff --cached --name-only)" ]] || { echo 'initializer left generated files staged'; exit 1; }
-[[ -z "$(git -C "$fixture" remote)" ]] || { echo 'initializer created a Git remote'; exit 1; }
-if git -C "$fixture" rev-parse --verify HEAD >/dev/null 2>&1; then echo 'initializer created a commit'; exit 1; fi
-
-snapshot_after="$(python3 - "$fixture" <<'PY'
-from pathlib import Path
-import hashlib, sys
-root=Path(sys.argv[1])
-for rel in ['.preexisting-hidden/sentinel.txt','visible-folder/sentinel.txt','visible folder/Unicode-Þór/sentinel file.txt','.env.example','README.seed']:
- p=root/rel
- print(rel, hashlib.sha256(p.read_bytes()).hexdigest())
-PY
-)"
-[[ "$snapshot_before" == "$snapshot_after" ]] || { echo 'pre-existing content changed'; exit 1; }
-
-required=(
-  .git .beads .styrir agent-guidance .gitignore .gitnexusignore .gitnexusrc AGENTS.md CLAUDE.md
-  .styrir/runs .styrir/analysis/raw .styrir/analysis/reports .styrir/pipelines .styrir/build .styrir/cache .styrir/logs .styrir/tmp
-  agent-guidance/beads-and-dolt.md agent-guidance/handoffs.md agent-guidance/gitnexus.md agent-guidance/non-interactive-shell.md agent-guidance/styrir-workspace.md
-  .preexisting-hidden .preexisting-hidden/subdir visible-folder visible-folder/subdir "visible folder" "visible folder/Unicode-Þór" "visible folder/Unicode-Þór/sentinel file.txt" .env.example README.seed
-)
-for rel in "${required[@]}"; do [[ -e "$fixture/$rel" ]] || { echo "missing $rel"; exit 1; }; done
-
-# Generated guidance must carry the verified-work publication contract while
-# preserving the initializer's own no-commit/no-remote/no-push boundary.
-grep -F 'Verified completion has standing publication authority' "$fixture/AGENTS.md" >/dev/null
-grep -F 'Keep incomplete tasks and unfinished parent epics open' "$fixture/AGENTS.md" >/dev/null
-grep -F 'Remote creation/replacement, force pushes' "$fixture/AGENTS.md" >/dev/null
-grep -F 'Before reporting completed tracked work, perform the standing publication closeout' "$fixture/AGENTS.md" >/dev/null
-grep -F 'git push origin HEAD' "$fixture/AGENTS.md" >/dev/null
-grep -F 'Read `agent-guidance/handoffs.md` when work crosses sessions' "$fixture/AGENTS.md" >/dev/null
-grep -F 'bd dolt push --remote origin' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-grep -F 'git push origin HEAD' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-grep -F 'Ordinary non-force pushes to the already-configured intended `origin` remotes' "$fixture/agent-guidance/beads-and-dolt.md" >/dev/null
-grep -F 'successful Dolt and non-force Git pushes' "$fixture/agent-guidance/handoffs.md" >/dev/null
-grep -F 'ordinary non-force Git plus Beads/Dolt pushes' "$fixture/agent-guidance/non-interactive-shell.md" >/dev/null
-if grep -Eqi 'Git source push is separate|does not authorize `git push`|separately gated Git source push|Git source push remains separately' "$fixture/AGENTS.md" "$fixture/agent-guidance/beads-and-dolt.md" "$fixture/agent-guidance/handoffs.md" "$fixture/agent-guidance/non-interactive-shell.md"; then echo 'generated guidance still gates ordinary Git publication'; exit 1; fi
-
-# Capture all non-runtime files before the second run; generated tracker runtime is intentionally excluded.
-manifest_before="$(python3 - "$fixture" <<'PY'
-from pathlib import Path
-import hashlib, sys
-root=Path(sys.argv[1])
-excluded={'.git','.beads','.styrir'}
-for p in sorted(root.rglob('*')):
- rel=p.relative_to(root)
- if rel.parts and rel.parts[0] in excluded: continue
- if p.is_file(): print(rel, hashlib.sha256(p.read_bytes()).hexdigest())
-PY
-)"
-"$INIT" --target "$fixture" --project-name "Random Fixture" --prefix random-fixture
-manifest_after="$(python3 - "$fixture" <<'PY'
-from pathlib import Path
-import hashlib, sys
-root=Path(sys.argv[1])
-excluded={'.git','.beads','.styrir'}
-for p in sorted(root.rglob('*')):
- rel=p.relative_to(root)
- if rel.parts and rel.parts[0] in excluded: continue
- if p.is_file(): print(rel, hashlib.sha256(p.read_bytes()).hexdigest())
-PY
-)"
-[[ "$manifest_before" == "$manifest_after" ]] || { echo 'second run changed managed/source files'; diff <(printf '%s\n' "$manifest_before") <(printf '%s\n' "$manifest_after") || true; exit 1; }
-
-export BEADS_DIR="$fixture/.beads"
-(cd -- "$fixture" && bd where) | grep -F "$fixture/.beads" >/dev/null
-(cd -- "$fixture" && bd dolt remote list) | grep -F 'No remotes configured.' >/dev/null
-git -C "$fixture" check-ignore -q .styrir/tmp
-git -C "$fixture" check-ignore -q .gitnexus/example
-git -C "$fixture" check-ignore -q .beads/embeddeddolt
-if git -C "$fixture" check-ignore -q .beads/config.yaml; then echo '.beads/config.yaml must remain trackable'; exit 1; fi
-if git -C "$fixture" check-ignore -q .beads/metadata.json; then echo '.beads/metadata.json must remain trackable'; exit 1; fi
-[[ "$(git -C "$fixture" branch --show-current)" == "main" ]]
-[[ "$(git -C "$fixture" symbolic-ref HEAD)" == "refs/heads/main" ]]
-[[ "$(git -C "$fixture" rev-parse --is-bare-repository)" == "false" ]]
-[[ "$(git -C "$fixture" config --local --get beads.role)" == "maintainer" ]]
-[[ "$(git -C "$fixture" config --local --get core.hooksPath)" == "$fixture/.beads/hooks" ]]
-(cd -- "$fixture" && bd hooks list) | grep -F 'pre-commit: installed' >/dev/null
-
-python3 - "$fixture/.gitnexusrc" <<'PY'
-import json, sys
-p=sys.argv[1]
-d=json.load(open(p))
-assert d['analyze']['indexOnly'] is True
-assert d['analyze']['name']=='random-fixture'
-PY
-
-# Failure cases: nested repository, non-main repository, custom hooks path,
-# symlink collision, and incompatible existing .beads content must fail closed.
-failure_root="$fixture_parent/failure-cases"
-mkdir -p -- "$failure_root/parent/nested"
-git -C "$failure_root/parent" init -b main >/dev/null
-if "$INIT" --target "$failure_root/parent/nested" --prefix nested-project >/dev/null 2>&1; then echo 'nested repository safety check failed'; exit 1; fi
-
-mkdir -p -- "$failure_root/existing-origin"
-git -C "$failure_root/existing-origin" init -b main >/dev/null
-git -C "$failure_root/existing-origin" remote add origin https://github.com/example/example.git
-if "$INIT" --target "$failure_root/existing-origin" --prefix existing-origin >/dev/null 2>&1; then echo 'existing Git origin must require explicit Beads adoption'; exit 1; fi
-[[ ! -e "$failure_root/existing-origin/.beads/metadata.json" ]] || { echo 'origin safety failure created Beads metadata'; exit 1; }
-
-mkdir -p -- "$failure_root/staged-preservation"
-git -C "$failure_root/staged-preservation" init -b main >/dev/null
-git -C "$failure_root/staged-preservation" config user.name 'Styrir Init Test'
-git -C "$failure_root/staged-preservation" config user.email 'styrir-init@example.invalid'
-printf 'base\n' > "$failure_root/staged-preservation/operator.txt"
-git -C "$failure_root/staged-preservation" add operator.txt
-git -C "$failure_root/staged-preservation" commit -m base >/dev/null
-printf 'staged operator work\n' > "$failure_root/staged-preservation/operator.txt"
-git -C "$failure_root/staged-preservation" add operator.txt
-staged_before="$(git -C "$failure_root/staged-preservation" diff --cached --binary)"
-"$INIT" --target "$failure_root/staged-preservation" --prefix staged-preservation >/dev/null
-staged_after="$(git -C "$failure_root/staged-preservation" diff --cached --binary)"
-[[ "$staged_before" == "$staged_after" ]] || { echo 'initializer changed pre-existing staged operator work'; exit 1; }
-
-mkdir -p -- "$failure_root/non-main"
-git -C "$failure_root/non-main" init -b develop >/dev/null
-if "$INIT" --target "$failure_root/non-main" --prefix non-main >/dev/null 2>&1; then echo 'non-main safety check failed'; exit 1; fi
-
-mkdir -p -- "$failure_root/custom-hooks"
-git -C "$failure_root/custom-hooks" init -b main >/dev/null
-git -C "$failure_root/custom-hooks" config core.hooksPath .custom-hooks
-if "$INIT" --target "$failure_root/custom-hooks" --prefix custom-hooks >/dev/null 2>&1; then echo 'custom hooks safety check failed'; exit 1; fi
-
-mkdir -p -- "$failure_root/symlink-collision"
-ln -s /tmp "$failure_root/symlink-collision/.styrir"
-if "$INIT" --target "$failure_root/symlink-collision" --prefix symlink-collision >/dev/null 2>&1; then echo 'symlink collision safety check failed'; exit 1; fi
-
-mkdir -p -- "$failure_root/bad-beads/.beads"
-printf 'unknown\n' > "$failure_root/bad-beads/.beads/unrecognized"
-if "$INIT" --target "$failure_root/bad-beads" --prefix bad-beads >/dev/null 2>&1; then echo 'incompatible beads safety check failed'; exit 1; fi
-
-printf 'PASS: random fixture initialized twice with hidden and visible content preserved: %s\n' "$fixture"
+  [[ "$(cat "$fixture/output")" == *'Beads is decommissioned'* ]]
+done
+[[ ! -e "$fixture/new" && ! -e "$fixture/calls" ]]
+[[ "$(cat "$fixture/existing/sentinel")" == 'preserve me' ]]
+echo 'Retired initializer: no target changes and no tracker/Git invocation'

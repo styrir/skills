@@ -17,7 +17,7 @@ Canonical source for Styrir-owned agent skills shared across Claude Code, Codex,
 | `session-eval/` | Ingest Claude/Codex/Pi/Grok/OMP session logs, run a code-first check catalog, track Styrir skill activations, emit a self-contained HTML trend report. |
 | `research/` | Canonical research-tool skills for Context7, Deep Search, provider setup, report delivery, paper writing, and related retrieval workflows. |
 | `setja/` | TypeScript context-construction and agent-injection layer with templates and harness adapters. |
-| `styrir-init/` | Safely initialize or adopt a repository with local Git, Beads/Dolt, GitNexus, DOX guidance, and the Styrir generated-workspace layout. |
+| `styrir-init/` | Retired Beads bootstrap; disabled pending the Verk migration (`vk-2589`). |
 | `styrir-search/` | Bounded Styrir research routing, evidence ledgers, gates, and deep-search handoff packaging. |
 | `styrir-search-{simple,plus,deep-local,deep-aiq}/` | Slash-preset wrappers for the common Styrir Search lanes. |
 | `voice-preserving-humanizer/` | Revise AI-assisted prose while preserving author voice; dual-approved plan scaffolded, implementation in progress (`skills-cfw`). |
@@ -39,9 +39,9 @@ A real directory in the way is moved to `~/.skill-link-backups/<timestamp>/`, ne
 ## Repository workflow
 
 - Read `AGENTS.md` first.
-- Use Beads for durable task state; run `bd prime` for the current command contract.
-- The `skills` Beads database uses the machine-wide shared Dolt server and backs up to `refs/dolt/data` on `styrir/skills`.
-- Detailed planning, sync, handoff, and recovery guidance lives in `docs/agent-guidance/planning-beads-and-handoffs.md`.
+- Use `verk/SKILL.md` for durable task state through its session-scoped wrapper.
+- Task state stays in local Verk; Beads/Dolt tracking and synchronization are decommissioned.
+- Detailed planning and handoff guidance lives in `docs/agent-guidance/planning-verk-and-handoffs.md`.
 - Keep secrets out of the repository. Credentials belong in environment variables or the macOS Keychain.
 
 ## Migration boundary

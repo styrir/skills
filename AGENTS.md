@@ -11,105 +11,31 @@ This repository is the source of truth for agent skills shared across Claude Cod
 - Keep secrets out of the repository. Credentials belong in environment variables or the macOS Keychain.
 - Do not absorb or reformat unrelated dirty working-tree changes.
 - Use non-interactive flags for shell operations that may prompt.
-- A completed, verified tranche must be committed and published before closeout: push Git to the configured `origin`, push Beads/Dolt to `origin`, verify both refs, and leave the checkout clean. This is standing authority for ordinary non-force publication; ask before destructive history rewrites, force pushes, or creating/changing remotes.
+- A completed, verified tranche must be committed and published before closeout: follow the configured non-force Git publication workflow and verify its ref. Task state stays in local Verk; there is no Beads/Dolt synchronization. This is standing authority for ordinary non-force publication; ask before destructive history rewrites, force pushes, or creating/changing remotes.
 
 ## Task Routing
 
 | If you are working on... | Read |
 |---|---|
-| Beads, task planning, `.pipeline/` artifacts, shared Dolt operation, handoffs, or closeout | `docs/agent-guidance/planning-beads-and-handoffs.md` |
+| Verk, task planning, `.pipeline/` artifacts, handoffs, or closeout | `verk/SKILL.md`, then `docs/agent-guidance/planning-verk-and-handoffs.md` |
 | WorkGraph shipping Test / `.grok/quality-gates.yaml` | `.grok/quality-gates.yaml` (JSON-compatible YAML 1.2; `workgraph-quality-gates`) |
 | Adding, moving, or validating durable documentation | `docs/AGENTS.md` |
 | The Ask skill or provider/model routing | `ask/SKILL.md`, `ask/providers.json`, and the relevant files under `ask/scripts/` |
 | Setja runtime, CLI, package, adapters, or bundled skill | `setja/AGENTS.md`, then the relevant entry contract or source files |
 | Another skill | That skill's `SKILL.md`, then its referenced `scripts/`, `references/`, `templates/`, or `assets/` files |
 
-## Beads Posture
+## Verk posture
 
-This repo uses database **`skills`** with prefix **`skills-`** on the machine-wide launchd-managed Dolt server at `127.0.0.1:3308`. The server is external to `bd`; do not run a competing per-repo server or use `beads_global` as this repo's tracker.
+The operator decommissioned Beads. Use Verk for durable task state, including
+when an older document still mentions bd. Do not run bd, repair its databases,
+restart its services, migrate old stores or synchronize Dolt task refs.
 
-Run `bd prime` for the current command contract. The detailed machine posture, first-clone/bootstrap rule, sync boundary, and recovery commands live in `docs/agent-guidance/planning-beads-and-handoffs.md`.
+This checkout is bound to the local Verk project `skills`. Read `verk/SKILL.md`
+and use its session-scoped wrapper: brief and view, start before edits,
+checkpoint at handoff, and verify receipts before calling a contract satisfied.
+Operator decisions and policy approval remain the operator's actions.
 
 ## Child DOX Index
 
 - `docs/AGENTS.md` — owns durable documentation and progressive-disclosure guidance below `docs/`.
 - `setja/AGENTS.md` — owns the Setja TypeScript runtime, package, tests, documentation, templates, adapters, and bundled skill.
-
-<!-- bd-doctor-divergence: ok -->
-
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
-## Beads Issue Tracker
-
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
-
-### Quick Reference
-
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
-```
-
-### Rules
-
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
-
-**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
-
-## Agent Context Profiles
-
-The managed Beads block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
-
-- **Repository default — tranche publisher**: After each completed and verified tranche, close or update its Beads, commit the coherent Git change, push Beads/Dolt to `origin`, push Git to `origin`, verify both, and leave the checkout clean.
-- **Minimal**: Keep tool instruction files as pointers to `bd prime`; the same tranche-publication policy still applies.
-- **Explicit pause**: A current user or orchestrator instruction to avoid a commit or push temporarily overrides the default for that tranche. Destructive history rewrites, force pushes, and remote creation or replacement always require separate confirmation.
-
-## Session Completion
-
-This protocol applies when ending a Beads implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
-
-1. **File issues for remaining work** - Create beads for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **Publish the tranche** unless a current instruction explicitly pauses publication:
-   ```bash
-   git status
-   git pull --rebase
-   bd dolt push --remote origin
-   git push origin HEAD
-   git status
-   ```
-5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
-
-**Critical rules:**
-- Explicit user or orchestrator instructions override this Beads block.
-- This repository grants standing authority for ordinary tranche commits and non-force pushes to its configured origins.
-- If a required sync or push is blocked, keep the tranche open, preserve the local state, and report the exact command and error.
-<!-- END BEADS INTEGRATION -->
-
-<!-- BEGIN BEADS CODEX SETUP: generated by bd setup codex -->
-## Beads Issue Tracker
-
-Use Beads (`bd`) for durable task tracking in repositories that include it. Use the `beads` skill at `.agents/skills/beads/SKILL.md` (project install) or `~/.agents/skills/beads/SKILL.md` (global install) for Beads workflow guidance, then use the `bd` CLI for issue operations.
-
-### Quick Reference
-
-```bash
-bd ready                # Find available work
-bd show <id>            # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>           # Complete work
-bd prime                # Refresh Beads context
-```
-
-### Rules
-
-- Use `bd` for all task tracking; do not create markdown TODO lists.
-- Run `bd prime` when Beads context is missing or stale. Codex 0.129.0+ can load Beads context automatically through native hooks; use `/hooks` to inspect or toggle them.
-- Keep persistent project memory in Beads via `bd remember`; do not create ad hoc memory files.
-
-**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
-<!-- END BEADS CODEX SETUP -->
