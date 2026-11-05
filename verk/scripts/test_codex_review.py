@@ -238,27 +238,43 @@ class DelegatedGoalTests(unittest.TestCase):
         self.assertEqual(json.loads(path.read_text()), request)
         self.assertEqual(closeout.call(self.root, self.env, 'view', goal, '--json')['receipts'], [])
 
-    def test_missing_checkout_with_the_current_receipt_clears_from_any_surviving_directory(self):
+    def receipted_request(self):
         repo, goal, head = self.approved_goal()
         path = closeout.state_path(self.env)
         request = dict(json.loads(path.read_text()), delegate_approved_goals=True)
         closeout.save(path, request)
         self.assertEqual(self.operate(repo, 'complete', '--id', goal)[1]['status'], 'receipt')
         closeout.save(path, request)  # a later Stop still holds it, as after a crash between receipt and cleanup
-        for payload_cwd_survives in (False, True):
-            with self.subTest(payload_cwd_survives=payload_cwd_survives):
-                if not payload_cwd_survives:
-                    payload = self.missing_checkout(repo)
-                else:
-                    payload = dict(payload, cwd=str(self.root))
-                    closeout.save(path, request)
-                verbs, spy = self.spying()
-                with spy:
-                    result = codex_closeout.hook(payload, self.env)
-                self.assertNotIn('decision', result)
-                self.assertIn('checkout_missing', result['systemMessage'])
-                self.assertEqual(verbs, ['view'])
-                self.assertFalse(path.exists())
+        return repo, goal, path, request
+
+    def test_missing_checkout_with_the_current_receipt_clears_from_the_selected_directory(self):
+        repo, _, path, _ = self.receipted_request()
+        payload = self.missing_checkout(repo)
+        verbs, spy = self.spying()
+        with spy:
+            result = codex_closeout.hook(payload, dict(self.env, VERK_CLOSEOUT_READ_DIR=str(self.root)))
+        self.assertNotIn('decision', result)
+        self.assertIn('checkout_missing', result['systemMessage'])
+        self.assertEqual(verbs, ['view'])
+        self.assertFalse(path.exists())
+
+    def test_without_a_selected_directory_stop_reads_nothing_even_with_a_receipt(self):
+        repo, goal, path, request = self.receipted_request()
+        for payload_cwd in (self.root / 'deleted-cwd', self.root):  # a surviving host cwd is not a selection
+            for env in (self.env, dict(self.env, VERK_CLOSEOUT_READ_DIR=str(self.root / 'selected-but-gone'))):
+                with self.subTest(payload_cwd=payload_cwd, selected=env.get('VERK_CLOSEOUT_READ_DIR')):
+                    if repo.exists():
+                        shutil.rmtree(repo)
+                    payload = {'hook_event_name': 'Stop', 'session_id': self.env['CODEX_THREAD_ID'], 'cwd': str(payload_cwd)}
+                    with patch.object(closeout, 'call', side_effect=AssertionError('read without a selection')):
+                        result = codex_closeout.hook(payload, env)
+                    self.assertEqual(result['decision'], 'block')
+                    self.assertIn('checkout_missing', result['reason'])
+                    self.assertEqual(json.loads(path.read_text()), request)
+        # The foreground route is the selection: it finds the same receipt and clears the request.
+        code, done = self.operate(self.root, 'recover', '--id', goal)
+        self.assertEqual((code, done['status'], done['operation']), (0, 'receipt', 'recover'))
+        self.assertFalse(path.exists())
 
     def test_a_historical_receipt_at_the_same_revision_does_not_clear_a_missing_checkout(self):
         repo, goal, head = self.approved_goal()
@@ -271,7 +287,7 @@ class DelegatedGoalTests(unittest.TestCase):
         self.assertEqual(view['proof']['status'], 'needs_recheck')
         self.assertEqual(view['receipts'][-1]['revision'], head)  # it still matches, and must not count
         closeout.save(path, request)
-        result = codex_closeout.hook(self.missing_checkout(repo), self.env)
+        result = codex_closeout.hook(self.missing_checkout(repo), dict(self.env, VERK_CLOSEOUT_READ_DIR=str(self.root)))
         self.assertEqual(result['decision'], 'block')
         self.assertIn('needs_recheck', result['reason'])
         self.assertTrue(path.exists())
@@ -377,6 +393,7 @@ class CodexStopTests(unittest.TestCase):
             request = {'request_id': 'one', 'repo': str(root / 'deleted'), 'contract': 'vk-1', 'head': 'H', 'common_dir': 'g'}
             closeout.save(path, request)
             payload = {'hook_event_name': 'Stop', 'session_id': 'codex-int-test', 'cwd': str(root)}
+            env['VERK_CLOSEOUT_READ_DIR'] = str(root)
             with patch.object(closeout, 'call', side_effect=ValueError('store busy')):
                 result = codex_closeout.hook(payload, env)
             self.assertEqual(result['decision'], 'block')

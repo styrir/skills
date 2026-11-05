@@ -64,18 +64,20 @@ def current_receipt(view, request):
 
 
 def recover(read_dir, env, request, path):
-    """The missing-checkout branch: one Verk read and no writes to Verk. The directory only hosts the read; it runs nothing and answers nothing."""
+    """The missing-checkout branch: at most one Verk read and no writes to Verk. The selected directory only hosts the read; it runs nothing and answers nothing."""
     contract = request["contract"]
-    try:
-        view = shared.call(read_dir, env, "view", contract, "--json", timeout=5)
-        receipt = current_receipt(view, request)
-        proof = (view.get("proof") or {}).get("status")
-    except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
-        receipt, proof = None, f"unreadable: {str(error)[:200]}"
+    receipt, proof = None, "not_read: no surviving directory selected"
+    if read_dir:
+        try:
+            view = shared.call(read_dir, env, "view", contract, "--json", timeout=5)
+            receipt = current_receipt(view, request)
+            proof = (view.get("proof") or {}).get("status")
+        except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
+            proof = f"unreadable: {str(error)[:200]}"
     if receipt:
         return {"status": "receipt", "contract": contract, "receipt": receipt["id"], "revision": request["head"], "recovered": "checkout_missing"}
     result = {"status": "needs_action", "needs_action": "checkout_missing", "contract": contract, "revision": request["head"], "proof": proof,
-              "reason": "The recorded checkout is gone and no current receipt covers this request; no checks or repair were started",
+              "reason": "The recorded checkout is gone and no selected directory shows a current receipt for this request; no checks or repair were started",
               "request_id": request.get("request_id")}
     # Unchanged diagnostics are counted, not repeated.
     try:
@@ -87,12 +89,10 @@ def recover(read_dir, env, request, path):
     return dict(result, repeat=shared.number(previous.get("repeat")) + 1 if unchanged else 1)
 
 
-def read_directory(env, payload_cwd=None):
-    """The surviving directory that hosts recovery's read: explicit choice first, then the host's cwd, then home."""
-    for candidate in (env.get("VERK_CLOSEOUT_READ_DIR"), payload_cwd, str(Path.home())):
-        if candidate and Path(candidate).is_dir():
-            return Path(candidate).resolve()
-    raise ValueError("No surviving directory to read Verk from")
+def selected_directory(env):
+    """The directory the operator or author selected to host recovery's read. Never inferred from the host's cwd or home."""
+    selected = env.get("VERK_CLOSEOUT_READ_DIR")
+    return Path(selected).resolve() if selected and Path(selected).is_dir() else None
 
 
 def recover_pending(read_dir, env, contract):
@@ -169,7 +169,7 @@ def hook(payload, env):
             shared.call(repo, scoped, "reconcile", "--id", request["contract"], "--json", timeout=5)
             result = complete(repo, scoped, request)
         else:
-            result = recover(read_directory(scoped, payload.get("cwd")), scoped, request, path)
+            result = recover(selected_directory(scoped), scoped, request, path)
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         result = {"status": "needs_action", "reason": str(error)}
     if request is None:  # Unreadable: keep it and block, as nothing could be checked.
@@ -188,7 +188,8 @@ def hook(payload, env):
         if result.get("repeat", 1) > 1:
             return {"decision": "block", "reason": f"Verk closeout: still checkout_missing for {result['contract']}, unchanged ({result['repeat']} callbacks)."}
         return {"decision": "block", "reason": "Verk closeout is blocked: " + json.dumps(result)
-                + ". Restore the checkout or request closeout again from a current one. Do not start checks or repair from this callback, and do not ask for terminal chores."}
+                + f". Restore the checkout, request closeout again from a current one, or look for its receipt with `closeout.py recover --repo <surviving directory> --id {result['contract']}`. "
+                "Do not start checks or repair from this callback, and do not ask for terminal chores."}
     return {"decision": "block", "reason": "Complete the requested Verk review before finishing. "
             + json.dumps(result) + ". Wait for the independent verdict, repair findings and rerun Codex closeout; "
             "use the recorded operator delegation for an independently approved goal. Do not ask for terminal chores."}
