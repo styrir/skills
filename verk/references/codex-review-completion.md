@@ -31,6 +31,9 @@ When the operator asks Codex to finish reviews automatically, use
 into this session's pending request for Stop follow-through. It is not inferred
 from a passing test or generic permission to edit code.
 
+Stop and foreground closeout follow the delegation; `closeout.py complete --id <contract>` is the
+explicit route to the same step. `closeout.py observe` never takes it, even with delegation recorded.
+
 This route handles goal-completion reviews only. The independent reviewer still
 judges the exact target. Codex reads only the installed reviewer's existing
 owner-controlled report and verdict manifest, never an arbitrary author report.

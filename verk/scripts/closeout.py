@@ -48,6 +48,7 @@ def save(path, data):
 
 
 def observe(repo, env, contract, head, wait, call_timeout=10):
+    """Pure read: Verk view only. No writes, producers, reconciliation or delegated completion."""
     deadline = time.monotonic() + wait
     while True:
         view = call(repo, env, "view", contract, "--json", timeout=call_timeout)
@@ -65,6 +66,12 @@ def observe(repo, env, contract, head, wait, call_timeout=10):
         if time.monotonic() >= deadline:
             return {"status": "review_pending", "contract": contract, "reviews": pending}
         time.sleep(min(2, max(0, deadline - time.monotonic())))
+
+
+def reconcile(repo, env, contract, head, wait=0):
+    """Explicit and writing: asks Verk to act on ready evidence, then reports. Observing never does this."""
+    call(repo, env, "reconcile", "--id", contract, "--json")
+    return observe(repo, env, contract, head, wait)
 
 
 def current(repo, env, contract, attempt):
@@ -186,6 +193,38 @@ def hook(payload, env):
         claim.unlink(missing_ok=True)
 
 
+OPERATIONS = ("observe", "reconcile", "complete")
+
+
+def operation(name, arguments, harness, env):
+    parser = argparse.ArgumentParser(prog=f"closeout.py {name}", description={
+        "observe": "Pure read of current state: writes nothing and starts nothing.",
+        "reconcile": "Explicitly ask Verk to act on ready evidence, then report.",
+        "complete": "Codex only: finish an independently approved goal under the pending request's recorded delegation.",
+    }[name])
+    parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument("--id", required=True)
+    parser.add_argument("--wait", type=int, default=0, choices=range(0, 61), metavar="0..60")
+    if name != "complete":
+        parser.add_argument("--revision", help="Revision the receipt must cover; defaults to HEAD")
+    args = parser.parse_args(arguments)
+    repo = args.repo.resolve()
+    try:
+        if name == "complete":
+            if harness != "codex":
+                raise ValueError("Delegated goal completion is Codex-only")
+            from codex_closeout import complete_pending
+            result = complete_pending(repo, env, args.id, args.wait)
+        else:
+            head = args.revision or git(repo, "rev-parse", "HEAD")
+            result = (observe if name == "observe" else reconcile)(repo, env, args.id, head, args.wait)
+        print(json.dumps(dict(result, operation=name)))
+        return 0 if result["status"] == "receipt" else 3
+    except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
+        print(f"Verk {name}: {error}", file=sys.stderr)
+        return 2
+
+
 def main():
     arguments = sys.argv[1:]
     identity = argparse.ArgumentParser(add_help=False)
@@ -202,6 +241,8 @@ def main():
             result = {"systemMessage": f"Verk closeout needs attention: {error}"}
         print(json.dumps(result))
         return 0
+    if arguments[:1] and arguments[0] in OPERATIONS:
+        return operation(arguments[0], arguments[1:], selected.harness, env)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--id", required=True)

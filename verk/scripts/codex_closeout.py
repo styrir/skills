@@ -8,7 +8,8 @@ import closeout as shared
 from codex_review import complete_goal
 
 
-def observe(repo, env, request, wait=0):
+def complete(repo, env, request, wait=0):
+    """Writes: may answer an independently approved goal under the request's recorded delegation. Use shared.observe to only read."""
     deadline = time.monotonic() + wait
     while True:
         result = shared.observe(repo, env, request["contract"], request["head"], 0, call_timeout=5)
@@ -25,6 +26,33 @@ def observe(repo, env, request, wait=0):
         time.sleep(min(2, max(0, deadline - time.monotonic())))
 
 
+def ready(repo, request):
+    if (shared.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir") != request["common_dir"]
+            or shared.git(repo, "rev-parse", "HEAD") != request["head"]
+            or shared.git(repo, "status", "--porcelain")):
+        raise ValueError("Ready work changed; re-qualify and request closeout at current HEAD")
+
+
+def complete_pending(repo, env, contract, wait=0):
+    """The explicit foreground route to complete(), for the pending request of this session and contract."""
+    path = shared.state_path(repo, env)
+    try:
+        raw = path.read_text()
+    except FileNotFoundError:
+        raise ValueError("No pending closeout request in this session") from None
+    request = json.loads(raw)
+    canonical = shared.call(repo, env, "view", contract, "--json")["contract"]["id"]
+    if not isinstance(request, dict) or request.get("contract") != canonical:
+        raise ValueError(f"The pending closeout request is not for {canonical}")
+    target = Path(request["repo"]).resolve()
+    ready(target, request)
+    result = complete(target, env, request, wait)
+    shared.save(path.with_suffix(".result.json"), result)
+    if result["status"] == "receipt" and path.exists() and path.read_text() == raw:
+        path.unlink()
+    return result
+
+
 def closeout(repo, env, contract, proof, wait, qualification=None, source_only=False, delegate_approved_goals=False):
     if env.get("VERK_CLOSEOUT_HARNESS", "codex") != "codex":
         raise ValueError("This review-completion adapter is Codex-only")
@@ -35,7 +63,7 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
     request = json.loads(path.read_text())
     request["delegate_approved_goals"] = delegate_approved_goals
     shared.save(path, request)
-    result = observe(repo, env, request, wait)
+    result = complete(repo, env, request, wait)
     shared.save(path.with_suffix(".result.json"), result)
     if result["status"] == "receipt" and json.loads(path.read_text()) == request:
         path.unlink()
@@ -64,12 +92,9 @@ def hook(payload, env):
         if not isinstance(request, dict):
             raise ValueError("Malformed Codex closeout request")
         repo = Path(request["repo"]).resolve()
-        if (shared.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir") != request["common_dir"]
-                or shared.git(repo, "rev-parse", "HEAD") != request["head"]
-                or shared.git(repo, "status", "--porcelain")):
-            raise ValueError("Ready work changed; re-qualify and request closeout at current HEAD")
+        ready(repo, request)
         shared.call(repo, scoped, "reconcile", "--id", request["contract"], "--json", timeout=5)
-        result = observe(repo, scoped, request)
+        result = complete(repo, scoped, request)
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         result = {"status": "needs_action", "reason": str(error)}
     shared.save(path.with_suffix(".result.json"), result)

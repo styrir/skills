@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -116,7 +117,8 @@ class DelegatedGoalTests(unittest.TestCase):
             self.manifest.write_text(json.dumps(dict(self.row, chars=len(body), decider=None)) + '\n')
             self.assertIsNotNone(codex_review.approved_report(self.env, self.decision, 'vk-1', self.head))
 
-    def test_real_cli_goal_receipt_without_changing_policy_or_reviewer(self):
+    def approved_goal(self):
+        """A real goal with an open review whose approved report would let delegated completion answer it."""
         repo = self.root / 'repo'
         repo.mkdir()
         def run(*args, env=None):
@@ -139,6 +141,73 @@ class DelegatedGoalTests(unittest.TestCase):
         row = dict(self.row, decision=decision['id'], contract=goal, revision=head,
                    chars=len(body), at=decision['created_at'] + 1)
         self.manifest.write_text(json.dumps(row) + '\n')
+        return repo, goal, head
+
+    def snapshot(self, repo):
+        """Everything observing could change: store rows, every other store file with its mtime, and the checkout."""
+        rows, files = {}, {}
+        for item in sorted(Path(self.env['VERK_HOME']).rglob('*')):
+            if not item.is_file() or item.name.endswith(('-wal', '-shm')):
+                continue
+            head = item.read_bytes()[:16]
+            if head == b'SQLite format 3\x00':
+                db = sqlite3.connect(f'file:{item}?mode=ro', uri=True)
+                rows[str(item)] = list(db.iterdump())
+                db.close()
+            else:
+                files[str(item)] = (item.stat().st_mtime_ns, item.read_bytes())
+        self.assertTrue(rows, 'the fixture store should hold a database')
+        return rows, files, closeout.git(repo, 'status', '--porcelain'), closeout.git(repo, 'rev-parse', 'HEAD')
+
+    def operate(self, repo, *args):
+        script = Path(__file__).with_name('closeout.py')
+        result = subprocess.run([sys.executable, str(script), *args, '--repo', str(repo)], env=self.env,
+                                capture_output=True, text=True, timeout=60)
+        return result.returncode, json.loads(result.stdout) if result.stdout.strip() else result.stderr
+
+    def test_observing_a_delegated_request_twice_changes_and_completes_nothing(self):
+        repo, goal, head = self.approved_goal()
+        path = closeout.state_path(repo, self.env)
+        closeout.save(path, dict(json.loads(path.read_text()), delegate_approved_goals=True))
+        before = self.snapshot(repo)
+        for _ in range(2):
+            code, result = self.operate(repo, 'observe', '--id', goal)
+            self.assertEqual(code, 3, result)
+            self.assertEqual((result['status'], result['operation']), ('review_pending', 'observe'))
+            self.assertEqual(self.snapshot(repo), before)
+        # In process too, so the only Verk verb and the absence of completion are seen directly, not just their effects.
+        verbs = []
+        real = closeout.call
+        def spy(*args, **kwargs):
+            verbs.append(args[2])
+            return real(*args, **kwargs)
+        with patch.object(closeout, 'call', side_effect=spy), patch.object(codex_closeout, 'complete_goal', side_effect=AssertionError('completed')):
+            self.assertEqual(closeout.observe(repo, self.env, goal, head, 0)['status'], 'review_pending')
+        self.assertEqual(set(verbs), {'view'})
+        self.assertEqual(self.snapshot(repo), before)
+        # The same request really is completable, so the reads above held back something that could happen.
+        code, done = self.operate(repo, 'complete', '--id', goal)
+        self.assertEqual((code, done['status'], done['operation']), (0, 'receipt', 'complete'), done)
+        self.assertFalse(path.exists())
+
+    def test_complete_needs_the_recorded_delegation_and_reconcile_is_labelled(self):
+        repo, goal, _ = self.approved_goal()
+        path = closeout.state_path(repo, self.env)
+        before = path.read_text()
+        code, result = self.operate(repo, 'complete', '--id', goal)
+        self.assertEqual((code, result['status'], result['operation']), (3, 'review_pending', 'complete'))
+        self.assertEqual(path.read_text(), before)
+        self.assertEqual(closeout.call(repo, self.env, 'view', goal, '--json')['receipts'], [])
+        code, result = self.operate(repo, 'reconcile', '--id', goal)
+        self.assertEqual((code, result['status'], result['operation']), (3, 'review_pending', 'reconcile'))
+        self.assertEqual(self.operate(repo, '--harness', 'claude-code', 'complete', '--id', goal)[0], 2)
+        path.unlink()
+        code, message = self.operate(repo, 'complete', '--id', goal)
+        self.assertEqual(code, 2)
+        self.assertIn('No pending closeout request', message)
+
+    def test_real_cli_goal_receipt_without_changing_policy_or_reviewer(self):
+        repo, goal, _ = self.approved_goal()
         policy = closeout.call(repo, self.env, 'view', goal, '--json')['policy']
         done = codex_closeout.closeout(repo, self.env, goal, 'proof.txt', 0, source_only=True, delegate_approved_goals=True)
         self.assertEqual(done['status'], 'receipt')
@@ -180,16 +249,16 @@ with patch.object(closeout,'git',side_effect=git), patch.object(closeout,'call',
             def git(repo, *args):
                 return '' if args[0] == 'status' else ('head' if args[-1] == 'HEAD' else 'git')
             with patch.object(closeout, 'git', side_effect=git), patch.object(closeout, 'call', return_value={}), \
-                 patch.object(codex_closeout, 'observe', return_value={'status': 'review_pending'}) as observe:
+                 patch.object(codex_closeout, 'complete', return_value={'status': 'review_pending'}) as complete:
                 for active in [False, True]:
                     result = codex_closeout.hook(dict(payload, stop_hook_active=active), env)
                     self.assertEqual(result['decision'], 'block')
                     self.assertEqual(json.loads(path.read_text()), request)
-                    self.assertTrue(observe.call_args.args[2]['delegate_approved_goals'])
-                observe.return_value = {'status': 'receipt', 'receipt': 'vk-r1'}
+                    self.assertTrue(complete.call_args.args[2]['delegate_approved_goals'])
+                complete.return_value = {'status': 'receipt', 'receipt': 'vk-r1'}
                 self.assertNotIn('decision', codex_closeout.hook(payload, env))
                 self.assertFalse(path.exists())
-                observe.side_effect = AssertionError('duplicate completion')
+                complete.side_effect = AssertionError('duplicate completion')
                 self.assertEqual(codex_closeout.hook(payload, env), {})
 
     def test_changed_work_blocks_completion_without_verk_mutation(self):
