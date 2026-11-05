@@ -85,6 +85,23 @@ def current(repo, env, contract, attempt):
     return view
 
 
+def admitted_at(check, head):
+    """Core's own verdict on one check at this revision. A process exit or an aggregate passed flag never establishes it."""
+    return any(e.get("revision") == head and e.get("status") in ("accepted", "used") and e.get("bindings_current") is True
+               for e in check.get("evidence", []))
+
+
+def review_covers(view, decision, head):
+    """An open review of exactly this target: same contract, revision or artifact revision, acceptance, subjects and policy."""
+    target, bound = decision.get("target") or {}, decision.get("bindings") or {}
+    contract = view["contract"]
+    return (decision.get("lifecycle") == "open" and contract["id"] in decision.get("contracts", [decision.get("contract")])
+            and (target.get("revision") or (target.get("artifact") or {}).get("revision")) == head
+            and bound.get("acceptanceVersion") == contract.get("acceptance_version")
+            and bound.get("subjectsVersion") == contract.get("subjects_version")
+            and bound.get("policyVersion") == view["policy"].get("version"))
+
+
 def closeout(repo, env, contract, proof, wait, qualification=None, source_only=False):
     repo = repo.resolve()
     path = state_path(repo, env)
@@ -104,7 +121,7 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
     if view["state"] != "satisfied":
         open_reviews = [call(repo, env, "view", r["decision"], "--json")
                         for r in view.get("reviews", []) if r["lifecycle"] == "open"]
-        current_review = any(r.get("target", {}).get("revision") == head for r in open_reviews)
+        current_review = any(review_covers(view, r, head) for r in open_reviews)
         if not current_review:
             # start refuses to replace another held task; every later write names the attempt it returned.
             attempt = (call(repo, env, "start", contract, "--json").get("attempt") or {}).get("id")
@@ -125,10 +142,17 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
                 if current(repo, env, contract, attempt)["state"] == "satisfied":
                     admitted = True  # a receipt was admitted meanwhile; observe it instead of running more checks
                     break
-                # Public check status spans revisions; only a current-HEAD review proves reuse is safe.
+                if admitted_at(check, head):
+                    continue  # Verk already admitted this check for this revision under the current bindings
                 # Producer deadline ends its check process group before this outer timeout.
                 until = str(int((time.time() + 590) * 1000))
                 call(repo, env, "check", check["name"], "--id", contract, "--until", until, timeout=600, structured=False)
+                seen = current(repo, env, contract, attempt)
+                ran = next((c for c in seen["policy"]["checks"] if c["name"] == check["name"]), {})
+                # A Verk older than per-check evidence shows no list to confirm against.
+                if "evidence" in ran and not admitted_at(ran, head):
+                    why = [e.get("reason") or e.get("status") for e in ran["evidence"] if e.get("revision") == head]
+                    raise ValueError(f"Check {check['name']} exited 0 but Verk did not admit it at {head}: {', '.join(why) or 'no evidence recorded'}")
         if git(repo, "rev-parse", "HEAD") != head or git(repo, "status", "--porcelain"):
             raise ValueError("Ready work changed during closeout; inspect evidence before requesting it again")
         if not current_review and checks and not admitted:

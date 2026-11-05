@@ -174,6 +174,52 @@ class CloseoutTests(unittest.TestCase):
                 closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
         self.assertFalse(any("Approved checks passed" in str(c.args) for c in failed.call_args_list))
 
+    def evidence(self, **changes):
+        return dict({"id": "vk-e1", "revision": self.head, "status": "accepted", "reason": None, "bindings_current": True}, **changes)
+
+    def submit_with(self, evidence):
+        view = {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"},
+                "attempts": [{"id": "vk-1.1", "state": "active"}],
+                "policy": {"checks": [{"name": "unit", "status": "passed", "evidence": evidence}]}}
+        with patch.object(closeout, "call", return_value=view) as invoke, patch.object(closeout, "observe", return_value={"status": "review_pending", "reviews": []}):
+            closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
+        return [c.args[2:] for c in invoke.call_args_list if c.args[2] == "check"]
+
+    def test_admitted_evidence_for_this_revision_starts_no_check(self):
+        for status in ("accepted", "used"):
+            self.assertEqual(self.submit_with([self.evidence(status=status)]), [])
+        # An older failure or stale run beside the admitted one doesn't force another.
+        self.assertEqual(self.submit_with([self.evidence(status="rejected"), self.evidence()]), [])
+
+    def test_anything_short_of_current_admission_is_not_reused(self):
+        cases = {"old revision": self.evidence(revision="0" * 40), "changed bindings": self.evidence(bindings_current=False),
+                 "rejected, despite exit 0": self.evidence(status="rejected", reason="dirty"), "pending": self.evidence(status="pending"),
+                 "withdrawn": self.evidence(status="withdrawn"), "no bindings verdict": {"revision": self.head, "status": "accepted"}}
+        for name, row in cases.items():
+            with self.subTest(name):
+                with self.assertRaisesRegex(ValueError, "did not admit"):
+                    self.submit_with([row])  # the check runs, and the unchanged view still shows no admission
+        self.assertFalse(closeout.admitted_at({"status": "passed"}, self.head))
+
+    def test_a_check_that_exits_zero_without_admission_stops_closeout(self):
+        with self.assertRaisesRegex(ValueError, "exited 0 but Verk did not admit it .*dirty"):
+            self.submit_with([self.evidence(status="rejected", reason="dirty")])
+
+    def test_a_review_is_reused_only_for_exactly_this_target(self):
+        view = {"contract": {"id": "vk-1", "acceptance_version": 2, "subjects_version": 1}, "policy": {"version": 3}}
+        good = {"lifecycle": "open", "contracts": ["vk-1"], "target": {"revision": self.head},
+                "bindings": {"acceptanceVersion": 2, "subjectsVersion": 1, "policyVersion": 3}}
+        self.assertTrue(closeout.review_covers(view, good, self.head))
+        self.assertTrue(closeout.review_covers(view, dict(good, target={"artifact": {"revision": self.head}}), self.head))
+        for name, changed in {"revision": {"target": {"revision": "0" * 40}},
+                              "artifact revision": {"target": {"artifact": {"revision": "0" * 40}}},
+                              "acceptance": {"bindings": dict(good["bindings"], acceptanceVersion=1)},
+                              "subjects": {"bindings": dict(good["bindings"], subjectsVersion=0)},
+                              "policy": {"bindings": dict(good["bindings"], policyVersion=2)},
+                              "other contract": {"contracts": ["vk-2"]}, "answered": {"lifecycle": "answered"}}.items():
+            with self.subTest(name):
+                self.assertFalse(closeout.review_covers(view, dict(good, **changed), self.head))
+
     def test_qualification_and_additional_proof_reach_the_checkpoint_before_checks(self):
         view = {"contract": {"id": "vk-1"}, "state": "active", "attempt": {"id": "vk-1.1"},
                 "attempts": [{"id": "vk-1.1", "state": "active"}],
