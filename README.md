@@ -9,6 +9,7 @@ Canonical source for Styrir-owned agent skills shared across Claude Code, Codex,
 | `ask/` | Observable model-to-model consultation through provider-aware CLI adapters, JSONL traces, and Markdown artifacts. |
 | `jev/` | Jev (TypeSafe System One) decision-model client: typed yes/no, choice, and score judgments in ~0.4 s via Requesty/OpenRouter/TypeSafe; cheap reads over files, Level-10 composition, and threshold calibration. |
 | `jev-guard/` | Jev-backed Claude Code / Codex / Grok hooks: deny-only bash gate, hostile-output warning, opt-in family-scoped auto-approve, and a /compact advisory; observe mode by default. |
+| `apple/macos-vst3-pack-install/` | Preview and explicitly install VST3-only package selections; real package and DAW validation remain separate. |
 | `rea-report/` | Package morluto/rea evidence and analyst findings into Markdown, JSON and PDF reports. |
 | `devops/headscale-operations/` | Operate the Styrir Headscale control plane and safely join or approve clients. |
 | `productivity/meetcal-operations/` | Inspect and operate MeetCal database, audit-log, backup, and calendar-sync state. |
