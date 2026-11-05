@@ -11,6 +11,7 @@ Canonical source for Styrir-owned agent skills shared across Claude Code, Codex,
 | `jev-guard/` | Jev-backed Claude Code / Codex / Grok hooks: deny-only bash gate, hostile-output warning, opt-in family-scoped auto-approve, and a /compact advisory; observe mode by default. |
 | `apple/macos-vst3-pack-install/` | Preview and explicitly install VST3-only package selections; real package and DAW validation remain separate. |
 | `rea-report/` | Package morluto/rea evidence and analyst findings into Markdown, JSON and PDF reports. |
+| `rea-superghidra/` | Coordinate REA and direct SuperGhidra MCP without modifying upstream skills or mixing evidence contracts. |
 | `devops/headscale-operations/` | Operate the Styrir Headscale control plane and safely join or approve clients. |
 | `productivity/meetcal-operations/` | Inspect and operate MeetCal database, audit-log, backup, and calendar-sync state. |
 | `red-teaming/macos-app-defender-lab/` | Authorized macOS application self-red-team and hardening workflow. |

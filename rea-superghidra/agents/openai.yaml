@@ -1,0 +1,4 @@
+interface:
+  display_name: "REA + SuperGhidra"
+  short_description: "Coordinate REA evidence and SuperGhidra analyses"
+  default_prompt: "Use $rea-superghidra to investigate the selected target with REA and the relevant SuperGhidra tools, preserving each result's provenance."
