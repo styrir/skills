@@ -7,6 +7,9 @@ import time
 import closeout as shared
 from codex_review import complete_goal
 
+# A blocked Stop costs a model turn. The limit is on unchanged results, so a result that moves keeps its continuations.
+MAX_BLOCKED_STOPS = 10
+
 
 def complete(repo, env, request, wait=0):
     """Writes: may answer an independently approved goal under the request's recorded delegation. Use shared.observe to only read."""
@@ -79,7 +82,12 @@ def recover(read_dir, env, request, path):
     result = {"status": "needs_action", "needs_action": "checkout_missing", "contract": contract, "revision": request["head"], "proof": proof,
               "reason": "The recorded checkout is gone and no selected directory shows a current receipt for this request; no checks or repair were started",
               "request_id": request.get("request_id")}
-    # Unchanged diagnostics are counted, not repeated.
+    return result
+
+
+def counted(path, request, result):
+    """How many Stops in a row have blocked on this same result for this same request. Any change starts again at 1."""
+    result = dict(result, request_id=(request or {}).get("request_id"))
     try:
         with shared.request_lock(path):
             previous = json.loads(path.with_suffix(".result.json").read_text())
@@ -172,6 +180,8 @@ def hook(payload, env):
             result = recover(selected_directory(scoped), scoped, request, path)
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         result = {"status": "needs_action", "reason": str(error)}
+    if result["status"] != "receipt":
+        result = counted(path, request, result)
     if request is None:  # Unreadable: keep it and block, as nothing could be checked.
         with shared.request_lock(path):
             shared.save(path.with_suffix(".result.json"), result)
@@ -184,12 +194,18 @@ def hook(payload, env):
             result = {"status": "needs_action", "reason": "A newer closeout request replaced the one this Stop checked; it stays pending"}
         elif result["status"] == "receipt":
             return {"systemMessage": "Verk closeout: " + json.dumps(result)}
+    repeat = result.get("repeat", 1)
+    if repeat > MAX_BLOCKED_STOPS:
+        return {"systemMessage": f"Verk closeout is unresolved and no longer continuing this session: unchanged after {MAX_BLOCKED_STOPS} blocked Stops. "
+                "Nothing was accepted and the request is kept; a changed result blocks again. " + json.dumps(result)}
+    last = (" This is the last continuation: if it is still unchanged, say in your final message that the closeout is unresolved."
+            if repeat == MAX_BLOCKED_STOPS else "")
     if result.get("needs_action") == "checkout_missing":
-        if result.get("repeat", 1) > 1:
-            return {"decision": "block", "reason": f"Verk closeout: still checkout_missing for {result['contract']}, unchanged ({result['repeat']} callbacks)."}
+        if repeat > 1:
+            return {"decision": "block", "reason": f"Verk closeout: still checkout_missing for {result['contract']}, unchanged ({repeat} callbacks)." + last}
         return {"decision": "block", "reason": "Verk closeout is blocked: " + json.dumps(result)
                 + f". Restore the checkout, request closeout again from a current one, or look for its receipt with `closeout.py recover --repo <surviving directory> --id {result['contract']}`. "
                 "Do not start checks or repair from this callback, and do not ask for terminal chores."}
     return {"decision": "block", "reason": "Complete the requested Verk review before finishing. "
             + json.dumps(result) + ". Wait for the independent verdict, repair findings and rerun Codex closeout; "
-            "use the recorded operator delegation for an independently approved goal. Do not ask for terminal chores."}
+            "use the recorded operator delegation for an independently approved goal. Do not ask for terminal chores." + last}

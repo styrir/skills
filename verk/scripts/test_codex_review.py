@@ -496,5 +496,87 @@ with patch.object(closeout,'git',side_effect=git), patch.object(closeout,'call',
                 self.assertTrue(path.exists())
 
 
+class BlockedStopLimitTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.env = dict(os.environ, CODEX_THREAD_ID='limit-test', VERK_HOME=str(self.root / 'store'))
+        self.env.pop('VERK_CLOSEOUT_READ_DIR', None)
+        self.path = closeout.state_path(self.env)
+        self.payload = {'hook_event_name': 'Stop', 'session_id': 'limit-test', 'cwd': str(self.root)}
+        self.request = {'repo': str(self.root), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git', 'request_id': 'first'}
+        closeout.save(self.path, self.request)
+
+    def stops(self, count):
+        return [codex_closeout.hook(self.payload, self.env) for _ in range(count)]
+
+    def assert_limited(self):
+        limit = codex_closeout.MAX_BLOCKED_STOPS
+        kept = self.path.read_bytes()
+        results = self.stops(limit + 2)
+        self.assertTrue(all(r['decision'] == 'block' for r in results[:limit]))
+        self.assertTrue(all('last continuation' not in r['reason'] for r in results[:limit - 1]))
+        self.assertIn('last continuation', results[limit - 1]['reason'])
+        for result in results[limit:]:
+            self.assertNotIn('decision', result)
+            self.assertIn('unresolved', result['systemMessage'])
+            self.assertNotIn('receipt"', result['systemMessage'])
+        self.assertEqual(self.path.read_bytes(), kept)
+        self.assertFalse(self.path.with_suffix('.settled').exists())
+
+    def pending(self, result):
+        return patch.object(closeout, 'git', side_effect=lambda repo, *args: '' if args[0] == 'status' else ('head' if args[-1] == 'HEAD' else 'git')), \
+            patch.object(closeout, 'call', return_value={}), patch.object(codex_closeout, 'complete', return_value=result)
+
+    def test_review_pending_is_limited(self):
+        git, call, complete = self.pending({'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1']})
+        with git, call, complete:
+            self.assert_limited()
+
+    def test_rejected_and_needs_action_are_limited(self):
+        for result in ({'status': 'rejected', 'contract': 'vk-1', 'reviews': ['vk-d1']}, {'status': 'needs_action', 'contract': 'vk-1', 'reason': 'unavailable'}):
+            with self.subTest(result=result['status']):
+                self.path.with_suffix('.result.json').unlink(missing_ok=True)
+                git, call, complete = self.pending(result)
+                with git, call, complete:
+                    self.assert_limited()
+
+    def test_stale_work_is_limited(self):
+        with patch.object(closeout, 'git', side_effect=lambda repo, *args: 'other'):
+            self.assert_limited()
+
+    def test_missing_checkout_is_limited(self):
+        closeout.save(self.path, dict(self.request, repo=str(self.root / 'gone')))
+        self.assert_limited()
+
+    def test_unreadable_request_is_limited_and_kept(self):
+        self.path.write_text('[')
+        self.assert_limited()
+
+    def test_a_changed_result_blocks_again_from_one(self):
+        git, call, complete = self.pending({'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1']})
+        with git, call, complete as mock:
+            self.stops(codex_closeout.MAX_BLOCKED_STOPS + 1)
+            mock.return_value = {'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d2']}
+            self.assertEqual(self.stops(1)[0]['decision'], 'block')
+            self.assertEqual(json.loads(self.path.with_suffix('.result.json').read_text())['repeat'], 1)
+
+    def test_a_replaced_request_blocks_again_from_one(self):
+        git, call, complete = self.pending({'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1']})
+        with git, call, complete:
+            self.stops(codex_closeout.MAX_BLOCKED_STOPS + 1)
+            closeout.save(self.path, dict(self.request, request_id='second'))
+            self.assertEqual(self.stops(1)[0]['decision'], 'block')
+
+    def test_a_receipt_after_the_limit_still_clears_the_request(self):
+        git, call, complete = self.pending({'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1']})
+        with git, call, complete as mock:
+            self.stops(codex_closeout.MAX_BLOCKED_STOPS + 1)
+            mock.return_value = {'status': 'receipt', 'contract': 'vk-1', 'receipt': 'vk-r1'}
+            self.assertIn('vk-r1', self.stops(1)[0]['systemMessage'])
+        self.assertFalse(self.path.exists())
+
+
 if __name__ == '__main__':
     unittest.main()

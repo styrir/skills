@@ -18,6 +18,15 @@ to re-qualify at current HEAD. No tests run at Stop and no new daemon is created
 User interruption is a host event and remains effective; this is completion
 workflow enforcement, not protection against a malicious same-user process.
 
+Each blocked Stop costs a model turn, so blocking is limited. After
+`MAX_BLOCKED_STOPS` (10) consecutive blocks on an unchanged result for the same
+request, Stop stops continuing and reports the closeout as unresolved in a
+`systemMessage`. The tenth block tells the agent to say so in its final message.
+This doesn't accept anything: the request stays and no receipt is implied. A
+changed result or a replaced request blocks again from one, and a later Stop that
+finds a receipt still clears the request. At that limit a session usually ends
+before a slow independent review does; rerun closeout once the verdict is in.
+
 The native Stop command/timeout need not change. Refresh the installed package
 from this source using the existing packager and plugin add route. Preserve hook
 trust; do not edit trust hashes. Handler tests and real host dispatch are separate
