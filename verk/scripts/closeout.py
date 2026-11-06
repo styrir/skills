@@ -233,9 +233,9 @@ def outcomes(env, view, head, receipt=None):
 
 def reported(result):
     """What a reader is told. Control flow keeps `review_pending` while a review is open, so its request survives; a reader must not wait on a verdict nothing is producing."""
-    outcome = result.get("outcomes") or {}
-    if result.get("status") == "review_pending" and outcome.get("outcome") in ("process_failure", "unavailable"):
-        return dict(result, status="needs_action", reason=outcome["next_action"])
+    outcome = (result.get("outcomes") or {}).get("outcome")
+    if result.get("status") == "review_pending" and outcome in ("process_failure", "unavailable"):
+        return dict(result, status="needs_action", reason=NEXT_ACTION[outcome])
     return result
 
 

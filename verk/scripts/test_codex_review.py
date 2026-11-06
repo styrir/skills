@@ -535,6 +535,32 @@ class BlockedStopLimitTest(unittest.TestCase):
         with git, call, complete:
             self.assert_limited()
 
+    def test_a_review_no_verdict_is_coming_from_never_says_wait(self):
+        limit = codex_closeout.MAX_BLOCKED_STOPS
+        for outcome in ('process_failure', 'unavailable'):
+            with self.subTest(outcome):
+                self.path.with_suffix('.stops.json').unlink(missing_ok=True)
+                kept = self.path.read_bytes()
+                git, call, complete = self.pending({'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1'],
+                                                    'outcomes': {'outcome': outcome, 'next_action': closeout.NEXT_ACTION[outcome], 'receipt': None}})
+                with git, call, complete:
+                    results = self.stops(limit + 1)
+                self.assertTrue(all(r['decision'] == 'block' for r in results[:limit]))
+                for text in [r['reason'] for r in results[:limit]] + [results[limit]['systemMessage']]:
+                    self.assertIn('"status": "needs_action"', text)
+                    self.assertNotIn('"status": "review_pending"', text)
+                    self.assertNotIn('Wait for the independent verdict', text)
+                    self.assertIn(closeout.NEXT_ACTION[outcome], text)
+                self.assertEqual(self.path.read_bytes(), kept)
+
+    def test_an_ordinary_open_review_still_says_wait(self):
+        git, call, complete = self.pending({'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1'],
+                                            'outcomes': {'outcome': 'review_pending', 'next_action': closeout.NEXT_ACTION['review_pending'], 'receipt': None}})
+        with git, call, complete:
+            reason = self.stops(1)[0]['reason']
+        self.assertIn('Wait for the independent verdict', reason)
+        self.assertIn('"status": "review_pending"', reason)
+
     def test_rejected_and_unavailable_results_are_limited(self):
         # The shape observe returns, with outcomes whose receipt is null.
         results = [{'status': 'needs_action', 'contract': 'vk-1', 'reason': 'Independent review rejected the work; inspect the review report',

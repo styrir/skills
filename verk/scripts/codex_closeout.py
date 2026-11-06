@@ -202,6 +202,7 @@ def hook(payload, env):
         elif result["status"] == "receipt":
             return {"systemMessage": "Verk closeout: " + json.dumps(result)}
     repeat = result.get("repeat", 1)
+    observed, result = result, shared.reported(result)
     if repeat > MAX_BLOCKED_STOPS:
         return {"systemMessage": f"Verk closeout is unresolved and no longer continuing this session: unchanged after {MAX_BLOCKED_STOPS} blocked Stops. "
                 "Nothing was accepted and the request is kept; a changed result blocks again. " + json.dumps(result)}
@@ -213,6 +214,10 @@ def hook(payload, env):
         return {"decision": "block", "reason": "Verk closeout is blocked: " + json.dumps(result)
                 + f". Restore the checkout, request closeout again from a current one, or look for its receipt with `closeout.py recover --repo <surviving directory> --id {result['contract']}`. "
                 "Do not start checks or repair from this callback, and do not ask for terminal chores."}
+    if result is not observed:
+        return {"decision": "block", "reason": "Verk closeout is unresolved: " + json.dumps(result)
+                + ". No verdict is coming by itself, so do not wait for one. Follow the reason given, or say in your final message that the closeout is unresolved. "
+                "Do not ask for terminal chores." + last}
     return {"decision": "block", "reason": "Complete the requested Verk review before finishing. "
             + json.dumps(result) + ". Wait for the independent verdict, repair findings and rerun Codex closeout; "
             "use the recorded operator delegation for an independently approved goal. Do not ask for terminal chores." + last}

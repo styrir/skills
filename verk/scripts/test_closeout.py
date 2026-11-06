@@ -1,4 +1,6 @@
+import contextlib
 import fcntl
+import io
 import json
 import os
 from pathlib import Path
@@ -570,6 +572,58 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
         for unchanged in ({"status": "review_pending", "reviews": ["vk-d1"], "outcomes": {"outcome": "review_pending"}},
                           {"status": "review_pending", "reviews": ["vk-d1"]}, {"status": "receipt", "outcomes": {"outcome": "process_failure"}}):
             self.assertEqual(closeout.reported(unchanged), unchanged)
+
+    def degraded_routes(self):
+        """Each way a reviewer yields no verdict, as its manifest row, with Verk's real view of the still-open review."""
+        view = {"contract": {"id": "vk-1", "acceptance_version": 1, "subjects_version": 0}, "state": "active",
+                "reviews": [{"decision": "vk-d1", "lifecycle": "open", "verdict": None}], "receipts": [],
+                "policy": {"version": 1, "kind_version": 2, "checks": [{"name": "unit", "evidence": []}]}}
+        decision = {"lifecycle": "open", "contracts": ["vk-1"], "target": {"revision": self.head},
+                    "bindings": {"acceptanceVersion": 1, "subjectsVersion": 0, "policyVersion": 2}}
+        invoke = lambda repo, env, *args, **kwargs: decision if args[1] == "vk-d1" else view
+        for expected, row in (("process_failure", {"proposed": "retry", "exit": 1}), ("unavailable", {"proposed": "unavailable"})):
+            self.outcome({}, row)
+            with self.subTest(expected), patch.object(closeout, "call", side_effect=invoke):
+                yield expected
+
+    def assert_not_waiting(self, text, expected):
+        self.assertIn('"status": "needs_action"', text)
+        self.assertNotIn('"status": "review_pending"', text)
+        self.assertIn(closeout.NEXT_ACTION[expected], text)
+
+    def test_a_failed_review_reads_as_needs_action_from_its_manifest_row(self):
+        for expected in self.degraded_routes():
+            raw = closeout.observe(self.repo, self.env, "vk-1", self.head, 0)
+            self.assertEqual((raw["status"], raw["outcomes"]["outcome"]), ("review_pending", expected))
+            self.assert_not_waiting(json.dumps(closeout.reported(raw)), expected)
+
+    def test_read_operations_print_needs_action_and_exit_unresolved(self):
+        for expected in self.degraded_routes():
+            for name in ("observe", "reconcile"):
+                printed = io.StringIO()
+                with contextlib.redirect_stdout(printed):
+                    code = closeout.operation(name, ["--repo", str(self.repo), "--id", "vk-1"], "codex", self.env)
+                self.assertEqual(code, 3)
+                self.assert_not_waiting(printed.getvalue(), expected)
+
+    def test_foreground_closeout_keeps_its_request_when_no_verdict_is_coming(self):
+        for expected in self.degraded_routes():
+            result = closeout.closeout(self.repo, self.env, "vk-1", None, 0, source_only=True)
+            record = json.loads(closeout.state_path(self.env).read_text())
+            self.assertEqual((result["status"], record["request_id"]), ("review_pending", result["request_id"]))
+            self.assert_not_waiting(json.dumps(closeout.reported(result)), expected)
+
+    def test_claude_stop_message_does_not_say_pending_when_no_verdict_is_coming(self):
+        env = dict(self.env, VERK_CLOSEOUT_HARNESS="claude-code", CLAUDE_CODE_SESSION_ID="claude-test")
+        common_dir = closeout.git(self.repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        payload = {"hook_event_name": "Stop", "session_id": "claude-test"}
+        for expected in self.degraded_routes():
+            closeout.save(closeout.state_path(env), {"request_id": expected, "repo": str(self.repo), "contract": "vk-1", "head": self.head, "common_dir": common_dir})
+            self.assert_not_waiting(closeout.hook(payload, env)["systemMessage"], expected)
+
+    def test_failure_wording_promises_no_retry_the_reviewer_does_not_make(self):
+        self.assertNotIn("next run", closeout.NEXT_ACTION["process_failure"])
+        self.assertIn("verk-reviewer", closeout.NEXT_ACTION["process_failure"])
 
     def test_an_answer_against_the_reviewer_keeps_the_disagreement_visible(self):
         approve, reject = {"verdict": "approve", "clauses": []}, {"verdict": "reject", "clauses": []}
