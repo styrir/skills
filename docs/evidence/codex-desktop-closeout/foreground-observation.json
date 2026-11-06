@@ -1,0 +1,17 @@
+{
+  "capture_utc": "2026-11-06T17:12:14.006616+00:00",
+  "command": "python3 <installed-plugin>/skills/verk/scripts/closeout.py observe --repo ~/Code/skills --id vk-2628 --wait 0",
+  "exit_code": 3,
+  "operation": "observe",
+  "requested_revision": "cdc2d7cc2e358497c9146daf27c89c6af114b955",
+  "status": "needs_action",
+  "reason": "No receipt or open review; inspect Verk view",
+  "state": "active",
+  "review": "none",
+  "answer": "none",
+  "gate": "not_run",
+  "admission": [],
+  "receipt": null,
+  "writes": "none; pure observe route",
+  "foreground_submission": "NOT RUN under no-acceptance constraint"
+}

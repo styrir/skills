@@ -83,3 +83,6 @@ This archive in the owning `skills` repository resolves the earlier cross-reposi
 Owning tracking contract remains `vk-2628`, policy version 1, kind-version 1, review yolo, checks empty as read before this continuation. Policy was not changed. A future legitimate foreground submission requires ready committed scope and authority for normal reconciliation consequences. The archive itself is local proof, not a receipt or full desktop acceptance.
 
 [Official OpenAI hook documentation](https://learn.chatgpt.com/docs/hooks) was consulted for Stop/Interrupt/systemMessage semantics; actual observations retain precedence. Overall desktop qualification remains **INCOMPLETE**. No new probe was armed or rerun.
+
+
+Local proof commit: `cdc2d7cc2e358497c9146daf27c89c6af114b955`; worktree was clean immediately after commit. Installed foreground **observe** at that exact revision exited 3 with `needs_action`: no receipt or open review. Review none, answer none, gate not_run, admission empty, receipt null. This is **PASS** for pure-read observation only; foreground submission remains **NOT RUN**. See [captured observation](foreground-observation.json). No pending closeout request was created. Operator notice visibility remains unconfirmed.
