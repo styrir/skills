@@ -1,5 +1,28 @@
 # Codex desktop Verk closeout qualification
 
+
+## Final bounded assessment
+
+Authorized assessment work is finished; **overall route qualification remains INCOMPLETE**. This final assessment supersedes earlier next-step suggestions to ask the operator for timing or UI observations. No operator action is requested. Unobservable cases are documented limits, not routine-work blockers.
+
+| Case | Final result |
+|---|---|
+| Installed identity / actual probe dispatch | PASS |
+| Unchanged callback limit | PASS — ten blocks, counter/result 11, host completion |
+| Cancellation | PASS — four callbacks followed by actual host interruption |
+| One-to-two-callback timing target | FAIL — target missed; exact button-press time unobserved; no operator failure inferred |
+| Retained request / synthetic cleanup | PASS — captured before matching locked cleanup; no receipt; locks retained |
+| Local committed proof | PASS — owning skills archive; prior limit capture unchanged |
+| Unarmed baseline | INCOMPLETE — normal completion observed, specific handler dispatch/output unobserved |
+| Separate unresolved notice visibility | INCOMPLETE — no qualifying UI observation available; no further manual request |
+| Foreground pure observe | PASS — needs_action, review none, answer none, gate not_run, admission empty, receipt null |
+| Foreground submission | NOT RUN — reconcile can issue receipts; no submit-without-acceptance mode; current instruction excludes acceptance |
+| Independent review / verdict / automated gate / admission / receipt | NOT RUN |
+
+The recent unarmed host completions at 17:10:17.429, 17:12:21.902, 17:12:59.534 and 17:13:37.754 UTC corroborate ordinary turns completing after synthetic cleanup. They do not expose the hook-specific no-op output, so the baseline is not promoted to PASS. The same-session marker/result/counter remained absent at final inspection, with lock retained. No handler was manually invoked to manufacture host evidence.
+
+Machine-readable disposition and evidence hashes: [final-assessment.json](final-assessment.json). No serious blocker requires operator involvement. No further probe, foreground submission, approval, publication, policy change, installation or acceptance was performed. Task tracking stays open without a receipt; this report completes the authorized assessment, not Verk acceptance or full route qualification.
+
 Status: **INCOMPLETE**. Actual desktop route only; no CLI substitute used. No acceptance, installation, publication, trust changes, reviewer calls or check production performed.
 
 | Item | Status | Observed record |

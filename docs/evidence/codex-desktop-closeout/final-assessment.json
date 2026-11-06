@@ -1,0 +1,63 @@
+{
+  "capture_utc": "2026-11-06T17:17:52.447376+00:00",
+  "task": "vk-2628",
+  "work_disposition": "Authorized qualification assessment finished; remaining limits documented, no operator action requested",
+  "overall_route_status": "INCOMPLETE",
+  "cases": {
+    "installed_identity_and_probe_dispatch": "PASS",
+    "unchanged_callback_limit": "PASS",
+    "interruption_cancellation": "PASS: four delivered callbacks, three replies, host interrupted",
+    "one_to_two_callback_target": "FAIL: target missed; exact button-press time UNOBSERVED; no operator failure inferred",
+    "synthetic_cleanup": "PASS: matching marker/result/counter removed under installed lock; lock retained",
+    "committed_proof": "PASS: local skills archive",
+    "no_request_baseline": "INCOMPLETE: ordinary unarmed completion observed; hook-specific dispatch/output UNOBSERVED",
+    "ui_notice_visibility": "INCOMPLETE: separate unresolved warning not observed; no further manual request",
+    "foreground_pure_observe": "PASS: current-target read returned needs_action, no review or receipt",
+    "foreground_submission": "NOT RUN: installed closeout reconciles and may issue receipt; no non-accepting submission mode; excluded by explicit no-acceptance instruction",
+    "independent_review": "NOT RUN",
+    "independent_verdict": "NOT RUN",
+    "automated_gate": "NOT RUN",
+    "check_admission": "NOT RUN",
+    "receipt": "NOT RUN"
+  },
+  "recent_unarmed_host_completions": [
+    {
+      "utc": "2026-11-06T17:10:17.429Z",
+      "ordinal": 158,
+      "turn_id": "01a1b1d5-edd6-7e70-b239-9dcd1d6d060a"
+    },
+    {
+      "utc": "2026-11-06T17:12:21.902Z",
+      "ordinal": 255,
+      "turn_id": "01a1b1d7-2ca6-7042-9f90-78113a8c471f"
+    },
+    {
+      "utc": "2026-11-06T17:12:59.534Z",
+      "ordinal": 275,
+      "turn_id": "01a1b1d9-0f72-7e53-9130-65f0e9b4a6a1"
+    },
+    {
+      "utc": "2026-11-06T17:13:37.754Z",
+      "ordinal": 290,
+      "turn_id": "01a1b1d9-cded-76e3-946a-d97c6c9cfb8f"
+    }
+  ],
+  "operator_involvement": "No more manual tests or notice-confirmation requests; unobservable coverage is a report limit",
+  "serious_blocker": null,
+  "constraints": {
+    "publication": false,
+    "policy_changes": false,
+    "installation": false,
+    "hook_trust_changes": false,
+    "acceptance": false,
+    "new_probe": false
+  },
+  "evidence_hashes": {
+    "qualification.md": "6f1f46bdd21d391b3531dac9e3480de0d2112b2533d355f84ab49610b1b3784c",
+    "interruption-probe.json": "95f20b6fb12852926812eb5090dc42a9413bbc649cec8c55c53f638c5e034b77",
+    "interruption-preflight.json": "ed06372df6813022f195591336456a356357f3e5df7b81ebec6213eb3951a630",
+    "limit-probe.json": "3696eb77b8236e1208e420650848f62a5d10d300c36035feb70183396689b829",
+    "archive-manifest.json": "6158fe2fb65e8093cacad087509d95fbbdbb4beef3c5fac51438794b59f6d21f",
+    "foreground-observation.json": "a331cc84cbdb664dd802df02e6717fa3f447e215a26c844486670480cd64bfb1"
+  }
+}
