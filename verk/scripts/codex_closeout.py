@@ -86,15 +86,22 @@ def recover(read_dir, env, request, path):
 
 
 def counted(path, request, result):
-    """How many Stops in a row have blocked on this same result for this same request. Any change starts again at 1."""
-    result = dict(result, request_id=(request or {}).get("request_id"))
-    try:
-        with shared.request_lock(path):
-            previous = json.loads(path.with_suffix(".result.json").read_text())
-    except (OSError, ValueError):
-        previous = {}
-    unchanged = isinstance(previous, dict) and {k: v for k, v in previous.items() if k != "repeat"} == result
-    return dict(result, repeat=shared.number(previous.get("repeat")) + 1 if unchanged else 1)
+    """How many Stops in a row have blocked on this same result for this contract and revision. Any change starts again at 1.
+
+    Kept in its own file, because foreground closeout also writes .result.json, and keyed without the request ID, because rerunning closeout mints one with nothing changed.
+    """
+    request = request or {}
+    key = json.dumps([request.get("contract"), request.get("head"), {k: v for k, v in result.items() if k != "request_id"}], sort_keys=True)
+    counter = path.with_suffix(".stops.json")
+    with shared.request_lock(path):
+        try:
+            previous = json.loads(counter.read_text())
+        except (OSError, ValueError):
+            previous = None
+        same = isinstance(previous, dict) and previous.get("key") == key
+        repeat = shared.number(previous.get("repeat")) + 1 if same else 1
+        shared.save(counter, {"key": key, "repeat": repeat})
+    return dict(result, repeat=repeat)
 
 
 def selected_directory(env):

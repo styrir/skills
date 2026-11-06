@@ -521,7 +521,8 @@ class BlockedStopLimitTest(unittest.TestCase):
         for result in results[limit:]:
             self.assertNotIn('decision', result)
             self.assertIn('unresolved', result['systemMessage'])
-            self.assertNotIn('receipt"', result['systemMessage'])
+            self.assertIn('Nothing was accepted', result['systemMessage'])
+            self.assertNotIn('"status": "receipt"', result['systemMessage'])
         self.assertEqual(self.path.read_bytes(), kept)
         self.assertFalse(self.path.with_suffix('.settled').exists())
 
@@ -534,10 +535,15 @@ class BlockedStopLimitTest(unittest.TestCase):
         with git, call, complete:
             self.assert_limited()
 
-    def test_rejected_and_needs_action_are_limited(self):
-        for result in ({'status': 'rejected', 'contract': 'vk-1', 'reviews': ['vk-d1']}, {'status': 'needs_action', 'contract': 'vk-1', 'reason': 'unavailable'}):
-            with self.subTest(result=result['status']):
-                self.path.with_suffix('.result.json').unlink(missing_ok=True)
+    def test_rejected_and_unavailable_results_are_limited(self):
+        # The shape observe returns, with outcomes whose receipt is null.
+        results = [{'status': 'needs_action', 'contract': 'vk-1', 'reason': 'Independent review rejected the work; inspect the review report',
+                    'outcomes': {'outcome': 'review_rejected', 'review': 'reject', 'answer': 'rejected', 'receipt': None}},
+                   {'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1'],
+                    'outcomes': {'outcome': 'unavailable', 'review': 'unavailable', 'answer': 'open', 'receipt': None}}]
+        for result in results:
+            with self.subTest(outcome=result['outcomes']['outcome']):
+                self.path.with_suffix('.stops.json').unlink(missing_ok=True)
                 git, call, complete = self.pending(result)
                 with git, call, complete:
                     self.assert_limited()
@@ -562,12 +568,49 @@ class BlockedStopLimitTest(unittest.TestCase):
             self.assertEqual(self.stops(1)[0]['decision'], 'block')
             self.assertEqual(json.loads(self.path.with_suffix('.result.json').read_text())['repeat'], 1)
 
-    def test_a_replaced_request_blocks_again_from_one(self):
+    def test_a_new_revision_blocks_again_from_one(self):
         git, call, complete = self.pending({'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1']})
         with git, call, complete:
             self.stops(codex_closeout.MAX_BLOCKED_STOPS + 1)
-            closeout.save(self.path, dict(self.request, request_id='second'))
+        closeout.save(self.path, dict(self.request, request_id='second', head='new'))
+        git = patch.object(closeout, 'git', side_effect=lambda repo, *args: '' if args[0] == 'status' else ('new' if args[-1] == 'HEAD' else 'git'))
+        with git, call, complete:
             self.assertEqual(self.stops(1)[0]['decision'], 'block')
+        self.assertEqual(self.count(), 1)
+
+    def count(self):
+        return json.loads(self.path.with_suffix('.result.json').read_text())['repeat']
+
+    def test_rerunning_closeout_on_the_same_work_does_not_restart_the_count(self):
+        git, call, complete = self.pending({'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1']})
+        with git, call, complete:
+            for number in range(1, codex_closeout.MAX_BLOCKED_STOPS + 1):
+                closeout.save(self.path, dict(self.request, request_id=f'rerun-{number}'))
+                self.assertEqual(self.stops(1)[0]['decision'], 'block')
+                self.assertEqual(self.count(), number)
+            closeout.save(self.path, dict(self.request, request_id='rerun-last'))
+            self.assertNotIn('decision', self.stops(1)[0])
+        self.assertEqual(json.loads(self.path.read_text())['request_id'], 'rerun-last')
+
+    def test_foreground_complete_between_stops_does_not_restart_the_count(self):
+        pending = {'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1']}
+        with patch.object(closeout, 'git', side_effect=lambda repo, *args: '' if args[0] == 'status' else ('head' if args[-1] == 'HEAD' else 'git')), \
+             patch.object(closeout, 'call', return_value={'contract': {'id': 'vk-1'}}), patch.object(codex_closeout, 'complete', return_value=pending):
+            for number in range(1, codex_closeout.MAX_BLOCKED_STOPS + 1):
+                self.assertEqual(self.stops(1)[0]['decision'], 'block')
+                self.assertEqual(self.count(), number)
+                self.assertEqual(codex_closeout.complete_pending(self.root, self.env, 'vk-1')['status'], 'review_pending')
+            self.assertNotIn('decision', self.stops(1)[0])
+
+    def test_foreground_recover_between_stops_does_not_restart_the_count(self):
+        closeout.save(self.path, dict(self.request, repo=str(self.root / 'gone')))
+        view = {'contract': {'id': 'vk-1'}, 'proof': {'status': 'none'}, 'receipts': []}
+        for number in range(1, codex_closeout.MAX_BLOCKED_STOPS + 1):
+            self.assertEqual(self.stops(1)[0]['decision'], 'block')
+            self.assertEqual(self.count(), number)
+            with patch.object(closeout, 'call', return_value=view):
+                self.assertEqual(codex_closeout.recover_pending(self.root, self.env, 'vk-1')['needs_action'], 'checkout_missing')
+        self.assertNotIn('decision', self.stops(1)[0])
 
     def test_a_receipt_after_the_limit_still_clears_the_request(self):
         git, call, complete = self.pending({'status': 'review_pending', 'contract': 'vk-1', 'reviews': ['vk-d1']})
