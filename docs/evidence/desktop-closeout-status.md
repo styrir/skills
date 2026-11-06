@@ -1,6 +1,6 @@
 # Desktop closeout status: Claude Code and Codex
 
-State at 2026-11-06T17:45Z. This summarizes the two host records and adds the Codex foreground outcome, which Codex's own record does not contain. Neither host is broadly qualified: each route below is shown only as far as its evidence goes.
+State at 2026-11-06T17:45Z, with the Codex plugin install updated at 20:37Z. This summarizes the two host records and adds the Codex foreground outcome, which Codex's own record does not contain. Neither host is broadly qualified: each route below is shown only as far as its evidence goes.
 
 - [Codex qualification](codex-desktop-closeout/qualification.md), in this repository
 - Claude qualification: `docs/evidence/claude-code-desktop-closeout/qualification.md` in `plg-crk`, commit `03d2a7b`
@@ -55,16 +55,16 @@ The `vk-2624` refusal is recorded in the Claude qualification. Why the same revi
 
 **Open work**
 
-1. **Installed Codex plugin lacks the `vk-2627` fix.** Plugin 0.2.6 still has `closeout.py` starting `ec21b3bc`, so its Stop can still say to wait on a review that has no verdict coming. The session's permission system blocked the install. A side-effect-free build from current source differs in five files, all from `vk-2627`, and `hooks/closeout.json` is byte-identical. The fixed path has not been observed in a Codex host.
+1. **The `vk-2627` fix is installed in Codex but unobserved there.** The operator installed it at 20:23:55Z, after the session's permission system blocked the agent from doing so. The version still reads 0.2.6, so only the hashes tell the builds apart: cached `closeout.py` moved from `ec21b3bc` to `0140d345`, `codex_closeout.py` is now `1decc3f0`, and the cached skill is identical to source. Five files changed, all from `vk-2627`. No Stop has run the new code in a Codex host, and an already-open session may still have the old version loaded.
 2. **Scope of the fix on Claude.** The foreground helper reads the source through a symlink, so it has the fix. Claude's native Stop is `verk-adapter`, not this helper, and whether it words these cases the same way is not established.
-3. **Codex marker for session `01a1b1e6-b113-74d3-a6ea-33f0de73bf87`.** At this writing it remains on disk, after the review it was waiting on already reached a receipt. That session's next Stop is expected to settle it, which would also be the first Codex Stop observed reporting a receipt.
+3. **Codex marker for session `01a1b1e6-b113-74d3-a6ea-33f0de73bf87`.** At this writing it remains on disk, after the review it was waiting on already reached a receipt. That session's next Stop is expected to settle it, which would also be the first Codex Stop observed reporting a receipt. Two attempts at 20:32Z to trigger it did not run a turn: `codex exec resume` was refused because the desktop app holds the thread as its active writer, and the operator declined agent control of the app. The marker's `result.json` still reads `review_pending` for `vk-d281`, which is stale because that review has reached `vk-r149`.
 4. **Claude interruption.** It stays NOT RUN until the operator stops a turn during a fresh pending closeout.
 5. **Positive Stop reconciliation.** Neither host has shown one. Both foreground receipts were issued when a review answered, not at an observed Stop. By source reading, not a host trace, Claude's `stopReconcile` skips contracts with an open review, and checkpoints with proof already reconcile at once, so ordinary work leaves it little to do.
 6. **Publication.** Commits in `skills` and `plg-crk` are local. Codex's original captures in `plg-crk/docs/evidence/codex-desktop-closeout/` remain untracked; the archive in this repository is the committed copy.
 
 **Evidence limits**
 
-- **Codex trust:** values were read from persisted settings only. They are not proof of current trust validation, and the trust UI was not inspected. A byte-identical hook file suggests an install would not change trust, but that has not been tested.
+- **Codex trust:** values were read from persisted settings only. They are not proof of current trust validation, and the trust UI was not inspected. After the install, `hooks/closeout.json` is still `75577268`, and both persisted trust values and the enabled setting are unchanged. Whether the host still accepts the hook is untested until a Stop runs it.
 - **Codex callback 11:** its raw `systemMessage` was never captured in the limit probe, and its nonblocking behaviour is inferred from the counter, result file and host completion.
 - **Codex baseline:** the hook-specific no-op output is unobserved.
 - **Codex synthetic probes:** the callback-limit and interruption results used synthetic contracts and revisions, with no real contract behind them. The real `vk-2628` session adds counter evidence for the limit only, and no Codex interruption of a real pending closeout is recorded.
