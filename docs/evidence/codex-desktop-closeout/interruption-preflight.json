@@ -1,0 +1,46 @@
+{
+  "stage": "unarmed preflight; baseline turn has not ended",
+  "task": "vk-2628",
+  "capture_utc": "2026-11-06T16:46:03.582452+00:00",
+  "session": "01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7",
+  "session_id_matches": true,
+  "originator": "Codex Desktop",
+  "runtime": "0.166.0-alpha.6",
+  "model": "gpt-6.1-sol",
+  "effort": "medium",
+  "app": "com.openai.codex 26.1029.61003 build 24614",
+  "framework": "156.0.8078.79 build 8078.79",
+  "cwd": "~/Code/skills",
+  "store": "~/.verk",
+  "recovery_dir": null,
+  "plugin": {
+    "enabled": true
+  },
+  "persisted_trust": {
+    "trusted_hash": "sha256:7da9e6fd0d2d977587134acb2eb28efa5fdb9ce8d33efcb93de5598a4f036362",
+    "trusted_content_hash": "sha256:695b8f8a818711aca69aa39faecca46f25cdd8e5f5c85989a466eb3a3e9dfe61"
+  },
+  "hook_command": "python3 \"${PLUGIN_ROOT}/skills/verk/scripts/closeout.py\" hook-stop",
+  "dispatch": "UNOBSERVED in this fresh session; config and disk are not execution evidence",
+  "hashes": {
+    "~/.codex/plugins/cache/brooks-local/verk/0.2.6/skills/verk/scripts/closeout.py": "ec21b3bc6cc9b55a64d94d2219350f85590ed86ef9a11ae04c31ff8ef289ccb6",
+    "~/.codex/plugins/cache/brooks-local/verk/0.2.6/skills/verk/scripts/codex_closeout.py": "7252c0065b9393f9fcd4449965bb4a51dbf11a83137f1d6c11c809907f49d55d",
+    "~/.codex/plugins/cache/brooks-local/verk/0.2.6/hooks/closeout.json": "75577268887c3767ec0969cde0bc5a609808fd4fcc5c4b7991868975e9f6185f",
+    "~/Code/skills/verk/scripts/closeout.py": "bdf0521ad78d2ad4c7c10b706655971c7f3002f07675922c002c1639db5cc17f",
+    "~/Code/skills/verk/scripts/codex_closeout.py": "7252c0065b9393f9fcd4449965bb4a51dbf11a83137f1d6c11c809907f49d55d"
+  },
+  "drift": "Installed closeout.py matches prior limit probe but differs from current source foreground copy. codex_closeout.py matches. No refresh or repair performed.",
+  "own_state": {
+    "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.json": false,
+    "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.stops.json": false,
+    "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.result.json": false,
+    "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.settled": false,
+    "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.lock": false
+  },
+  "synthetic_request_created": false,
+  "baseline": "INCOMPLETE until actual baseline Stop evidence inspected next turn",
+  "interruption": "NOT RUN; requires explicit start interruption probe then operator normal Stop after one or two callbacks",
+  "visibility": "INCOMPLETE; separately labeled operator observation required",
+  "foreground": "NOT RUN; current instruction forbids publication and acceptance; legitimate route must be assessed separately",
+  "preserved_limit_probe_sha256": "3696eb77b8236e1208e420650848f62a5d10d300c36035feb70183396689b829"
+}

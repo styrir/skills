@@ -1,0 +1,216 @@
+{
+  "stage": "captured and cleaned",
+  "task": "vk-2628",
+  "session": "01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7",
+  "prepared_utc": "2026-11-06T17:08:14.153390+00:00",
+  "request_id": "desktop-interruption-2e7002fad1d7416e8c83d232a3851de0",
+  "request_path": "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.json",
+  "request": {
+    "request_id": "desktop-interruption-2e7002fad1d7416e8c83d232a3851de0",
+    "began": 1793984894152918000,
+    "store": "~/.verk",
+    "harness": "codex",
+    "session": "01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7",
+    "repo": "~/Code/skills/.verk-desktop-missing-desktop-interruption-2e7002fad1d7416e8c83d232a3851de0",
+    "contract": "vk-desktop-interruption-probe",
+    "project": "skills",
+    "head": "synthetic-desktop-interruption-revision",
+    "artifact": null,
+    "common_dir": "~/Code/skills/.verk-desktop-missing-desktop-interruption-2e7002fad1d7416e8c83d232a3851de0/.git",
+    "bindings": {
+      "acceptanceVersion": null,
+      "subjectsVersion": null,
+      "policyVersion": null
+    },
+    "delegate_approved_goals": false,
+    "qualification": null,
+    "source_only": false
+  },
+  "request_sha256": "8635df37d5541f5ba6f1f614be784880f1b45f6caf07e7ba8922cabeb3a0f5de",
+  "baseline": {
+    "status": "INCOMPLETE",
+    "host_completion_utc": "2026-11-06T16:46:14.400Z",
+    "host_completion_ordinal": 68,
+    "state_absent_before_and_after": true,
+    "specific_hook_dispatch": "UNOBSERVED",
+    "handler_result": "UNOBSERVED; no hook-specific event in inspected rollout; ordinary host completion does not prove handler no-op"
+  },
+  "synthetic": true,
+  "real_contract": null,
+  "receipt": null,
+  "recovery_dir": null,
+  "operator_start": "Explicit start interruption probe received",
+  "interruption": "PASS: host turn_aborted reason interrupted after four callbacks; three unresolved callback replies",
+  "cleanup": {
+    "status": "PASS",
+    "removed": [
+      "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.json",
+      "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.result.json",
+      "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.stops.json"
+    ],
+    "lock_retained": "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.lock",
+    "replacement": "none encountered; request/result/counter match validated under installed request_lock",
+    "meaning": "withdrawn synthetic diagnostic only; no contract accepted"
+  },
+  "capture_utc": "2026-11-06T17:09:40.362021+00:00",
+  "callbacks": [
+    {
+      "timestamp": "2026-11-06T17:08:21.789Z",
+      "ordinal": 105,
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7",
+        "turn_id": "01a1b1d4-ae5e-7a10-a5e8-0208573e60af",
+        "item": {
+          "type": "HookPrompt",
+          "id": "msg_01a1b1d5-329c-7161-a0d2-120178e95616",
+          "fragments": [
+            {
+              "text": "Verk closeout is blocked: {\"status\": \"needs_action\", \"needs_action\": \"checkout_missing\", \"contract\": \"vk-desktop-interruption-probe\", \"revision\": \"synthetic-desktop-interruption-revision\", \"proof\": \"not_read: no surviving directory selected\", \"reason\": \"The recorded checkout is gone and no selected directory shows a current receipt for this request; no checks or repair were started\", \"request_id\": \"desktop-interruption-2e7002fad1d7416e8c83d232a3851de0\", \"repeat\": 1}. Restore the checkout, request closeout again from a current one, or look for its receipt with `closeout.py recover --repo <surviving directory> --id vk-desktop-interruption-probe`. Do not start checks or repair from this callback, and do not ask for terminal chores.",
+              "hookRunId": "stop:53:~/.codex/plugins/cache/brooks-local/verk/0.2.6/hooks/closeout.json"
+            }
+          ]
+        },
+        "started_at_ms": 1793984901789,
+        "completed_at_ms": 1793984901789
+      }
+    },
+    {
+      "timestamp": "2026-11-06T17:08:28.734Z",
+      "ordinal": 111,
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7",
+        "turn_id": "01a1b1d4-ae5e-7a10-a5e8-0208573e60af",
+        "item": {
+          "type": "HookPrompt",
+          "id": "msg_01a1b1d5-4dbd-7ec2-8ed5-5a75d30b880b",
+          "fragments": [
+            {
+              "text": "Verk closeout: still checkout_missing for vk-desktop-interruption-probe, unchanged (2 callbacks).",
+              "hookRunId": "stop:53:~/.codex/plugins/cache/brooks-local/verk/0.2.6/hooks/closeout.json"
+            }
+          ]
+        },
+        "started_at_ms": 1793984908734,
+        "completed_at_ms": 1793984908734
+      }
+    },
+    {
+      "timestamp": "2026-11-06T17:08:35.119Z",
+      "ordinal": 117,
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7",
+        "turn_id": "01a1b1d4-ae5e-7a10-a5e8-0208573e60af",
+        "item": {
+          "type": "HookPrompt",
+          "id": "msg_01a1b1d5-66ae-70e2-b08c-d29e4c56622b",
+          "fragments": [
+            {
+              "text": "Verk closeout: still checkout_missing for vk-desktop-interruption-probe, unchanged (3 callbacks).",
+              "hookRunId": "stop:53:~/.codex/plugins/cache/brooks-local/verk/0.2.6/hooks/closeout.json"
+            }
+          ]
+        },
+        "started_at_ms": 1793984915119,
+        "completed_at_ms": 1793984915119
+      }
+    },
+    {
+      "timestamp": "2026-11-06T17:08:41.315Z",
+      "ordinal": 123,
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7",
+        "turn_id": "01a1b1d4-ae5e-7a10-a5e8-0208573e60af",
+        "item": {
+          "type": "HookPrompt",
+          "id": "msg_01a1b1d5-7ee2-73f2-b4d7-1c6dde294cda",
+          "fragments": [
+            {
+              "text": "Verk closeout: still checkout_missing for vk-desktop-interruption-probe, unchanged (4 callbacks).",
+              "hookRunId": "stop:53:~/.codex/plugins/cache/brooks-local/verk/0.2.6/hooks/closeout.json"
+            }
+          ]
+        },
+        "started_at_ms": 1793984921315,
+        "completed_at_ms": 1793984921315
+      }
+    }
+  ],
+  "agent_finals": [],
+  "interrupted_event": {
+    "timestamp": "2026-11-06T17:08:41.416Z",
+    "ordinal": 125,
+    "type": "event_msg",
+    "payload": {
+      "type": "turn_aborted",
+      "root_turn_id": "01a1b1d4-ae5e-7a10-a5e8-0208573e60af",
+      "turn_id": "01a1b1d4-ae5e-7a10-a5e8-0208573e60af",
+      "reason": "interrupted",
+      "started_at": 1793984868,
+      "completed_at": 1793984921,
+      "duration_ms": 53401
+    }
+  },
+  "inventory_before_cleanup": [
+    {
+      "path": "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.json",
+      "sha256": "8635df37d5541f5ba6f1f614be784880f1b45f6caf07e7ba8922cabeb3a0f5de",
+      "mtime_utc": "2026-11-06T17:08:14.153264+00:00",
+      "content": {
+        "request_id": "desktop-interruption-2e7002fad1d7416e8c83d232a3851de0",
+        "began": 1793984894152918000,
+        "store": "~/.verk",
+        "harness": "codex",
+        "session": "01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7",
+        "repo": "~/Code/skills/.verk-desktop-missing-desktop-interruption-2e7002fad1d7416e8c83d232a3851de0",
+        "contract": "vk-desktop-interruption-probe",
+        "project": "skills",
+        "head": "synthetic-desktop-interruption-revision",
+        "artifact": null,
+        "common_dir": "~/Code/skills/.verk-desktop-missing-desktop-interruption-2e7002fad1d7416e8c83d232a3851de0/.git",
+        "bindings": {
+          "acceptanceVersion": null,
+          "subjectsVersion": null,
+          "policyVersion": null
+        },
+        "delegate_approved_goals": false,
+        "qualification": null,
+        "source_only": false
+      }
+    },
+    {
+      "path": "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.result.json",
+      "sha256": "a62ca5b736437fdadab5c04d681be0365a319028a647dc82ef2e92d186823757",
+      "mtime_utc": "2026-11-06T17:08:37.264615+00:00",
+      "content": {
+        "status": "needs_action",
+        "needs_action": "checkout_missing",
+        "contract": "vk-desktop-interruption-probe",
+        "revision": "synthetic-desktop-interruption-revision",
+        "proof": "not_read: no surviving directory selected",
+        "reason": "The recorded checkout is gone and no selected directory shows a current receipt for this request; no checks or repair were started",
+        "request_id": "desktop-interruption-2e7002fad1d7416e8c83d232a3851de0",
+        "repeat": 4
+      }
+    },
+    {
+      "path": "~/.cache/verk-closeout/01a1b1bf-e0c4-7e30-b8e1-62425bf76cf7.stops.json",
+      "sha256": "a570857e5c9d49499d6656896e4399e52d1941f6f3415ac87462da1b7e13257f",
+      "mtime_utc": "2026-11-06T17:08:37.263602+00:00",
+      "content": {
+        "key": "[\"vk-desktop-interruption-probe\", \"synthetic-desktop-interruption-revision\", {\"contract\": \"vk-desktop-interruption-probe\", \"needs_action\": \"checkout_missing\", \"proof\": \"not_read: no surviving directory selected\", \"reason\": \"The recorded checkout is gone and no selected directory shows a current receipt for this request; no checks or repair were started\", \"revision\": \"synthetic-desktop-interruption-revision\", \"status\": \"needs_action\"}]",
+        "repeat": 4
+      }
+    }
+  ],
+  "requested_timing": "FAIL: requested 1-2 callbacks; actual 4",
+  "retention": "PASS: matching marker retained through capture, needs_action checkout_missing, counter/result 4, no receipt in result; synthetic contract has no real contract or receipt",
+  "operator_observation": "Parent reports operator said Done after normal Stop; no UI visibility confirmation supplied"
+}

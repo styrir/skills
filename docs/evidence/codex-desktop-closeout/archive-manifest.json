@@ -1,0 +1,15 @@
+{
+  "source": "~/Code/plg-crk/docs/evidence/codex-desktop-closeout",
+  "capture_utc": "2026-11-06T17:11:53.340737+00:00",
+  "source_revision_skills": "65723cd5df33455c27169bac61f3ba0fcbbaea62",
+  "source_files": {
+    "qualification.md": "83d2e9ab98ac7ae8681448c6a646a5ee72c7d5bd716a0d7d4cd4958864da044f",
+    "limit-probe.json": "3696eb77b8236e1208e420650848f62a5d10d300c36035feb70183396689b829",
+    "interruption-preflight.json": "ed06372df6813022f195591336456a356357f3e5df7b81ebec6213eb3951a630",
+    "interruption-probe.json": "4dd79dc0328c1bb3da6773dcdff5f26f3ac177a8a579bd44ad2a85c5143b0776"
+  },
+  "copied_json_byte_identical": true,
+  "qualification_change": "Appended continuation; prior capture content unchanged",
+  "publication": false,
+  "acceptance": false
+}
