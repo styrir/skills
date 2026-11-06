@@ -13,10 +13,11 @@ State at 2026-11-06T17:45Z. This summarizes the two host records and adds the Co
 |---|---|---|
 | Installed identity and hook dispatch | PASS: `verk-adapter claude-code stop`, plugin 0.1.1 | PASS: `closeout.py hook-stop`, plugin 0.2.6 |
 | Stop with no request | PASS (narrow): one Stop recorded, nonblocking, no output | INCOMPLETE: host completion recorded, handler dispatch and output unobserved |
-| Stop while a review is pending | PASS (narrow): three recorded Stops, silent and nonblocking | PASS (narrow): counter reached 11 with the request retained; see the capture below |
+| Stop while a review is pending | PASS (narrow): three recorded Stops, silent and nonblocking | PASS (narrow): on a real review, counter reached 11 with the request retained; see the capture below |
+| Unchanged-result callback limit | Not applicable: its native Stop does not block | PASS on a synthetic probe: ten blocks with host timestamps, then counter and result at 11 and host completion |
 | Foreground closeout | PASS: `vk-2624`, one submission | PASS: `vk-2628`, one submission from the installed helper |
-| Python marker follow-up | Unavailable: no consumer loaded, marker untouched by Stop | Read by the loaded hook; the marker stays until a receipt |
-| Interruption | NOT RUN: needs the operator to press Stop during a pending closeout | PASS: stopped after four callbacks; the one-to-two-callback target was missed |
+| Python marker follow-up | Unavailable: no consumer loaded, marker untouched by Stop | Read by the loaded hook. Source keeps the marker until a receipt, but settlement is unobserved: earlier markers were removed by manual cleanup, and the real one is still on disk |
+| Interruption | NOT RUN: needs the operator to press Stop during a pending closeout | PASS on a synthetic probe only: stopped after four callbacks, and the one-to-two-callback target was missed. Not shown on a real pending closeout, so this is not the test Claude has yet to run |
 | Positive reconciliation at Stop | Not observed | Not observed |
 | Notice visibility in the app | UNOBSERVED | INCOMPLETE |
 
@@ -44,10 +45,10 @@ The `vk-2624` refusal is recorded in the Claude qualification. Why the same revi
 |---|---|---|---|---|---|---|
 | `vk-2625` | Claude qualification result | `vk-d279` approved | Approve, lowest 0.94 | None | `vk-r147` | `03d2a7b` in `plg-crk` |
 | `vk-2626` | Codex limit probe record | `vk-d280` approved | Approve, lowest 0.53 | None | `vk-r148` | `5d5eee3` |
-| `vk-2627` | Stop telling readers to wait when no verdict is coming | `vk-d277` rejected at `65723cd`, then `vk-d278` approved | `vk-d278`: approve, lowest 0.61 | None | `vk-r146` | `5d5eee3` |
+| `vk-2627` | Stop telling readers to wait when no verdict is coming | `vk-d277` rejected at `65723cd`, then `vk-d278` approved | `vk-d277`: reject, lowest 0.27. `vk-d278`: approve, lowest 0.61 | None | `vk-r146` | `5d5eee3` |
 
 - **`vk-d280`:** the 0.53 clause was "The implementation records real no-request Stop", the same no-request gap as `vk-d281`. That reviewer said a stricter reading of its clause would make the result a rejection.
-- **`vk-d278`:** the 0.61 clause was "The closeout test suites pass". The tests ran only on the author's side, with no approved check to record them.
+- **`vk-d277` and `vk-d278`:** the lowest clause on both was "The closeout test suites pass". The tests ran only on the author's side, with no approved check to record them.
 - **`vk-2626`:** it was submitted from a Claude session at the operator's instruction. All of its host evidence is Codex's own, and its record was not edited.
 
 ## Remaining limits
@@ -58,7 +59,7 @@ The `vk-2624` refusal is recorded in the Claude qualification. Why the same revi
 2. **Scope of the fix on Claude.** The foreground helper reads the source through a symlink, so it has the fix. Claude's native Stop is `verk-adapter`, not this helper, and whether it words these cases the same way is not established.
 3. **Codex marker for session `01a1b1e6-b113-74d3-a6ea-33f0de73bf87`.** At this writing it remains on disk, after the review it was waiting on already reached a receipt. That session's next Stop is expected to settle it, which would also be the first Codex Stop observed reporting a receipt.
 4. **Claude interruption.** It stays NOT RUN until the operator stops a turn during a fresh pending closeout.
-5. **Positive Stop reconciliation.** Neither host has shown one. Both foreground receipts were issued when a review answered, not at an observed Stop. On Claude, `stopReconcile` skips contracts with an open review, and checkpoints with proof already reconcile at once, so ordinary work leaves it little to do.
+5. **Positive Stop reconciliation.** Neither host has shown one. Both foreground receipts were issued when a review answered, not at an observed Stop. By source reading, not a host trace, Claude's `stopReconcile` skips contracts with an open review, and checkpoints with proof already reconcile at once, so ordinary work leaves it little to do.
 6. **Publication.** Commits in `skills` and `plg-crk` are local. Codex's original captures in `plg-crk/docs/evidence/codex-desktop-closeout/` remain untracked; the archive in this repository is the committed copy.
 
 **Evidence limits**
@@ -66,7 +67,12 @@ The `vk-2624` refusal is recorded in the Claude qualification. Why the same revi
 - **Codex trust:** values were read from persisted settings only. They are not proof of current trust validation, and the trust UI was not inspected. A byte-identical hook file suggests an install would not change trust, but that has not been tested.
 - **Codex callback 11:** its raw `systemMessage` was never captured in the limit probe, and its nonblocking behaviour is inferred from the counter, result file and host completion.
 - **Codex baseline:** the hook-specific no-op output is unobserved.
-- **Codex interruption timing:** the exact moment the operator pressed Stop is unobserved.
+- **Codex synthetic probes:** the callback-limit and interruption results used synthetic contracts and revisions, with no real contract behind them. The real `vk-2628` session adds counter evidence for the limit only, and no Codex interruption of a real pending closeout is recorded.
+- **Codex interruption account:** that it was a normal Stop press rests on the operator's statement, and the exact moment of the press is unobserved.
+- **Codex record defects reported by `vk-d281`, not rechecked here:**
+  - `final-assessment.json` holds a `qualification.md` hash that cannot match the file after `826ac1e`.
+  - `archive-manifest.json` still claims byte-identical copies, although `interruption-probe.json` was amended afterward. That amendment is additive.
+  - "Three unresolved callback replies" is not backed by the capture, whose `agent_finals` is empty.
 - **Claude Stop results:** the record has no per-hook exit code, so success is inferred from an empty error list.
 - **Claude handlers and adapter:** two Stop handlers are recorded only as `callback`, and the adapter's hash is not tied to a source commit.
 - **Claude display:** what the app showed is unobserved, because the agent cannot see its own interface.
