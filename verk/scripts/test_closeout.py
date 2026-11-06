@@ -559,6 +559,18 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
                 self.assertEqual(seen["next_action"], closeout.NEXT_ACTION[expected])
         self.assertEqual(len({c[0] for c in cases}), 12)
 
+    def test_a_review_no_verdict_is_coming_from_is_not_reported_as_waiting(self):
+        for outcome in ("process_failure", "unavailable"):
+            with self.subTest(outcome):
+                result = {"status": "review_pending", "contract": "vk-1", "reviews": ["vk-d1"],
+                          "outcomes": {"outcome": outcome, "next_action": closeout.NEXT_ACTION[outcome]}}
+                seen = closeout.reported(result)
+                self.assertEqual((seen["status"], seen["reason"], seen["reviews"]), ("needs_action", closeout.NEXT_ACTION[outcome], ["vk-d1"]))
+                self.assertEqual(result["status"], "review_pending")  # Control flow still sees the open review, so its request survives.
+        for unchanged in ({"status": "review_pending", "reviews": ["vk-d1"], "outcomes": {"outcome": "review_pending"}},
+                          {"status": "review_pending", "reviews": ["vk-d1"]}, {"status": "receipt", "outcomes": {"outcome": "process_failure"}}):
+            self.assertEqual(closeout.reported(unchanged), unchanged)
+
     def test_an_answer_against_the_reviewer_keeps_the_disagreement_visible(self):
         approve, reject = {"verdict": "approve", "clauses": []}, {"verdict": "reject", "clauses": []}
         overruled = self.outcome({"lifecycle": "answered", "verdict": "approved"}, {"proposed": "reject", "decider": approve})

@@ -150,7 +150,8 @@ NEXT_ACTION = {
     "receipt": "None: a receipt covers this revision.",
     "disagreement_gate_rejected": "The reviewer approved but the automated gate rejected. Read both, then repair or ask the operator; do not wait.",
     "disagreement_reviewer_rejected": "The reviewer rejected though the automated gate approved. Read the report and repair the work.",
-    "process_failure": "The reviewer process failed before judging. It retries on its next run; nothing was assessed.",
+    "process_failure": ("The reviewer process failed before judging, so nothing was assessed. It may retry briefly; after that the review stays open "
+                        "until another review opens or `verk-reviewer` runs. Read the report or ask the operator; do not keep waiting. This is not a rejection."),
     "unavailable": "The reviewer could not assess this. It stays open; retry explicitly or ask the operator. This is not a rejection.",
     "stale_bindings": "Terms or policy changed after this evidence. Run closeout again under the current terms.",
     "review_rejected": "The review rejected the work. Read the report, repair, and request closeout again.",
@@ -228,6 +229,14 @@ def outcomes(env, view, head, receipt=None):
                          "checks_admitted": sorted(a["check"] for a in admission if a["state"] == "admitted"),
                          "checks_not_admitted": sorted(a["check"] for a in admission if a["state"] != "admitted")},
             "next_action": NEXT_ACTION[outcome]}
+
+
+def reported(result):
+    """What a reader is told. Control flow keeps `review_pending` while a review is open, so its request survives; a reader must not wait on a verdict nothing is producing."""
+    outcome = result.get("outcomes") or {}
+    if result.get("status") == "review_pending" and outcome.get("outcome") in ("process_failure", "unavailable"):
+        return dict(result, status="needs_action", reason=outcome["next_action"])
+    return result
 
 
 def observe(repo, env, contract, head, wait, call_timeout=10):
@@ -454,7 +463,7 @@ def hook(payload, env):
         return {}  # Another Stop or foreground closeout already settled it.
     if settled == "replaced":
         return {"systemMessage": "Verk closeout: a newer request replaced the one this Stop checked; it stays pending."}
-    return {"systemMessage": "Verk closeout: " + json.dumps(result)}
+    return {"systemMessage": "Verk closeout: " + json.dumps(reported(result))}
 
 
 OPERATIONS = ("observe", "reconcile", "complete", "recover")
@@ -489,7 +498,7 @@ def operation(name, arguments, harness, env):
         else:
             head = args.revision or git(repo, "rev-parse", "HEAD")
             result = (observe if name == "observe" else reconcile)(repo, env, args.id, head, args.wait)
-        print(json.dumps(dict(result, operation=name)))
+        print(json.dumps(dict(reported(result), operation=name)))
         return 0 if result["status"] == "receipt" else 3
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
         print(f"Verk {name}: {error}", file=sys.stderr)
@@ -535,7 +544,7 @@ def main():
             if args.delegate_approved_goals:
                 raise ValueError("Delegated goal completion is Codex-only")
             result = closeout(repo, env, args.id, args.proof, args.wait, args.qualification, args.source_only)
-        print(json.dumps(result))
+        print(json.dumps(reported(result)))
         return 0 if result["status"] == "receipt" else 3
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         print(f"Verk closeout: {error}", file=sys.stderr)
