@@ -86,3 +86,8 @@ Owning tracking contract remains `vk-2628`, policy version 1, kind-version 1, re
 
 
 Local proof commit: `cdc2d7cc2e358497c9146daf27c89c6af114b955`; worktree was clean immediately after commit. Installed foreground **observe** at that exact revision exited 3 with `needs_action`: no receipt or open review. Review none, answer none, gate not_run, admission empty, receipt null. This is **PASS** for pure-read observation only; foreground submission remains **NOT RUN**. See [captured observation](foreground-observation.json). No pending closeout request was created. Operator notice visibility remains unconfirmed.
+
+
+## Operator clarification after interruption
+
+The operator reports reading the instruction to press Stop, seeing about two callbacks, and pressing Stop while callbacks arrived quickly; one or two additional callbacks may have arrived in the meantime. This is operator observation of the interruption flow, not confirmation of the separate unresolved systemMessage warning from the earlier limit probe. Host evidence remains four delivered callbacks followed by interruption. Cancellation **PASS** stands. Earlier “FAIL (requested timing)” labels describe the test's one-to-two-callback target being missed; they do not indicate operator failure or a demonstrated cancellation defect. Exact button-press time relative to callback delivery is **UNOBSERVED**. No repeat is needed to establish the cancellation already observed at four callbacks. Separate notice visibility remains **INCOMPLETE**.

@@ -212,5 +212,14 @@
   ],
   "requested_timing": "FAIL: requested 1-2 callbacks; actual 4",
   "retention": "PASS: matching marker retained through capture, needs_action checkout_missing, counter/result 4, no receipt in result; synthetic contract has no real contract or receipt",
-  "operator_observation": "Parent reports operator said Done after normal Stop; no UI visibility confirmation supplied"
+  "operator_observation": "Parent reports operator said Done after normal Stop; no UI visibility confirmation supplied",
+  "operator_clarification": {
+    "source": "Direct operator reply in this chat after qualification",
+    "observation": "Read the Stop instruction, saw about two callbacks, pressed Stop while callbacks arrived quickly; one or two extras may have arrived.",
+    "scope": "Interruption flow only; separate unresolved warning visibility not confirmed",
+    "host_count": 4,
+    "cancellation": "PASS",
+    "exact_button_press_timing": "UNOBSERVED",
+    "requested_timing_interpretation": "Test target missed; not operator failure or demonstrated cancellation defect"
+  }
 }
