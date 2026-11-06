@@ -114,3 +114,12 @@ Local proof commit: `cdc2d7cc2e358497c9146daf27c89c6af114b955`; worktree was cle
 ## Operator clarification after interruption
 
 The operator reports reading the instruction to press Stop, seeing about two callbacks, and pressing Stop while callbacks arrived quickly; one or two additional callbacks may have arrived in the meantime. This is operator observation of the interruption flow, not confirmation of the separate unresolved systemMessage warning from the earlier limit probe. Host evidence remains four delivered callbacks followed by interruption. Cancellation **PASS** stands. Earlier “FAIL (requested timing)” labels describe the test's one-to-two-callback target being missed; they do not indicate operator failure or a demonstrated cancellation defect. Exact button-press time relative to callback delivery is **UNOBSERVED**. No repeat is needed to establish the cancellation already observed at four callbacks. Separate notice visibility remains **INCOMPLETE**.
+
+
+## Authorized foreground submission — 6 November 2026
+
+This submission is being made from actual Codex desktop session `01a1b1e6-b113-74d3-a6ea-33f0de73bf87`, without a CLI-session substitute or delegate. The operator now authorizes normal reconciliation consequences, including independent review and a receipt on approval, for `vk-2628` only; this supersedes the earlier no-acceptance boundary for this submission. Existing baseline and notice-visibility limits remain as recorded.
+
+Installed skill directory: `/Users/brooks/.codex/plugins/cache/brooks-local/verk/0.2.6/skills/verk`. Foreground helper: `scripts/closeout.py`, SHA-256 `ec21b3bc6cc9b55a64d94d2219350f85590ed86ef9a11ae04c31ff8ef289ccb6`. The discovery symlink `/Users/brooks/.codex/skills/verk` resolves to the source checkout; that newer source helper is not used for this submission. Contract and policy were read: policy version 1, kind-version 1, review `yolo`, checks empty. Initial worktree was clean.
+
+The installed foreground helper will be submitted once with `--wait 0` and this committed qualification, without a delegation flag. Review, gate, admission, receipt and any actual host Stop continuation will be reported separately from its result. No review answers, policy approval, trust changes, plugin refresh, polling or push are authorized. This pre-submission record claims no outcome.
