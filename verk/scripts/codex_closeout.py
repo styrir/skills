@@ -8,7 +8,7 @@ import closeout as shared
 from codex_review import complete_goal
 
 # A blocked Stop costs a model turn. The limit is on unchanged results, so a result that moves keeps its continuations.
-MAX_BLOCKED_STOPS = 10
+MAX_BLOCKED_STOPS = 3
 
 
 def complete(repo, env, request, wait=0):

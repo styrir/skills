@@ -19,9 +19,9 @@ User interruption is a host event and remains effective; this is completion
 workflow enforcement, not protection against a malicious same-user process.
 
 Each blocked Stop costs a model turn, so blocking is limited. After
-`MAX_BLOCKED_STOPS` (10) consecutive blocks on an unchanged result for the same
+`MAX_BLOCKED_STOPS` (3) consecutive blocks on an unchanged result for the same
 contract and revision, Stop stops continuing and reports the closeout as
-unresolved in a `systemMessage`. The tenth block tells the agent to say so in its
+unresolved in a `systemMessage`. The third block tells the agent to say so in its
 final message. This doesn't accept anything: the request stays and no receipt is
 implied. A changed result or a new revision blocks again from one, and a later
 Stop that finds a receipt still clears the request. Foreground `complete`,

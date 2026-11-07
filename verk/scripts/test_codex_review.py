@@ -233,7 +233,8 @@ class DelegatedGoalTests(unittest.TestCase):
         self.assertEqual(verbs, ['view', 'view', 'view'])  # one read per callback: no reconcile, check or answer
         self.assertIn('checkout_missing', reasons[0])
         self.assertIn('no checks or repair were started', reasons[0])
-        self.assertLess(len(reasons[2]), 100)
+        self.assertLess(len(reasons[1]), 100)
+        self.assertIn('unchanged (2 callbacks)', reasons[1])
         self.assertIn('unchanged (3 callbacks)', reasons[2])
         self.assertEqual(json.loads(path.read_text()), request)
         self.assertEqual(closeout.call(self.root, self.env, 'view', goal, '--json')['receipts'], [])
@@ -265,6 +266,7 @@ class DelegatedGoalTests(unittest.TestCase):
                 with self.subTest(payload_cwd=payload_cwd, selected=env.get('VERK_CLOSEOUT_READ_DIR')):
                     if repo.exists():
                         shutil.rmtree(repo)
+                    path.with_suffix('.stops.json').unlink(missing_ok=True)  # each case starts its own count; the limit isn't what this tests
                     payload = {'hook_event_name': 'Stop', 'session_id': self.env['CODEX_THREAD_ID'], 'cwd': str(payload_cwd)}
                     with patch.object(closeout, 'call', side_effect=AssertionError('read without a selection')):
                         result = codex_closeout.hook(payload, env)
