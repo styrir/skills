@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 
@@ -16,6 +17,15 @@ def session_identity(harness, environment):
     if not session or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", session):
         raise ValueError(f"{harness} session identity is unavailable; no Verk command was run.")
     return session
+
+
+def installed(name, environment, bin_dir=None):
+    """Where the install put it: the folder given, then VERK_BIN_DIR, then PATH, then the install's default."""
+    folder = bin_dir or environment.get("VERK_BIN_DIR")
+    if folder:
+        return Path(folder) / name
+    found = shutil.which(name, path=environment.get("PATH", ""))
+    return Path(found) if found else Path.home() / ".local" / "bin" / name
 
 
 def invocation(arguments, environment, bin_dir=None):
@@ -36,7 +46,7 @@ def invocation(arguments, environment, bin_dir=None):
     repo = (options.repo or Path.cwd()).expanduser().resolve()
     if not repo.is_dir():
         raise ValueError(f"Repository directory does not exist: {repo}")
-    binary = (bin_dir or Path.home() / ".local" / "bin") / ("verk-check" if verb == "check" else "verk")
+    binary = installed("verk-check" if verb == "check" else "verk", environment, bin_dir)
     if not binary.is_file() or not os.access(binary, os.X_OK):
         raise ValueError(f"Installed executable is unavailable: {binary}")
     env = dict(environment)

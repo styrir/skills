@@ -57,6 +57,21 @@ class SessionWrapperTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError, "executable"):
             invocation(["brief"], {"CODEX_THREAD_ID": "test-session"}, Path(directory))
 
+    def test_the_binary_comes_from_the_folder_given_then_the_install_setting_then_path(self):
+        with tempfile.TemporaryDirectory() as given, tempfile.TemporaryDirectory() as setting, tempfile.TemporaryDirectory() as on_path:
+            for folder in (given, setting, on_path):
+                binary = Path(folder) / "verk"
+                binary.write_text("#!/bin/sh\n")
+                binary.chmod(0o755)
+            environment = {"CODEX_THREAD_ID": "test-session", "VERK_BIN_DIR": setting, "PATH": on_path}
+            run = lambda env, folder=None: invocation(["brief"], env, folder)[0][0]
+            self.assertEqual(run(environment, Path(given)), str(Path(given) / "verk"))
+            self.assertEqual(run(environment), str(Path(setting) / "verk"))
+            self.assertEqual(run({k: v for k, v in environment.items() if k != "VERK_BIN_DIR"}), str(Path(on_path) / "verk"))
+            # A setting that names an empty folder is refused rather than quietly using another install.
+            with tempfile.TemporaryDirectory() as empty, self.assertRaisesRegex(ValueError, "executable"):
+                invocation(["brief"], dict(environment, VERK_BIN_DIR=empty))
+
     def test_real_cli_lifecycle_in_isolated_store(self):
         with tempfile.TemporaryDirectory(prefix="verk-skill-test-") as directory:
             root = Path(directory)
