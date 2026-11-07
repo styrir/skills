@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "integration": { "ref": "refs/heads/main", "fetch": false },
+  "checks": {
+    "test": { "run": "python3 -m unittest discover -s verk/scripts -p test_*.py" }
+  },
+  "kinds": {
+    "code": { "checks": ["test"], "review": "agent" },
+    "research": { "review": "agent" },
+    "ops": { "review": "agent" },
+    "goal": { "review": true }
+  }
+}
