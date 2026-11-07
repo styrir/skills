@@ -14,7 +14,9 @@ Stop response is `decision: "block"` with `reason` asking the model to continue
 review/repair. It does not merely warn and then discard the reminder. Repeated
 continued Stop events retain the request; a receipt removes it. No request means
 no Verk call. Stale/dirty work is not submitted: the continuation asks the agent
-to re-qualify at current HEAD. No tests run at Stop and no new daemon is created.
+to re-qualify at current HEAD, unless Verk's current receipt already covers the
+recorded revision, which clears the request. No tests run at Stop and no new
+daemon is created.
 User interruption is a host event and remains effective; this is completion
 workflow enforcement, not protection against a malicious same-user process.
 

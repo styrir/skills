@@ -248,6 +248,29 @@ class DelegatedGoalTests(unittest.TestCase):
         closeout.save(path, request)  # a later Stop still holds it, as after a crash between receipt and cleanup
         return repo, goal, path, request
 
+    def move_on(self, repo):
+        (repo / 'later.txt').write_text('later work')
+        for args in (['add', 'later.txt'], ['commit', '-qm', 'later']):
+            subprocess.run(['git', *args], cwd=repo, env=self.env, check=True, capture_output=True)
+        return {'hook_event_name': 'Stop', 'session_id': self.env['CODEX_THREAD_ID'], 'cwd': str(repo)}
+
+    def test_a_checkout_that_moved_on_does_not_make_finished_work_stale(self):
+        repo, _, path, _ = self.receipted_request()
+        result = codex_closeout.hook(self.move_on(repo), self.env)
+        self.assertNotIn('decision', result)
+        self.assertIn('"status": "receipt"', result['systemMessage'])
+        self.assertFalse(path.exists())
+
+    def test_a_checkout_that_moved_on_without_a_receipt_blocks_and_never_says_wait(self):
+        repo, _, _ = self.approved_goal()
+        path = closeout.state_path(self.env)
+        request = json.loads(path.read_text())
+        result = codex_closeout.hook(self.move_on(repo), self.env)
+        self.assertEqual(result['decision'], 'block')
+        self.assertIn('Ready work changed', result['reason'])
+        self.assertNotIn('Wait for the independent verdict', result['reason'])
+        self.assertEqual(json.loads(path.read_text()), request)
+
     def test_missing_checkout_with_the_current_receipt_clears_from_the_selected_directory(self):
         repo, _, path, _ = self.receipted_request()
         payload = self.missing_checkout(repo)
@@ -490,9 +513,13 @@ with patch.object(closeout,'git',side_effect=git), patch.object(closeout,'call',
             path = closeout.state_path(env)
             closeout.save(path, {'repo': str(root), 'contract': 'vk-1', 'head': 'old', 'common_dir': 'git'})
             payload = {'hook_event_name': 'Stop', 'session_id': 'codex-stale-test', 'cwd': str(root)}
-            with patch.object(closeout, 'git', return_value='changed'), \
-                 patch.object(closeout, 'call', side_effect=AssertionError('stale write')):
+            verbs = []
+            def read_only(repo, env, verb, *args, **kwargs):
+                verbs.append(verb)
+                return {'contract': {'id': 'vk-1'}, 'proof': {'status': 'none'}, 'receipts': []}
+            with patch.object(closeout, 'git', return_value='changed'), patch.object(closeout, 'call', side_effect=read_only):
                 result = codex_closeout.hook(payload, env)
+                self.assertEqual(verbs, ['view'])
                 self.assertEqual(result['decision'], 'block')
                 self.assertIn('changed', result['reason'])
                 self.assertTrue(path.exists())

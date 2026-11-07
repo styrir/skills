@@ -180,9 +180,17 @@ def hook(payload, env):
             return {}
         repo = Path(request["repo"]).resolve()
         if checkout_present(repo):
-            ready(repo, request)
-            shared.call(repo, scoped, "reconcile", "--id", request["contract"], "--json", timeout=5)
-            result = complete(repo, scoped, request)
+            try:
+                ready(repo, request)
+            except ValueError:
+                # The checkout moving on doesn't make finished work stale: its own receipt still settles the request.
+                receipt = current_receipt(shared.call(repo, scoped, "view", request["contract"], "--json", timeout=5), request)
+                if not receipt:
+                    raise
+                result = {"status": "receipt", "contract": request["contract"], "receipt": receipt["id"], "revision": request["head"]}
+            else:
+                shared.call(repo, scoped, "reconcile", "--id", request["contract"], "--json", timeout=5)
+                result = complete(repo, scoped, request)
         else:
             result = recover(selected_directory(scoped), scoped, request, path)
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:
@@ -214,7 +222,7 @@ def hook(payload, env):
         return {"decision": "block", "reason": "Verk closeout is blocked: " + json.dumps(result)
                 + f". Restore the checkout, request closeout again from a current one, or look for its receipt with `closeout.py recover --repo <surviving directory> --id {result['contract']}`. "
                 "Do not start checks or repair from this callback, and do not ask for terminal chores."}
-    if result is not observed:
+    if result is not observed or result["status"] != "review_pending":
         return {"decision": "block", "reason": "Verk closeout is unresolved: " + json.dumps(result)
                 + ". No verdict is coming by itself, so do not wait for one. Follow the reason given, or say in your final message that the closeout is unresolved. "
                 "Do not ask for terminal chores." + last}
