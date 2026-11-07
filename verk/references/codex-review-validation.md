@@ -73,3 +73,11 @@ plugin installer. The installed `codex_closeout.py` SHA-256 is
 `b77afec4104bd1d0319b44419f92f280eabadaec15337779a97c519a534bbaf6`,
 byte-identical to the package/source. All 28 tests pass from the installed bundle
 as well. The hook command/manifest and trust settings remain unchanged.
+
+**Correction, 7 November 2026.** The refresh notes above don't show that the hook
+kept running. An unchanged hook definition doesn't keep trust: Codex's trust record
+also has a content hash, and a plugin refresh can change it. Codex then lists the
+hook as Modified and finishes turns without running it, with a Review hooks icon
+beside Full access as the only sign, until the operator allows it. This was
+observed live on Codex desktop after each of three installs on 7 November. See
+`docs/evidence/desktop-closeout-status.md`.
