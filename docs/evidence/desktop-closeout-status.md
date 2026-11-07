@@ -16,7 +16,7 @@ State at 2026-11-06T17:45Z, with the Codex plugin install updated at 20:37Z and 
 | Stop while a review is pending | PASS (narrow): three recorded Stops, silent and nonblocking | PASS (narrow): on a real review, counter reached 11 with the request retained; see the capture below |
 | Unchanged-result callback limit | Not applicable: its native Stop does not block | PASS on a synthetic probe: ten blocks with host timestamps, then counter and result at 11 and host completion |
 | Foreground closeout | PASS: `vk-2624`, one submission | PASS: `vk-2628`, one submission from the installed helper |
-| Python marker follow-up | Unavailable: no consumer loaded, marker untouched by Stop | Read by the loaded hook. Source keeps the marker until a receipt, but settlement is unobserved: earlier markers were removed by manual cleanup, and the real one is still on disk |
+| Python marker follow-up | Unavailable: no consumer loaded, marker untouched by Stop | Read by the loaded hook. Source keeps the marker until a receipt. Earlier markers were removed by manual cleanup; the real one settled at a real Stop on 7 November, reporting its receipt (open work, item 3) |
 | Interruption | NOT RUN: needs the operator to press Stop during a pending closeout | PASS on a synthetic probe only: stopped after four callbacks, and the one-to-two-callback target was missed. Not shown on a real pending closeout, so this is not the test Claude has yet to run |
 | Positive reconciliation at Stop | Not observed | Not observed |
 | Notice visibility in the app | UNOBSERVED | INCOMPLETE |
