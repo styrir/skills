@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Convert a Word or PDF file locally, preserving the source and bundled assets."""
+import argparse
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+
+def require(command):
+    path = shutil.which(command)
+    if not path:
+        raise RuntimeError(f"Required executable not on PATH: {command}")
+    return path
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("source", type=Path)
+    parser.add_argument("--out", type=Path, help="New output directory; default: <source stem>.research")
+    parser.add_argument("--pages", help="PDF only: zero-based pages/ranges, e.g. 0,2-4")
+    args = parser.parse_args()
+    source = args.source.expanduser().resolve()
+    if not source.is_file():
+        parser.error("Source file does not exist")
+    if source.suffix.lower() not in (".docx", ".pdf"):
+        parser.error("Supported: .docx and .pdf; legacy .doc needs conversion in Word first")
+    if args.pages and source.suffix.lower() != ".pdf":
+        parser.error("--pages applies only to PDF")
+    output = (args.out or source.with_suffix(".research")).expanduser().absolute()
+    if output.exists():
+        parser.error("Output already exists; reuse it or choose a new --out directory")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".research-", dir=output.parent) as temp:
+        stage = Path(temp) / "result"
+        stage.mkdir()
+        if source.suffix.lower() == ".docx":
+            command = [require("pandoc"), str(source), "--from=docx",
+                       "--to=markdown+tex_math_dollars+pipe_tables-simple_tables-multiline_tables-grid_tables",
+                       "--extract-media=assets",
+                       "--wrap=none", "--output=document.md"]
+        else:
+            command = [require("marker_single"), str(source),
+                       "--output_dir", str(stage), "--output_format", "markdown",
+                       "--paginate_output", "--disable_multiprocessing",
+                       # Image-based inline math has no text/font signal for fast mode.
+                       "--mode", "balanced", "--force_ocr"]
+            if args.pages:
+                command += ["--page_range", args.pages]
+        # ponytail: one OCR slot bounds memory; raise parallelism for batch throughput.
+        env = dict(os.environ, SURYA_INFERENCE_BACKEND="llamacpp",
+                   SURYA_INFERENCE_URL="", SURYA_INFERENCE_HOST="127.0.0.1",
+                   SURYA_INFERENCE_KEEP_ALIVE="false",
+                   SURYA_INFERENCE_CTX_PER_SLOT="24576",
+                   SURYA_INFERENCE_PARALLEL="1",
+                   FAST_LAYOUT_SERVER_URL="", FAST_LAYOUT_SERVER_HOST="127.0.0.1",
+                   OCR_ERROR_SERVER_URL="", OCR_ERROR_SERVER_HOST="127.0.0.1",
+                   DETECTOR_SERVER_URL="", DETECTOR_SERVER_HOST="127.0.0.1",
+                   HF_HUB_DISABLE_TELEMETRY="1")
+        if source.suffix.lower() == ".pdf":
+            env["LLAMA_CPP_BINARY"] = require("llama-server")
+        # Marker's shared helper services outlive this temporary output directory.
+        cwd = stage if source.suffix.lower() == ".docx" else Path.home()
+        subprocess.run(command, cwd=cwd, env=env, check=True, stdout=sys.stderr)
+        markdown = list(stage.rglob("*.md"))
+        if len(markdown) != 1 or not markdown[0].read_text().strip():
+            raise RuntimeError("Conversion produced no unique, nonempty Markdown file")
+        relative = markdown[0].relative_to(stage)
+        # mkdir reserves the destination without replacing another run's output.
+        output.mkdir()
+        try:
+            os.rename(stage, output)
+        except OSError:
+            output.rmdir()
+            raise
+    print(output / relative)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, RuntimeError, subprocess.CalledProcessError) as error:
+        sys.exit(f"research-convert: {error}")
