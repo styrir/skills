@@ -31,6 +31,15 @@ it does not certify every future document, perfect OCR, or research claims.
 - DOX pass: README indexes the new skill; its SKILL.md owns and links its scripts,
   fixtures and this snapshot. Root AGENTS.md routing remains applicable unchanged.
 
+## Publication evidence
+
+The initial source commit `cd881576314eed23bfd0e20314b01ac36b541db6`
+was published by ordinary `git push origin main`. A fresh `git ls-remote origin
+refs/heads/main` returned that exact SHA. The first closeout review checked before
+the push and rejected publication coverage; no source defect blocked its verdict.
+This qualification-only follow-up is published before requesting closeout again,
+so the shared remote-tracking ref also exposes the current published revision.
+
 ## Limits
 
 - Other formats' anydoc route was retained from the upstream skill, not live-qualified.
