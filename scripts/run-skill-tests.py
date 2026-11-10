@@ -6,8 +6,8 @@ Suites are found from git-tracked files, never from a list of skill names:
     files that script names, expanded the way npm's shell expands them
     (quoted globs the way Node's test runner does);
   - each Python test file runs on its own from its folder: under unittest
-    when it imports unittest (as a script when its name is not importable),
-    otherwise as a plain script;
+    when it imports the unittest module or a TestCase from it (as a script
+    when its name is not importable), otherwise as a plain script;
   - a shell test file runs with bash.
 Python files in a folder whose PEP 723 header lists dependencies run under
 `uv run --with` those dependencies.
@@ -19,7 +19,7 @@ node_modules (this check never installs), when a tracked test file is
 missing from disk, or when a tracked test file is claimed by no suite. Plain
 script and shell suites are judged by exit code alone.
 """
-import ast, fnmatch, glob, json, re, subprocess, sys, time, tomllib
+import ast, fnmatch, glob, json, os, re, signal, subprocess, sys, time, tomllib
 from pathlib import Path
 
 TEST_NAMES = ["test_*.py", "*_test.py", "*-test.py",
@@ -27,7 +27,8 @@ TEST_NAMES = ["test_*.py", "*_test.py", "*-test.py",
                 for p in ("*.test", "*_test", "*-test", "test_*")],
               "test-*.sh", "*-test.sh"]
 TAIL = 40  # lines of output shown for a failing suite
-SUITE_TIMEOUT = 600  # seconds; a suite that hangs fails instead of stalling the check
+# seconds; a suite that hangs fails instead of stalling the check
+SUITE_TIMEOUT = float(os.environ.get("RUN_SKILL_TESTS_TIMEOUT", 600))
 GLOB_CHARS = set("*?[")
 
 root = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True,
@@ -45,7 +46,14 @@ def suite(name, cwd=None, cmd=None, count=None, error=None):
 def node_claims(folder, script):
     """Files the test script names, relative to the repo root."""
     found = set()
-    for raw in re.findall(r"""'[^']*'|"[^"]*"|\S+""", script):
+    # Only arguments of a test-runner command count; a file merely mentioned
+    # elsewhere (an echo, a build step) is not run, so it stays unclaimed.
+    runner_args = []
+    for segment in re.split(r"&&|\|\||[;|]", script):
+        tokens = re.findall(r"""'[^']*'|"[^"]*"|\S+""", segment)
+        if "--test" in tokens:
+            runner_args += tokens
+    for raw in runner_args:
         quoted = raw[0] in "'\"" and raw[-1] == raw[0] and len(raw) > 1
         token = raw[1:-1] if quoted else raw
         if quoted and GLOB_CHARS & set(token):
@@ -85,10 +93,13 @@ for f in tracked:
         suite(str(folder), root / folder, ["npm", "test"], r"^(?:ℹ|#) tests (\d+)")
 
 def imports_unittest(path):
+    """True when the file imports the unittest module or a TestCase from it
+    (under any alias). Importing only a helper such as unittest.mock does not count."""
     for n in ast.walk(ast.parse(path.read_text(), str(path))):
-        if isinstance(n, ast.Import) and any(a.name.split(".")[0] == "unittest" for a in n.names):
+        if isinstance(n, ast.Import) and any(a.name == "unittest" for a in n.names):
             return True
-        if isinstance(n, ast.ImportFrom) and (n.module or "").split(".")[0] == "unittest":
+        if (isinstance(n, ast.ImportFrom) and n.module == "unittest"
+                and any(a.name.endswith("TestCase") or a.name == "main" for a in n.names)):
             return True
     return False
 
@@ -140,11 +151,16 @@ for s in suites:
     start, out, ok, count = time.monotonic(), s["error"] or "", s["error"] is None, ""
     if ok:
         try:
-            r = subprocess.run(s["cmd"], cwd=s["cwd"], capture_output=True, text=True,
-                               stdin=subprocess.DEVNULL, timeout=SUITE_TIMEOUT)
-            out, ok = r.stdout + r.stderr, r.returncode == 0
-        except subprocess.TimeoutExpired as e:
-            out, ok = f"{e.output or ''}\ntimed out after {SUITE_TIMEOUT} s", False
+            # own process group, so a timeout also stops what npm or bash started
+            p = subprocess.Popen(s["cmd"], cwd=s["cwd"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, text=True, start_new_session=True)
+            try:
+                out, _ = p.communicate(timeout=SUITE_TIMEOUT)
+                ok = p.returncode == 0
+            except subprocess.TimeoutExpired:
+                os.killpg(p.pid, signal.SIGKILL)
+                out, _ = p.communicate()
+                out, ok = f"{out}\ntimed out after {SUITE_TIMEOUT} s", False
         except OSError as e:
             out, ok = f"cannot run {s['cmd'][0]}: {e}", False
         if ok and s["count"]:
