@@ -9,6 +9,6 @@ const packageJson = JSON.parse(fs.readFileSync(new URL('../package.json', import
 test('package.json exposes a deterministic test harness script', () => {
   assert.equal(
     packageJson.scripts?.test,
-    'SETJA_SUMMARIZER=outline SETJA_RUNIR_ENABLED=false tsx --test test/**/*.test.ts'
+    "SETJA_SUMMARIZER=outline SETJA_RUNIR_ENABLED=false tsx --test 'test/**/*.test.ts'"
   );
 });
