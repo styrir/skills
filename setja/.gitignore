@@ -3,3 +3,6 @@ dist/
 .env
 workspace/
 workspace/**
+# The example project's sample workspace is a test fixture, so it is tracked.
+!example-project/workspace/
+!example-project/workspace/**
