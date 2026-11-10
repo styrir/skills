@@ -104,7 +104,8 @@ def imports_unittest(path):
     for n in ast.walk(ast.parse(path.read_text(), str(path))):
         if isinstance(n, ast.Import) and any(counts(a.name) for a in n.names):
             return True
-        if isinstance(n, ast.ImportFrom) and counts(n.module or ""):
+        if (isinstance(n, ast.ImportFrom) and counts(n.module or "")
+                and not (n.module == "unittest" and all(a.name == "mock" for a in n.names))):
             return True
     return False
 
