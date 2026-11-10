@@ -43,8 +43,10 @@ Against the Rúnir repository at `591fc1f`, with the local Rúnir service.
 
 Re-run after passing mentions were split out (vk-2712), against Rúnir at
 `98784c1` (no change to these functions since `591fc1f`). The counts differ
-from the table above because Rúnir stored new facts in between, not because
-the matching changed.
+from the table above because Rúnir's memory changed in between. Run the same
+day, the previous script (`2f1b379`) found the same totals (34, 9, 33) and
+printed a `mention:` line for the same number of facts (17, 5, 24) as the new
+script counts as named only later.
 
 | Function | Named in first 220 chars | Named only later | File-only | Time |
 | --- | --- | --- | --- | --- |
