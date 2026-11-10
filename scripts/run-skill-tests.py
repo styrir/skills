@@ -30,6 +30,7 @@ TAIL = 40  # lines of output shown for a failing suite
 # seconds; a suite that hangs fails instead of stalling the check
 SUITE_TIMEOUT = float(os.environ.get("RUN_SKILL_TESTS_TIMEOUT", 600))
 GLOB_CHARS = set("*?[")
+NODE_TEST_RUNNERS = {"node", "tsx"}  # runners whose --test mode takes test files as arguments
 
 root = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True,
                            text=True, check=True).stdout.strip())
@@ -51,8 +52,11 @@ def node_claims(folder, script):
     runner_args = []
     for segment in re.split(r"&&|\|\||[;|]", script):
         tokens = re.findall(r"""'[^']*'|"[^"]*"|\S+""", segment)
-        if "--test" in tokens:
-            runner_args += tokens
+        words = [t for t in tokens if not re.match(r"^\w+=", t)]  # drop VAR=value prefixes
+        if words[:1] == ["npx"]:
+            words = words[1:]
+        if words and Path(words[0]).name in NODE_TEST_RUNNERS and "--test" in words:
+            runner_args += words[1:]
     for raw in runner_args:
         quoted = raw[0] in "'\"" and raw[-1] == raw[0] and len(raw) > 1
         token = raw[1:-1] if quoted else raw
@@ -93,13 +97,14 @@ for f in tracked:
         suite(str(folder), root / folder, ["npm", "test"], r"^(?:ℹ|#) tests (\d+)")
 
 def imports_unittest(path):
-    """True when the file imports the unittest module or a TestCase from it
-    (under any alias). Importing only a helper such as unittest.mock does not count."""
+    """True when the file imports unittest itself, or from unittest or one of its
+    submodules (under any alias). Importing only unittest.mock does not count."""
+    def counts(module):
+        return module == "unittest" or (module.startswith("unittest.") and not module.startswith("unittest.mock"))
     for n in ast.walk(ast.parse(path.read_text(), str(path))):
-        if isinstance(n, ast.Import) and any(a.name == "unittest" for a in n.names):
+        if isinstance(n, ast.Import) and any(counts(a.name) for a in n.names):
             return True
-        if (isinstance(n, ast.ImportFrom) and n.module == "unittest"
-                and any(a.name.endswith("TestCase") or a.name == "main" for a in n.names)):
+        if isinstance(n, ast.ImportFrom) and counts(n.module or ""):
             return True
     return False
 
