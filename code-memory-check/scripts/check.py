@@ -14,10 +14,13 @@ p.add_argument("--file", required=True, help="path relative to the repo root")
 p.add_argument("--lines", help="START,END (1-based) from a code index; default finds the function by name")
 p.add_argument("--repo", default=".", help="repo root (default: current folder)")
 p.add_argument("--limit", type=int, default=50, help="hits per search; Rúnir caps this at 50")
+p.add_argument("--passing", action="store_true", help="also list facts that name the function only past the preview")
 p.add_argument("--file-facts", action="store_true", help="also list facts that name only the file")
 p.add_argument("--full", nargs="*", metavar="ID",
                help="print whole fact text: only the facts with these ids (prefixes work), or every listed fact when no id is given")
 a = p.parse_args()
+
+PREVIEW = 220  # characters of each fact shown in the listing
 
 def git(*args):
     return subprocess.run(["git", "-C", a.repo, *args], capture_output=True, text=True)
@@ -53,11 +56,19 @@ def search(query):
 # Search the symbol and the file name separately, merge by id, then keep only
 # facts that actually name one of them.
 fname = Path(a.file).name
-batches = [search(n) for n in (a.symbol, fname)]
-hits = {h["id"]: h for b in batches for h in b}.values()
+hits = {h["id"]: h for n in (a.symbol, fname) for h in search(n)}.values()
 by_symbol = [h for h in hits if a.symbol in str(h.get("memory", ""))]
 by_file = [h for h in hits if a.symbol not in str(h.get("memory", "")) and fname in str(h.get("memory", ""))]
-full = any(len(b) >= a.limit for b in batches)
+
+def in_preview(h):
+    """True when the name ends inside the preview. Facts that name it later usually
+    mention it in passing, in a list attached to a claim about other code."""
+    text = " ".join(str(h["memory"]).split())
+    at = text.find(a.symbol)
+    return at >= 0 and at + len(a.symbol) <= PREVIEW
+
+named = [h for h in by_symbol if in_preview(h)]
+passing = [h for h in by_symbol if not in_preview(h)]
 
 def judge(h):
     """(flag, block) for one fact. created_at, not updated_at: a later touch must not make an old fact look fresh."""
@@ -73,17 +84,24 @@ def judge(h):
     absent = [m for m in re.findall(r"[\w./-]+/[\w.-]+\.\w{1,4}\b", text) if not (Path(a.repo) / m).exists()]
     if absent:
         note += f"; note: names {absent[0]}, absent from this checkout"
-    body = text if a.full is not None else text[:220]
+    body = text if a.full is not None else text[:PREVIEW]
     # Many facts name the function only in passing, past the preview. Show where.
     needle = a.symbol if a.symbol in text else fname
     at = text.find(needle)
-    if a.full is None and at + len(needle) > 220:
+    if a.full is None and at + len(needle) > PREVIEW:
         body += f"\n          mention: …{text[max(0, at - 90):at + len(needle) + 90]}…"
     return flag, f"{flag:8}  {when.date()}  {note}\n          {h['id']}\n          {body}\n"
 
 def show(facts):
     for h in sorted(facts, key=lambda h: h["created_at"]):
         print(judge(h)[1])
+
+def tally(facts, what, flag, listed):
+    flags = [judge(h)[0] for h in facts]
+    print(f"{len(facts)} more {what}: {flags.count('RE-CHECK')} re-check, {flags.count('OK')} ok"
+          + ("" if listed or not facts else f"  ({flag} lists them)") + "\n")
+    if listed:
+        show(facts)
 
 print(f"{a.symbol}  {a.file}")
 print(f"last changed {last[0].date()} ({last[1]}) {last[2][:70]}")
@@ -98,11 +116,7 @@ if a.full:  # ids given: print just those facts, whole
         print(f"no listed fact has an id starting with {i}")
     sys.exit(1 if missing else 0)
 
-print(f"{len(by_symbol)} fact(s) name the function"
-      + ("; search hit its limit, so this list may be partial" if full else "") + "\n")
-show(by_symbol)
-flags = [judge(h)[0] for h in by_file]
-print(f"{len(by_file)} more name only {fname}: {flags.count('RE-CHECK')} re-check, {flags.count('OK')} ok"
-      + ("" if a.file_facts or not by_file else "  (--file-facts lists them)") + "\n")
-if a.file_facts:
-    show(by_file)
+print(f"{len(named)} fact(s) name the function in their first {PREVIEW} characters\n")
+show(named)
+tally(passing, "name it only later in the text", "--passing", a.passing)
+tally(by_file, f"name only {fname}", "--file-facts", a.file_facts)

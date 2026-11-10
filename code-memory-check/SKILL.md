@@ -42,7 +42,8 @@ the function: fix the target before reading on.
 
 ```bash
 python3 <this skill's folder>/scripts/check.py --symbol <name> --file <path> \
-  [--lines START,END] [--repo <repo root>] [--file-facts] [--full [ID ...]]
+  [--lines START,END] [--repo <repo root>] [--passing] [--file-facts] \
+  [--full [ID ...]]
 ```
 
 `--file` is relative to the repo root. `--repo` defaults to the current
@@ -51,13 +52,17 @@ folder, so pass it unless you are already at the repo root.
 Needs `RUNIR_API_KEY` and `RUNIR_USER_ID` in the environment, the same as the
 `runir-search` skill. If the search fails, say so; do not guess.
 
-Output comes in two parts:
+Output comes in three parts:
 
-1. Facts that name the function, one block each. Read these.
-2. One line counting facts that name only the file, with how many are
-   re-check and ok. These are usually about other code in the same file. Add
-   `--file-facts` to list them when the function-named list is empty or you
-   need the wider picture.
+1. Facts that name the function in their first 220 characters, one block
+   each, showing those 220 characters. Read these.
+2. One line counting facts that name the function only later in the text,
+   with how many are re-check and ok. Most name it in passing, in a list of
+   files attached to a claim about something else. Add `--passing` to list
+   them; each block then has a `mention:` line with the text around the name.
+3. One line counting facts that name only the file. These are usually about
+   other code in the same file. Add `--file-facts` to list them when the
+   lists above are empty or you need the wider picture.
 
 Each fact is marked:
 
@@ -66,15 +71,6 @@ Each fact is marked:
   number of commits.
 - A `note:` when the fact names a file that is absent from this checkout. That
   can mean a rename, or a path from another repository.
-
-Each block shows the first 220 characters of the fact. When the function's
-name comes later than that, a `mention:` line shows the text around it. Many
-facts name a function only in passing, in a list of files attached to a claim
-about something else.
-
-If the output says the search hit its limit, the list may be partial. Older
-facts can drop out as newer ones about the same function are stored,
-including facts captured from earlier runs of this skill.
 
 ## 3. Judge the flagged facts
 
@@ -119,6 +115,12 @@ you judged out of how many were listed. Then stop.
   is flagged. The output notes when a fact predates the function's history.
 - Rúnir memory spans projects, so a same-named symbol or file in another
   project can match.
-- Each search returns at most 50 facts.
+- Each search returns at most 50 facts, and the output does not say when a
+  search was cut off. Older facts can drop out as newer ones about the same
+  function are stored, including facts captured from earlier runs of this
+  skill.
+- The split between parts 1 and 2 goes by where the name falls in the text,
+  nothing else. A fact about the function that names it late is counted in
+  part 2; a passing mention near the start is listed in part 1.
 - Dates come from the checkout you run in. Run it where the code you are
   about to edit lives.

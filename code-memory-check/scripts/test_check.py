@@ -72,7 +72,7 @@ class CheckTest(unittest.TestCase):
         ]).stdout
         self.assertIn("scope: function, found by name", out)
         self.assertIn("last changed 2026-03-01", out)
-        self.assertIn("3 fact(s) name the function", out)
+        self.assertIn("3 fact(s) name the function in their first 220 characters", out)
         self.assertIn("RE-CHECK  2026-02-01  1 commit(s) to the function since\n          a1", out)
         self.assertIn("OK        2026-04-01  written after the last change\n          a2", out)
         self.assertIn("2 commit(s) to the function since; note: older than this checkout's history", out)
@@ -102,9 +102,29 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("RE-CHECK  2026-02-01", run.stdout)
 
+    def test_names_past_the_preview_are_tallied_by_position(self):
+        # The name ends at character 220 in one fact and at 221 in the other; no other difference.
+        at_edge = fact("e1", "x" * 214 + "charge", OLD)
+        past_edge = fact("e2", "x" * 215 + "charge", NEW)
+        out = self.check(facts=[at_edge, past_edge]).stdout
+        self.assertIn("1 fact(s) name the function in their first 220 characters", out)
+        self.assertIn("\n          e1\n", out)
+        self.assertNotIn("e2", out)
+        self.assertIn("1 more name it only later in the text: 0 re-check, 1 ok  (--passing lists them)", out)
+        listed = self.check("--passing", facts=[at_edge, past_edge]).stdout
+        self.assertIn("\n          e2\n", listed)
+        self.assertNotIn("--passing lists them", listed)
+
+    def test_no_partial_notice_when_the_search_is_full(self):
+        out = self.check("--limit", "2", facts=[fact("a1", "charge one", OLD), fact("a2", "charge two", NEW)]).stdout
+        self.assertIn("2 fact(s) name the function", out)
+        self.assertNotIn("limit", out)
+        self.assertNotIn("partial", out)
+
     def test_mention_line_and_full_text(self):
         long = fact("f1", "Lead claim about something else. " + "pad " * 80 + "see charge in the list. TAIL", OLD)
-        out = self.check(facts=[long]).stdout
+        self.assertNotIn("mention:", self.check(facts=[long]).stdout)
+        out = self.check("--passing", facts=[long]).stdout
         self.assertIn("mention: …", out)
         self.assertIn("see charge in the list", out)
         self.assertNotIn("Lead claim about something else. " + "pad " * 60, out)

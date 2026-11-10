@@ -19,15 +19,17 @@ readlink ~/.codex/skills/code-memory-check        # -> <this repo>/code-memory-c
 ## Script tests
 
 ```
-python3 -m unittest discover -s code-memory-check/scripts    # Ran 7 tests, OK
+python3 -m unittest discover -s code-memory-check/scripts    # Ran 9 tests, OK
 ```
 
 `scripts/test_check.py` builds a throwaway git repo and a stub Rúnir on
 localhost. It covers the by-name lookup, `--lines`, both whole-file fallbacks,
 a function that did not change in a file that did, the OK / RE-CHECK dates,
-a timestamp with no zone, the file-only tally, `--file-facts`, the `mention:`
-line, `--full` with a good and a bad id, a search that fails, and missing
-credentials. Python 3.14.6.
+a timestamp with no zone, the split at the 220-character preview (a name
+ending at character 220 is listed, one ending at 221 is counted), `--passing`,
+no partial notice when a search returns its limit, the file-only tally,
+`--file-facts`, the `mention:` line, `--full` with a good and a bad id, a
+search that fails, and missing credentials. Python 3.14.6.
 
 ## Live runs
 
@@ -38,6 +40,19 @@ Against the Rúnir repository at `591fc1f`, with the local Rúnir service.
 | `arbitrateWrite` | `src/storage/writes/write-arbitrator.ts` | `--lines 1259,2062` from `gitnexus context` | 2026-09-25 `9672709` | 34 | 21 | 13 | 20 | 42 | 1.2 s |
 | `annotateSelectedFacts` | `src/recall/source-excerpts.ts` | name | 2026-09-27 `6b1328c` | 7 | 5 | 2 | 5 | 4 | 2.2 s |
 | `extractMemories` | `src/capture/extraction/capture.ts` | name | 2026-11-09 `3a18143` | 32 | 31 | 1 | 24 | 7 | 1.8 s |
+
+Re-run after passing mentions were split out (vk-2712), against Rúnir at
+`98784c1` (no change to these functions since `591fc1f`). The counts differ
+from the table above because Rúnir stored new facts in between, not because
+the matching changed.
+
+| Function | Named in first 220 chars | Named only later | File-only | Time |
+| --- | --- | --- | --- | --- |
+| `arbitrateWrite` | 17 | 17 (10 re-check, 7 ok) | 41 | 1.3 s |
+| `annotateSelectedFacts` | 4 | 5 (5 re-check) | 4 | 1.9 s |
+| `extractMemories` | 9 | 24 (24 re-check) | 7 | 1.1 s |
+
+No run printed a partial-list notice.
 
 Also run: `--full dabf29d4 zzzz` (prints one fact whole, then
 `no listed fact has an id starting with zzzz`), and `neutralize` in
@@ -80,3 +95,9 @@ because the reported problem was fixed), 2 not about the function.
   span and a silent fall back to whole-file dates. The text is corrected and
   the output now says `whole file (line range not valid)`.
 - A timestamp without a zone would have raised an error. It is read as UTC.
+- Passing mentions crowded out the facts about the function. Facts that name
+  it only past the 220-character preview are now counted on one line, like
+  file-only facts, and `--passing` lists them (vk-2712).
+- The "search hit its limit, so this list may be partial" notice printed on
+  every live run, so it said nothing. It is gone; the 50-fact caveat stays
+  in SKILL.md under Limits (vk-2712).
