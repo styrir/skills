@@ -22,6 +22,9 @@ readlink ~/.codex/skills/code-memory-check        # -> <this repo>/code-memory-c
 python3 -m unittest discover -s code-memory-check/scripts    # Ran 9 tests, OK
 ```
 
+The repo's Verk policy runs this as the recorded `code-memory-check` check
+on every code contract (vk-2713).
+
 `scripts/test_check.py` builds a throwaway git repo and a stub Rúnir on
 localhost. It covers the by-name lookup, `--lines`, both whole-file fallbacks,
 a function that did not change in a file that did, the OK / RE-CHECK dates,
