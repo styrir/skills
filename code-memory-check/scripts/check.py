@@ -5,7 +5,7 @@ Reads only: two Rúnir searches, one git log. Stores nothing.
 Env: RUNIR_API_KEY, RUNIR_USER_ID, optional RUNIR_BASE (default http://127.0.0.1:7700).
 """
 import argparse, json, os, re, subprocess, sys, urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 p = argparse.ArgumentParser()
@@ -15,16 +15,20 @@ p.add_argument("--lines", help="START,END (1-based) from a code index; default f
 p.add_argument("--repo", default=".", help="repo root (default: current folder)")
 p.add_argument("--limit", type=int, default=50, help="hits per search; Rúnir caps this at 50")
 p.add_argument("--file-facts", action="store_true", help="also list facts that name only the file")
+p.add_argument("--full", nargs="*", metavar="ID",
+               help="print whole fact text: only the facts with these ids (prefixes work), or every listed fact when no id is given")
 a = p.parse_args()
 
 def git(*args):
     return subprocess.run(["git", "-C", a.repo, *args], capture_output=True, text=True)
 
 # History of the function itself, newest first. Falls back to the whole file.
+what = "function"
 scope = "function, by line range" if a.lines else "function, found by name"
 log = git("log", "-s", "--format=%cI%x09%h%x09%s", "-L", f"{a.lines}:{a.file}" if a.lines else f":{a.symbol}:{a.file}")
 if log.returncode != 0 or not log.stdout.strip():
-    scope = "whole file (function not found; pass --lines)"
+    what = "whole file"
+    scope = "whole file (line range not valid)" if a.lines else "whole file (function not found; pass --lines)"
     log = git("log", "--format=%cI%x09%h%x09%s", "--", a.file)
 commits = [l.split("\t", 2) for l in log.stdout.splitlines() if l.count("\t") == 2]
 if not commits:
@@ -59,15 +63,23 @@ def judge(h):
     """(flag, block) for one fact. created_at, not updated_at: a later touch must not make an old fact look fresh."""
     text = " ".join(str(h["memory"]).split())
     when = datetime.fromisoformat(h["created_at"].replace("Z", "+00:00"))
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
     since = sum(1 for d, _, _ in commits if d > when)
     flag = "RE-CHECK" if since else "OK"
-    note = f"{since} commit(s) to the {scope.split(',')[0]} since" if since else "written after the last change"
+    note = f"{since} commit(s) to the {what} since" if since else "written after the last change"
     if when < commits[-1][0]:
-        note += "; note: older than this checkout's history of the function, so the count includes its first commit"
+        note += f"; note: older than this checkout's history of the {what}, so the count includes its first commit"
     absent = [m for m in re.findall(r"[\w./-]+/[\w.-]+\.\w{1,4}\b", text) if not (Path(a.repo) / m).exists()]
     if absent:
         note += f"; note: names {absent[0]}, absent from this checkout"
-    return flag, f"{flag:8}  {when.date()}  {note}\n          {h['id']}\n          {text[:220]}\n"
+    body = text if a.full is not None else text[:220]
+    # Many facts name the function only in passing, past the preview. Show where.
+    needle = a.symbol if a.symbol in text else fname
+    at = text.find(needle)
+    if a.full is None and at + len(needle) > 220:
+        body += f"\n          mention: …{text[max(0, at - 90):at + len(needle) + 90]}…"
+    return flag, f"{flag:8}  {when.date()}  {note}\n          {h['id']}\n          {body}\n"
 
 def show(facts):
     for h in sorted(facts, key=lambda h: h["created_at"]):
@@ -76,6 +88,16 @@ def show(facts):
 print(f"{a.symbol}  {a.file}")
 print(f"last changed {last[0].date()} ({last[1]}) {last[2][:70]}")
 print(f"scope: {scope}")
+
+if a.full:  # ids given: print just those facts, whole
+    listed = [*by_symbol, *by_file]
+    missing = [i for i in a.full if not any(h["id"].startswith(i) for h in listed)]
+    print()
+    show([h for h in listed if any(h["id"].startswith(i) for i in a.full)])
+    for i in missing:
+        print(f"no listed fact has an id starting with {i}")
+    sys.exit(1 if missing else 0)
+
 print(f"{len(by_symbol)} fact(s) name the function"
       + ("; search hit its limit, so this list may be partial" if full else "") + "\n")
 show(by_symbol)

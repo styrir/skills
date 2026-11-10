@@ -24,21 +24,25 @@ You need a symbol name and its file path, relative to the repo root.
 If a code index is available, use it to confirm where the symbol lives now and
 to get its line range. Any index works:
 
-- GitNexus: `gitnexus context <symbol> -r <repo>` (its line numbers are
-  zero-based; add 1 to both).
+- GitNexus: `gitnexus context <symbol> -r <repo>` gives `startLine` and
+  `endLine`; pass them as they are. Add `--file <path>` when the name matches
+  more than one symbol. (Its Cypher queries count the same lines from zero;
+  add 1 to both if you take them from there.)
 - CodeGraph: `codegraph explore "<symbol>"`.
 - Neither: grep for the definition.
 
 Pass the line range when you have it. Without it the script finds the function
 by name, which takes the first line at column 0 that contains the name; that
-can be a re-export or a type instead of the definition. The output says which
-method was used.
+can be a re-export or a type instead of the definition. The output's `scope:`
+line says which method was used. If it says `whole file`, the function was
+not found or the line range was wrong, and every date is for the file, not
+the function: fix the target before reading on.
 
 ## 2. Run the check
 
 ```bash
 python3 <this skill's folder>/scripts/check.py --symbol <name> --file <path> \
-  [--lines START,END] [--repo <repo root>] [--file-facts]
+  [--lines START,END] [--repo <repo root>] [--file-facts] [--full [ID ...]]
 ```
 
 `--file` is relative to the repo root. `--repo` defaults to the current
@@ -63,20 +67,41 @@ Each fact is marked:
 - A `note:` when the fact names a file that is absent from this checkout. That
   can mean a rename, or a path from another repository.
 
+Each block shows the first 220 characters of the fact. When the function's
+name comes later than that, a `mention:` line shows the text around it. Many
+facts name a function only in passing, in a list of files attached to a claim
+about something else.
+
 If the output says the search hit its limit, the list may be partial. Older
 facts can drop out as newer ones about the same function are stored,
 including facts captured from earlier runs of this skill.
 
 ## 3. Judge the flagged facts
 
-`RE-CHECK` means "the code moved on", not "the fact is wrong". For each one,
-read the current function and decide: still true, outdated, or can't tell.
-For what depends on the function, use the code index's impact query.
+`RE-CHECK` means "the code moved on", not "the fact is wrong". To read the
+facts you are judging in full, rerun with `--full <id> [<id> ...]` (id
+prefixes work; `--full` alone prints every listed fact whole). Then read the
+current function and put each fact in one of these:
+
+- **Still true** — the code does what the fact says.
+- **True, details drifted** — the claim holds but a line number, path or name
+  in it is out of date. Old line numbers almost always are.
+- **Outdated** — the code contradicts it. A bug report or review finding is
+  usually outdated because it was fixed: check whether the fix landed.
+- **Not about this function** — the fact names the function in passing and
+  its claim is about other code. Check that code if it matters; otherwise say
+  so and move on.
+- **Can't tell from code** — status and history, such as "the task is done"
+  or "two scouts are running". Do not force a verdict.
+
+On a long list, judge the facts that make a claim about the code first. For
+what depends on the function, use the code index's impact query.
 
 ## 4. Report
 
 Tell the user which facts still hold and which are outdated, quoting the fact
-and the code that contradicts it. Then stop.
+and the code that contradicts it, with its file and line. Say how many facts
+you judged out of how many were listed. Then stop.
 
 - Do not forget, edit or supersede a fact on your own.
 - If the user asks you to correct one, store the corrected statement with
