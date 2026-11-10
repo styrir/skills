@@ -38,7 +38,7 @@ method was used.
 
 ```bash
 python3 <this skill's folder>/scripts/check.py --symbol <name> --file <path> \
-  [--lines START,END] [--repo <repo root>]
+  [--lines START,END] [--repo <repo root>] [--file-facts]
 ```
 
 `--file` is relative to the repo root. `--repo` defaults to the current
@@ -47,7 +47,15 @@ folder, so pass it unless you are already at the repo root.
 Needs `RUNIR_API_KEY` and `RUNIR_USER_ID` in the environment, the same as the
 `runir-search` skill. If the search fails, say so; do not guess.
 
-Output, one block per fact:
+Output comes in two parts:
+
+1. Facts that name the function, one block each. Read these.
+2. One line counting facts that name only the file, with how many are
+   re-check and ok. These are usually about other code in the same file. Add
+   `--file-facts` to list them when the function-named list is empty or you
+   need the wider picture.
+
+Each fact is marked:
 
 - `OK` — written after the function's last change.
 - `RE-CHECK` — the function has changed since the fact was written, with the
@@ -55,7 +63,9 @@ Output, one block per fact:
 - A `note:` when the fact names a file that is absent from this checkout. That
   can mean a rename, or a path from another repository.
 
-If the output says the search hit its limit, the list may be partial.
+If the output says the search hit its limit, the list may be partial. Older
+facts can drop out as newer ones about the same function are stored,
+including facts captured from earlier runs of this skill.
 
 ## 3. Judge the flagged facts
 

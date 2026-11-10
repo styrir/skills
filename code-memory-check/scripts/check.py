@@ -13,7 +13,8 @@ p.add_argument("--symbol", required=True)
 p.add_argument("--file", required=True, help="path relative to the repo root")
 p.add_argument("--lines", help="START,END (1-based) from a code index; default finds the function by name")
 p.add_argument("--repo", default=".", help="repo root (default: current folder)")
-p.add_argument("--limit", type=int, default=30, help="hits per search; Rúnir caps this at 50")
+p.add_argument("--limit", type=int, default=50, help="hits per search; Rúnir caps this at 50")
+p.add_argument("--file-facts", action="store_true", help="also list facts that name only the file")
 a = p.parse_args()
 
 def git(*args):
@@ -47,27 +48,39 @@ def search(query):
 
 # Search the symbol and the file name separately, merge by id, then keep only
 # facts that actually name one of them.
-names = (a.symbol, Path(a.file).name)
-batches = [search(n) for n in names]
-hits = {h["id"]: h for b in batches for h in b}
-kept = [h for h in hits.values() if any(n in str(h.get("memory", "")) for n in names)]
+fname = Path(a.file).name
+batches = [search(n) for n in (a.symbol, fname)]
+hits = {h["id"]: h for b in batches for h in b}.values()
+by_symbol = [h for h in hits if a.symbol in str(h.get("memory", ""))]
+by_file = [h for h in hits if a.symbol not in str(h.get("memory", "")) and fname in str(h.get("memory", ""))]
 full = any(len(b) >= a.limit for b in batches)
 
-print(f"{a.symbol}  {a.file}")
-print(f"last changed {last[0].date()} ({last[1]}) {last[2][:70]}")
-print(f"scope: {scope}")
-print(f"{len(kept)} fact(s) name it; {len(hits) - len(kept)} other search hit(s) dropped"
-      + ("; search hit its limit, so this list may be partial" if full else "") + "\n")
-# created_at, not updated_at: a later touch must not make an old fact look fresh.
-for h in sorted(kept, key=lambda h: h["created_at"]):
+def judge(h):
+    """(flag, block) for one fact. created_at, not updated_at: a later touch must not make an old fact look fresh."""
     text = " ".join(str(h["memory"]).split())
     when = datetime.fromisoformat(h["created_at"].replace("Z", "+00:00"))
     since = sum(1 for d, _, _ in commits if d > when)
-    flag = "RE-CHECK" if since else "OK      "
+    flag = "RE-CHECK" if since else "OK"
     note = f"{since} commit(s) to the {scope.split(',')[0]} since" if since else "written after the last change"
     if when < commits[-1][0]:
         note += "; note: older than this checkout's history of the function, so the count includes its first commit"
     absent = [m for m in re.findall(r"[\w./-]+/[\w.-]+\.\w{1,4}\b", text) if not (Path(a.repo) / m).exists()]
     if absent:
         note += f"; note: names {absent[0]}, absent from this checkout"
-    print(f"{flag}  {when.date()}  {note}\n          {h['id']}\n          {text[:220]}\n")
+    return flag, f"{flag:8}  {when.date()}  {note}\n          {h['id']}\n          {text[:220]}\n"
+
+def show(facts):
+    for h in sorted(facts, key=lambda h: h["created_at"]):
+        print(judge(h)[1])
+
+print(f"{a.symbol}  {a.file}")
+print(f"last changed {last[0].date()} ({last[1]}) {last[2][:70]}")
+print(f"scope: {scope}")
+print(f"{len(by_symbol)} fact(s) name the function"
+      + ("; search hit its limit, so this list may be partial" if full else "") + "\n")
+show(by_symbol)
+flags = [judge(h)[0] for h in by_file]
+print(f"{len(by_file)} more name only {fname}: {flags.count('RE-CHECK')} re-check, {flags.count('OK')} ok"
+      + ("" if a.file_facts or not by_file else "  (--file-facts lists them)") + "\n")
+if a.file_facts:
+    show(by_file)
