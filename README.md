@@ -7,6 +7,7 @@ Canonical source for Styrir-owned agent skills shared across Claude Code, Codex,
 | Skill | Purpose |
 |---|---|
 | `ask/` | Observable model-to-model consultation through provider-aware CLI adapters, JSONL traces, and Markdown artifacts. |
+| `code-memory-check/` | List what Rúnir remembers about one function and flag facts written before the function last changed; read-only, nothing stored. |
 | `convert-documents-to-markdown/` | Local Word/PDF conversion with extracted figures, editable math, source verification, and synthetic regression fixtures. |
 | `jev/` | Jev (TypeSafe System One) decision-model client: typed yes/no, choice, and score judgments in ~0.4 s via Requesty/OpenRouter/TypeSafe; cheap reads over files, Level-10 composition, and threshold calibration. |
 | `jev-guard/` | Jev-backed Claude Code / Codex / Grok hooks: deny-only bash gate, hostile-output warning, opt-in family-scoped auto-approve, and a /compact advisory; observe mode by default. |
