@@ -3,11 +3,10 @@
   "integration": { "ref": "refs/remotes/origin/main", "fetch": true },
   "delivery": { "strategy": "either", "completion": "publication" },
   "checks": {
-    "test": { "run": "python3 -m unittest discover -s verk/scripts -p test_*.py" },
-    "code-memory-check": { "run": "python3 -m unittest discover -s code-memory-check/scripts" }
+    "test": { "run": "python3 scripts/run-skill-tests.py" }
   },
   "kinds": {
-    "code": { "checks": ["test", "code-memory-check"], "review": "agent" },
+    "code": { "checks": ["test"], "review": "agent" },
     "research": { "review": "agent" },
     "ops": { "review": "agent" },
     "goal": { "review": true }

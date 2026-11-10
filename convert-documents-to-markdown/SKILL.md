@@ -44,9 +44,9 @@ uv tool install --python 3.12 marker-pdf==2.1.0
 First PDF use downloads models. Run the bundled synthetic regression check:
 
 ```sh
-python3 <skill-dir>/scripts/check.py
+python3 <skill-dir>/scripts/check-test.py
 # After model provisioning, verify cached-model reuse:
-HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python3 <skill-dir>/scripts/check.py
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python3 <skill-dir>/scripts/check-test.py
 ```
 
 The check covers Word text/table/image/native math, digital/scanned PDF text and

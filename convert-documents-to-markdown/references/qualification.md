@@ -20,7 +20,7 @@ it does not certify every future document, perfect OCR, or research claims.
 ## Observed checks
 
 - Apple Silicon; Pandoc 3.13, Marker 2.1.0, Surya 0.23.0, llama.cpp 9820.
-- `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python3 convert-documents-to-markdown/scripts/check.py`:
+- `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python3 convert-documents-to-markdown/scripts/check-test.py`:
   PASS using cached models. Word text/table/image/native math, digital/scanned PDF
   text/figures, raster inline signed values and subscripts, equation recognition,
   selected pages, unchanged source hashes, and refusal to overwrite output.
