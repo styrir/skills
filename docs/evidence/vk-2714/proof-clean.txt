@@ -1,0 +1,22 @@
+3326c430f281a6a2f3d18bb6209a2ffba93bddda
+FAIL  setja  (0.0s)
+    declares dependencies but has no node_modules; run npm ci there first
+PASS  styrir-search  (99 tests, 1.8s)
+PASS  apple/macos-vst3-pack-install/scripts/test_install_vst3.py  (3 tests, 0.2s)
+PASS  ask/scripts/proxy-test.py  (8 tests, 0.2s)
+PASS  ask/scripts/supervision-test.py  (13 tests, 14.5s)
+PASS  code-memory-check/scripts/test_check.py  (9 tests, 3.5s)
+PASS  convert-documents-to-markdown/scripts/check-test.py  (88.8s)
+PASS  jev-guard/tests/test_hook.py  (0.1s)
+PASS  jev-guard/tests/test_policy.py  (0.1s)
+PASS  rea-report/scripts/test_package_report.py  (6 tests, 0.6s) via uv run --no-project --with reportlab==5.1.0
+PASS  session-eval/scripts/test_history.py  (18 tests, 0.2s)
+PASS  verk/scripts/test_closeout.py  (51 tests, 29.4s)
+PASS  verk/scripts/test_codex_review.py  (39 tests, 46.5s)
+PASS  verk/scripts/test_verk.py  (8 tests, 1.4s)
+PASS  voice-preserving-humanizer/tests/test_scaffold.py  (15 tests, 0.2s)
+PASS  ask/scripts/ask-runner-self-test.sh  (13.5s)
+PASS  styrir-init/scripts/test-styrir-init.sh  (0.1s)
+
+16 of 17 suites passed
+EXIT 1

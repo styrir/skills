@@ -1,0 +1,164 @@
+3326c430f281a6a2f3d18bb6209a2ffba93bddda
+A  aliased/test_aliased.py
+M  code-memory-check/scripts/test_check.py
+A  echopkg/broken.test.js
+A  echopkg/good.test.js
+A  echopkg/package.json
+A  hang/test-hang.sh
+M  jev-guard/tests/test_policy.py
+A  litpkg/example.test.js
+A  litpkg/package.json
+A  lonely/foo_test.ts
+A  mockonly/test_mockonly.py
+M  rea-report/scripts/test_package_report.py
+ D session-eval/scripts/test_history.py
+A  setja/test/unit/new.test.ts
+M  styrir-init/scripts/test-styrir-init.sh
+A  styrir-search/scripts/.regression.test.ts
+M  styrir-search/scripts/styrir-route.test.ts
+A  syntax/test_syntax.py
+A  zero/test_zero.py
+PASS  echopkg  (1 tests, 0.6s)
+PASS  litpkg  (1 tests, 0.3s)
+FAIL  setja  (0.0s)
+    declares dependencies but has no node_modules; run npm ci there first
+FAIL  styrir-search  (1.4s)
+    ✔ no key falls back to BM25 and says so (2.780125ms)
+    ✔ any failed call switches the whole stage to BM25 with the reason (0.29075ms)
+    ✔ passages rank chunks across fetched pages and write a best-first reading file (1.268084ms)
+    ✔ claim payload asks whether the source supports the observation, with concrete criteria (0.095ms)
+    ✔ evidence window keeps the page's best-matching chunks within the budget, in page order (1.796334ms)
+    ✔ claims flags weakly supported entries, skips unfetched sources, and records cost (1.609541ms)
+    ✔ claims without a key or with a failed call leaves support null and says why (1.929666ms)
+    ✔ ask is the unified skill for Codex and Claude second opinions (0.991167ms)
+    ✔ ask documents the current Codex exec and native Claude routes (173.611625ms)
+    ✔ ask surfaces provider authentication failures as explicit blockers (0.373583ms)
+    ✔ ask preserves surfaced progress and durable artifacts (0.1815ms)
+    ✔ slash preset wrapper skills surface the requested Styrir lanes (2.167959ms)
+    ℹ tests 100
+    ℹ suites 0
+    ℹ pass 99
+    ℹ fail 1
+    ℹ cancelled 0
+    ℹ skipped 0
+    ℹ todo 0
+    ℹ duration_ms 1162.637375
+    
+    ✖ failing tests:
+    
+    test at scripts/styrir-route.test.ts:299:77
+    ✖ broken (0.67775ms)
+      AssertionError [ERR_ASSERTION]: 1 == 2
+          at TestContext.<anonymous> (file://~/Code/skills/.styrir/worktrees/proof-break/styrir-search/scripts/styrir-route.test.ts:299:117)
+          at Test.runInAsyncScope (node:async_hooks:226:14)
+          at Test.run (node:internal/test_runner/test:1382:25)
+          at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+          at Test.postRun (node:internal/test_runner/test:1522:19)
+          at Test.run (node:internal/test_runner/test:1447:12)
+          at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+        generatedMessage: true,
+        code: 'ERR_ASSERTION',
+        actual: 1,
+        expected: 2,
+        operator: '==',
+        diff: 'simple'
+      }
+FAIL  aliased/test_aliased.py  (0.1s)
+    F
+    ======================================================================
+    FAIL: test_fails (test_aliased.T.test_fails)
+    ----------------------------------------------------------------------
+    Traceback (most recent call last):
+      File "~/Code/skills/.styrir/worktrees/proof-break/aliased/test_aliased.py", line 4, in test_fails
+        self.assertEqual(1, 2)
+        ~~~~~~~~~~~~~~~~^^^^^^
+    AssertionError: 1 != 2
+    
+    ----------------------------------------------------------------------
+    Ran 1 test in 0.000s
+    
+    FAILED (failures=1)
+PASS  apple/macos-vst3-pack-install/scripts/test_install_vst3.py  (3 tests, 0.2s)
+PASS  ask/scripts/proxy-test.py  (8 tests, 0.2s)
+PASS  ask/scripts/supervision-test.py  (13 tests, 13.7s)
+FAIL  code-memory-check/scripts/test_check.py  (3.4s)
+    .....F...
+    ======================================================================
+    FAIL: test_no_partial_notice_when_the_search_is_full (test_check.CheckTest.test_no_partial_notice_when_the_search_is_full)
+    ----------------------------------------------------------------------
+    Traceback (most recent call last):
+      File "~/Code/skills/.styrir/worktrees/proof-break/code-memory-check/scripts/test_check.py", line 120, in test_no_partial_notice_when_the_search_is_full
+        self.assertIn("BROKEN", out)
+        ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+    AssertionError: 'BROKEN' not found in 'charge  src/pay.py\nlast changed 2026-03-01 (bebc65e) double charge\nscope: function, found by name\n2 fact(s) name the function in their first 220 characters\n\nRE-CHECK  2026-02-01  1 commit(s) to the function since\n          a1\n          charge one\n\nOK        2026-04-01  written after the last change\n          a2\n          charge two\n\n0 more name it only later in the text: 0 re-check, 0 ok\n\n0 more name only pay.py: 0 re-check, 0 ok\n\n'
+    
+    ----------------------------------------------------------------------
+    Ran 9 tests in 3.278s
+    
+    FAILED (failures=1)
+PASS  convert-documents-to-markdown/scripts/check-test.py  (82.4s)
+PASS  jev-guard/tests/test_hook.py  (0.1s)
+FAIL  jev-guard/tests/test_policy.py  (0.0s)
+
+PASS  mockonly/test_mockonly.py  (0.1s)
+FAIL  rea-report/scripts/test_package_report.py  (1.3s) via uv run --no-project --with reportlab==5.1.0
+    Traceback (most recent call last):
+      File "<frozen runpy>", line 198, in _run_module_as_main
+      File "<frozen runpy>", line 88, in _run_code
+      File "~/.local/share/uv/python/cpython-3.12.10-macos-aarch64-none/lib/python3.12/unittest/__main__.py", line 18, in <module>
+        main(module=None)
+      File "~/.local/share/uv/python/cpython-3.12.10-macos-aarch64-none/lib/python3.12/unittest/main.py", line 104, in __init__
+        self.parseArgs(argv)
+      File "~/.local/share/uv/python/cpython-3.12.10-macos-aarch64-none/lib/python3.12/unittest/main.py", line 153, in parseArgs
+        self.createTests()
+      File "~/.local/share/uv/python/cpython-3.12.10-macos-aarch64-none/lib/python3.12/unittest/main.py", line 164, in createTests
+        self.test = self.testLoader.loadTestsFromNames(self.testNames,
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "~/.local/share/uv/python/cpython-3.12.10-macos-aarch64-none/lib/python3.12/unittest/loader.py", line 207, in loadTestsFromNames
+        suites = [self.loadTestsFromName(name, module) for name in names]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "~/.local/share/uv/python/cpython-3.12.10-macos-aarch64-none/lib/python3.12/unittest/loader.py", line 137, in loadTestsFromName
+        module = __import__(module_name)
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+      File "~/Code/skills/.styrir/worktrees/proof-break/rea-report/scripts/test_package_report.py", line 9, in <module>
+        assert False, 'broken'
+               ^^^^^
+    AssertionError: broken
+FAIL  session-eval/scripts/test_history.py  (0.0s)
+    tracked but missing from disk
+FAIL  syntax/test_syntax.py  (0.0s)
+    cannot set up: invalid syntax (test_syntax.py, line 1)
+PASS  verk/scripts/test_closeout.py  (51 tests, 27.3s)
+PASS  verk/scripts/test_codex_review.py  (39 tests, 50.1s)
+PASS  verk/scripts/test_verk.py  (8 tests, 1.5s)
+PASS  voice-preserving-humanizer/tests/test_scaffold.py  (15 tests, 0.2s)
+FAIL  zero/test_zero.py  (0.1s)
+    
+    ----------------------------------------------------------------------
+    Ran 0 tests in 0.000s
+    
+    NO TESTS RAN
+PASS  ask/scripts/ask-runner-self-test.sh  (12.3s)
+FAIL  hang/test-hang.sh  (600.0s)
+    
+    timed out after 600.0 s
+FAIL  styrir-init/scripts/test-styrir-init.sh  (0.0s)
+
+FAIL  echopkg/broken.test.js  (test file no suite runs)
+FAIL  lonely/foo_test.ts  (test file no suite runs)
+FAIL  setja/test/agent-prompt-contract.test.ts  (test file no suite runs)
+FAIL  setja/test/agent-subprocess.test.ts  (test file no suite runs)
+FAIL  setja/test/cli-ux.test.ts  (test file no suite runs)
+FAIL  setja/test/cli.test.ts  (test file no suite runs)
+FAIL  setja/test/context-resolution.test.ts  (test file no suite runs)
+FAIL  setja/test/docs.test.ts  (test file no suite runs)
+FAIL  setja/test/html-to-md.test.ts  (test file no suite runs)
+FAIL  setja/test/inject.test.ts  (test file no suite runs)
+FAIL  setja/test/model-first.test.ts  (test file no suite runs)
+FAIL  setja/test/package.test.ts  (test file no suite runs)
+FAIL  setja/test/prepare.test.ts  (test file no suite runs)
+FAIL  setja/test/skill-bundle.test.ts  (test file no suite runs)
+FAIL  styrir-search/scripts/.regression.test.ts  (test file no suite runs)
+
+13 of 24 suites passed; 15 unclaimed test file(s)
+EXIT 1
