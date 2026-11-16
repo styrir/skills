@@ -88,8 +88,13 @@ class SupervisionTests(unittest.TestCase):
             ([warning, terminal], "failed"),
             ([warning, answer, {"type": "error", "message": "authentication failed"}, terminal], "failed"),
             ([warning, answer, {"type": "turn.failed"}, terminal], "failed"),
-            ([dict(warning, message=warning["message"] + "\nProvider request failed"), answer, terminal], "failed"),
-            ([{"type": "error", "message": "unknown warning"}, answer, terminal], "failed"),
+            # An unrecognised error before the turn is waived only by a completed turn and an answer.
+            ([dict(warning, message=warning["message"] + "\nProvider request failed"), answer, terminal], "complete"),
+            ([{"type": "error", "message": "unknown warning"}, answer, terminal], "complete"),
+            ([{"type": "error", "message": "unknown warning"}, answer], "failed"),
+            ([{"type": "error", "message": "unknown warning"}, terminal], "failed"),
+            ([answer, {"type": "error", "message": "unknown warning"}, terminal], "failed"),
+            ([{"type": "turn.started"}, {"type": "error", "message": "unknown warning"}, answer, terminal], "failed"),
         ]
         for events, expected in cases:
             with self.subTest(events=events):
@@ -102,6 +107,34 @@ class SupervisionTests(unittest.TestCase):
         code = "print(" + repr("\n".join(json.dumps(e) for e in [item_warning, answer, terminal])) + ")"
         _, result, _ = self.run_case(code, adapter="codex-stream-surface.ts")
         self.assertEqual(result["status"], "complete")
+
+    def test_codex_startup_notices_before_a_completed_turn(self):
+        # Event sequence of a real run (codex-cli 0.169.0, 2026-11-16) that was recorded as failed:
+        # the notices arrive twice as error items before turn.started. Answer text and paths replaced.
+        deprecated = "`[features].multi_agent` is deprecated. It still controls the V1 fallback. `[agents].enabled = false` disables subagent tools even when the model selects a subagent version, unless `[features].multi_agent_v2` is enabled."
+        ignored = "Codex is ignoring 6 unrecognized configuration settings. Check for typos or deprecated settings.\n  user (/example/config.toml): `network_access` is ignored.\n  user (/example/config.toml): `sandbox_workspace_write.developer_instructions` is ignored.\n  user (/example/config.toml): `sandbox_workspace_write.model` is ignored.\n  ... and 3 more ignored settings."
+        notices = [{"type": "item.completed", "item": {"id": f"item_{i}", "type": "error", "message": m}}
+                   for i, m in enumerate([deprecated, ignored, deprecated, ignored])]
+        answer = {"type": "item.completed", "item": {"id": "item_4", "type": "agent_message", "text": "VERDICT: OPEN"}}
+        done = {"type": "turn.completed", "usage": {"input_tokens": 1, "output_tokens": 1}}
+        start = [{"type": "thread.started", "thread_id": "t"}, *notices, {"type": "turn.started"}]
+
+        def run(events):
+            code = "print(" + repr("\n".join(json.dumps(e) for e in events)) + ")"
+            _, result, out = self.run_case(code, adapter="codex-stream-surface.ts")
+            return result, json.loads((out / "stream-result.json").read_text())
+
+        result, stream = run([*start, answer, done])
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(stream["failures"], [])
+        self.assertEqual(stream["waived"], [deprecated, deprecated])
+
+        for events in ([*start, answer], [*start, done]):
+            with self.subTest(events=events):
+                result, stream = run(events)
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["reason"], deprecated)
+                self.assertEqual(stream["waived"], [])
 
     def test_signal_cancellation_and_child_drain(self):
         with tempfile.TemporaryDirectory() as d:

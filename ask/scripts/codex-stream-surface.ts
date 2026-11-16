@@ -15,21 +15,28 @@ import {
   type ProgressEvent,
 } from "./stream-core.ts";
 
+// Before the turn: only thread.started and errors have been seen so far.
+export interface CodexStreamState { preTurn: boolean }
+
 // Codex 0.156 emits this non-fatal startup diagnostic with type="error".
-// Admit only its exact header and diagnostic lines; unrelated errors still fail.
-function describeDiagnostic(message: string): ProgressEvent[] {
+// Admit only its exact header and diagnostic lines. Any other error fails the
+// run, except before the turn: Codex also reports startup notices (a deprecated
+// config key, say) as errors there, and whether one was fatal is known only at
+// the end. Those are provisional, and stream-core waives them only when a
+// completed turn and an answer follow.
+function describeDiagnostic(message: string, preTurn: boolean): ProgressEvent[] {
   const lines = message.trim().split("\n");
   const isConfigWarning = lines.length > 1
     && /^Codex is ignoring [1-9]\d* unrecognized configuration settings\. Check for typos or deprecated settings\.$/.test(lines[0])
     && lines.slice(1).every((line) =>
       /^  (?:user|project|system) \(.+\): `[^`]+` is ignored\.$/.test(line)
       || /^  \.\.\. and [1-9]\d* more ignored settings\.$/.test(line));
-  return isConfigWarning
-    ? [{ progressLine: `warning: ${compact(message)}` }]
-    : [{ progressLine: `error: ${compact(message)}`, failure: message }];
+  if (isConfigWarning) return [{ progressLine: `warning: ${compact(message)}` }];
+  if (preTurn) return [{ progressLine: `startup-error: ${compact(message)}`, provisionalFailure: message }];
+  return [{ progressLine: `error: ${compact(message)}`, failure: message }];
 }
 
-function describeItem(item: Record<string, unknown>, phase: string): ProgressEvent[] {
+function describeItem(item: Record<string, unknown>, phase: string, preTurn: boolean): ProgressEvent[] {
   const itemType = typeof item.type === "string" ? item.type : "item";
 
   if (itemType === "agent_message" && typeof item.text === "string" && item.text.trim()) {
@@ -56,7 +63,7 @@ function describeItem(item: Record<string, unknown>, phase: string): ProgressEve
   }
   if (itemType === "error") {
     const message = typeof item.message === "string" ? item.message : JSON.stringify(item);
-    return describeDiagnostic(message);
+    return describeDiagnostic(message, preTurn);
   }
   return [{ progressLine: `${itemType}: ${phase}` }];
 }
@@ -78,7 +85,8 @@ function formatUsage(usage: unknown): string {
   return parts.join(", ");
 }
 
-export function summarizeCodexStreamLine(line: string): ProgressEvent[] {
+// Pass one state object per stream. Without it every error is judged as in-turn.
+export function summarizeCodexStreamLine(line: string, state: CodexStreamState = { preTurn: false }): ProgressEvent[] {
   const trimmed = line.trim();
   if (!trimmed) {
     return [];
@@ -92,6 +100,11 @@ export function summarizeCodexStreamLine(line: string): ProgressEvent[] {
   }
   if (!isRecord(event) || typeof event.type !== "string") {
     return [];
+  }
+
+  const isError = event.type === "error" || (event.type.startsWith("item.") && isRecord(event.item) && event.item.type === "error");
+  if (!isError && event.type !== "thread.started") {
+    state.preTurn = false;
   }
 
   if (event.type === "thread.started") {
@@ -109,15 +122,16 @@ export function summarizeCodexStreamLine(line: string): ProgressEvent[] {
   }
   if (event.type.startsWith("item.") && isRecord(event.item)) {
     const phase = event.type.slice("item.".length);
-    return describeItem(event.item, phase);
+    return describeItem(event.item, phase, state.preTurn);
   }
   if (event.type === "error") {
     const message = typeof event.message === "string" ? event.message : JSON.stringify(event);
-    return describeDiagnostic(message);
+    return describeDiagnostic(message, state.preTurn);
   }
   return [{ progressLine: `${event.type}: received` }];
 }
 
 if (typeof process.argv[1] === "string" && process.argv[1].endsWith("codex-stream-surface.ts")) {
-  runAdapterCli("codex-stream-surface.ts", summarizeCodexStreamLine, "Codex Review Result");
+  const state: CodexStreamState = { preTurn: true };
+  runAdapterCli("codex-stream-surface.ts", (line) => summarizeCodexStreamLine(line, state), "Codex Review Result");
 }

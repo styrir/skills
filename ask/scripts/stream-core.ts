@@ -12,6 +12,8 @@ export interface StreamSummary {
   parseErrors: string[];
   terminal?: { ok: boolean; reason: string; sessionId?: string; requestId?: string };
   failures: string[];
+  // Errors a provider reported before its turn started. settleFailures decides whether they count.
+  provisionalFailures: string[];
 }
 
 export interface ProgressEvent {
@@ -20,6 +22,7 @@ export interface ProgressEvent {
   parseError?: string;
   completion?: { ok: boolean; reason: string; sessionId?: string; requestId?: string };
   failure?: string;
+  provisionalFailure?: string;
 }
 
 export type LineSummarizer = (line: string) => ProgressEvent[];
@@ -43,7 +46,15 @@ export function compact(text: string, maxLength = 180): string {
 }
 
 export function makeSummary(): StreamSummary {
-  return { progressLines: [], finalAssistantText: "", parseErrors: [], failures: [] };
+  return { progressLines: [], finalAssistantText: "", parseErrors: [], failures: [], provisionalFailures: [] };
+}
+
+// A provisional failure is waived only when the run ended with a completed
+// turn and an answer. Otherwise it counts, ahead of later failures.
+export function settleFailures(summary: StreamSummary): { failures: string[]; waived: string[] } {
+  return summary.terminal?.ok && summary.finalAssistantText.trim()
+    ? { failures: summary.failures, waived: summary.provisionalFailures }
+    : { failures: [...summary.provisionalFailures, ...summary.failures], waived: [] };
 }
 
 export function consumeLine(
@@ -66,6 +77,7 @@ export function consumeLine(
     }
     if (event.completion) summary.terminal = event.completion;
     if (event.failure) summary.failures.push(event.failure);
+    if (event.provisionalFailure) summary.provisionalFailures.push(event.provisionalFailure);
     if (event.parseError) {
       summary.parseErrors.push(event.parseError);
     }
@@ -258,7 +270,7 @@ export function runFileMode(
   }
   const jsonl = readFileSync(tracePath, "utf8");
   const summary = summarizeJsonl(summarizer, jsonl);
-  if (!summary.terminal?.ok || !summary.finalAssistantText.trim() || summary.parseErrors.length || summary.failures.length) {
+  if (!summary.terminal?.ok || !summary.finalAssistantText.trim() || summary.parseErrors.length || settleFailures(summary).failures.length) {
     process.stderr.write("Replay refused: source is empty, incomplete, or malformed; existing artifacts preserved.\n");
     process.exitCode = 2;
     return;
@@ -300,9 +312,10 @@ export function runStreamMode(
     writeFileSync(markdownPath, renderMarkdown(title, summary, { tracePath, promptPath }));
     const summaryPath = join(dirname(markdownPath), "summary.md");
     writeFileSync(summaryPath, renderSummary(summary.finalAssistantText));
-    const complete = Boolean(summary.terminal?.ok && summary.finalAssistantText.trim() && !summary.parseErrors.length && !summary.failures.length);
-    const reason = summary.failures[0] || (summary.parseErrors.length ? "malformed_stream" : !summary.terminal ? "missing_completion" : !summary.terminal.ok ? summary.terminal.reason : !summary.finalAssistantText.trim() ? "empty_answer" : "completed");
-    writeFileSync(join(dirname(markdownPath), "stream-result.json"), JSON.stringify({complete, reason, terminal: summary.terminal, parseErrors: summary.parseErrors, failures: summary.failures}, null, 2) + "\n");
+    const { failures, waived } = settleFailures(summary);
+    const complete = Boolean(summary.terminal?.ok && summary.finalAssistantText.trim() && !summary.parseErrors.length && !failures.length);
+    const reason = failures[0] || (summary.parseErrors.length ? "malformed_stream" : !summary.terminal ? "missing_completion" : !summary.terminal.ok ? summary.terminal.reason : !summary.finalAssistantText.trim() ? "empty_answer" : "completed");
+    writeFileSync(join(dirname(markdownPath), "stream-result.json"), JSON.stringify({complete, reason, terminal: summary.terminal, parseErrors: summary.parseErrors, failures, waived}, null, 2) + "\n");
     if (!complete) process.exitCode = 2;
     process.stderr.write(`artifact: ${markdownPath}\n`);
     process.stderr.write(`summary: ${summaryPath}\n`);
