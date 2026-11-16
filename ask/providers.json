@@ -9,7 +9,7 @@
       "authCheck": "claude auth status"
     },
     "codex": {
-      "defaultModel": "gpt-6-astra",
+      "defaultModel": "gpt-6.1-sol",
       "tier": "stream-json",
       "adapter": "codex-stream-surface.ts",
       "versionCheck": "codex --version",
