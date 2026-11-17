@@ -1,0 +1,15 @@
+{
+  "source": "https://github.com/emilkowalski/skills",
+  "revision": "0f2e23b32bb1265e84cff8d3e75785fec953fb1b",
+  "upstream_root": "../skill-upstreams/emil/0f2e23b32bb1265e84cff8d3e75785fec953fb1b",
+  "skills": [
+    "break-ui",
+    "review-animations",
+    "pick-ui-library"
+  ],
+  "owner": "skills/harness-links.json; scripts/link-harness-skills.py --harness agents",
+  "destination": "~/.agents/skills",
+  "existing_leads": "Impeccable and design-taste-frontend remain owned by their existing installations; no migration or update performed.",
+  "rollback": "Remove only the four newly created links after verifying their targets against harness-links.json, and revert those four manifest entries. No prior paths are replaced.",
+  "updates": "Keep upstream intact; stage a new detached Git revision, verify content and resources, qualify reads, then repoint the owned links. Retain the old revision."
+}

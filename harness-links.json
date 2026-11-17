@@ -3,7 +3,11 @@
   "agents": {
     "dir": "~/.agents/skills",
     "links": {
-      "convert-documents-to-markdown": "convert-documents-to-markdown"
+      "convert-documents-to-markdown": "convert-documents-to-markdown",
+      "design-policy": "design-policy",
+      "break-ui": "../skill-upstreams/emil/0f2e23b32bb1265e84cff8d3e75785fec953fb1b/skills/break-ui",
+      "review-animations": "../skill-upstreams/emil/0f2e23b32bb1265e84cff8d3e75785fec953fb1b/skills/review-animations",
+      "pick-ui-library": "../skill-upstreams/emil/0f2e23b32bb1265e84cff8d3e75785fec953fb1b/skills/pick-ui-library"
     }
   },
   "claude": {
