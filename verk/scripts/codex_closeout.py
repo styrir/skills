@@ -160,6 +160,40 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
     return result
 
 
+def exception_key(entry):
+    return json.dumps([entry.get("decision") or entry.get("landing"), entry.get("state")])
+
+
+def exception_message(entry):
+    """One exception as Verk lists it. The action is relayed exactly as emitted; nothing here composes a command."""
+    what = f"{entry['kind']} {entry.get('decision') or entry.get('landing')} for {entry.get('contract')}"
+    if isinstance(entry.get("action"), str) and entry["action"]:
+        return f"Verk needs the operator on {what} ({entry.get('state')}): {entry['action']}"
+    return f"Verk lists {what} as waiting on the operator ({entry.get('state')}); Verk's brief names it and says what happens next."
+
+
+def exception_notice(repo, scoped, path):
+    """An author-scoped read of the brief's exceptions, no more: never a reconcile or closeout. Says each decision or landing and state once.
+
+    A failed read says nothing and records nothing, so the next Stop tries again.
+    """
+    try:
+        listed = shared.call(repo, scoped, "brief", "--json", timeout=5).get("exceptions") or []
+        entries = [e for e in listed if isinstance(e, dict) and (e.get("decision") or e.get("landing"))]
+    except (ValueError, KeyError, OSError, AttributeError, TypeError, subprocess.SubprocessError):
+        return None
+    seen_path = path.with_suffix(".exceptions.json")
+    with shared.request_lock(path):
+        try:
+            seen = set(json.loads(seen_path.read_text()))
+        except (OSError, ValueError, TypeError):
+            seen = set()
+        fresh = [e for e in entries if exception_key(e) not in seen]
+        # Only what is still listed stays remembered, so a decision that returns in a state says so again.
+        shared.save(seen_path, sorted({exception_key(e) for e in entries}))
+    return "\n".join(exception_message(e) for e in fresh) or None
+
+
 def hook(payload, env):
     if shared.reviewer_launch(env):
         return {}  # A reviewer's Stop is nobody's closeout: before any lock or request read.
@@ -173,6 +207,25 @@ def hook(payload, env):
         raise ValueError("Stop session differs from Codex execution identity")
     scoped = shared.author_copy("codex", env, session)
     path = shared.state_path(scoped)
+    result = closeout_stop(path, scoped)
+    # Hosts only the read. With a pending request its own checkout does, else the selected directory, as for recovery; the payload's cwd only when nothing is pending.
+    try:
+        request = shared.read_request(path)
+    except ValueError:
+        request = {}
+    cwd = payload.get("cwd")
+    if request is None:
+        read_dir = Path(cwd) if isinstance(cwd, str) and Path(cwd).is_dir() else None
+    else:
+        recorded = Path(request["repo"]).resolve() if isinstance(request.get("repo"), str) else None
+        read_dir = recorded if recorded and checkout_present(recorded) else selected_directory(scoped)
+    notice = exception_notice(read_dir, scoped, path) if read_dir else None
+    if notice:
+        result = dict(result, systemMessage="\n".join(filter(None, [result.get("systemMessage"), notice])))
+    return result
+
+
+def closeout_stop(path, scoped):
     request = None
     result = {"status": "needs_action", "reason": "Malformed Codex closeout request"}
     try:

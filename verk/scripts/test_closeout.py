@@ -374,6 +374,68 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
                             codex_closeout.closeout(self.repo, env, "vk-1", None, 0, source_only=True)
         self.assertFalse(list(Path(self.env["VERK_HOME"]).glob("**/*")))
 
+    def exceptions_brief(self, entries, verbs=None):
+        def brief(repo, scoped, verb, *args, **kwargs):
+            if verbs is not None:
+                verbs.append((verb, scoped["CODEX_THREAD_ID"]))
+            self.assertEqual(verb, "brief")  # the only operation an exception read performs
+            return {"exceptions": entries}
+        return patch.object(closeout, "call", side_effect=brief)
+
+    def test_stop_with_no_request_relays_each_exception_once(self):
+        payload = {"hook_event_name": "Stop", "session_id": "closeout-test", "cwd": str(self.repo)}
+        review = {"kind": "review", "decision": "vk-d1", "contract": "vk-1", "state": "proposed", "action": None}
+        delivery = {"kind": "delivery", "landing": "vk-l1", "contract": "vk-2", "state": "blocked", "action": None}
+        for entry, named in ((review, "vk-d1"), (delivery, "vk-l1")):
+            with self.subTest(kind=entry["kind"]):
+                path = closeout.state_path(self.env)
+                for leftover in path.parent.glob("closeout-test*"):
+                    leftover.unlink()
+                verbs = []
+                with self.exceptions_brief([entry], verbs):
+                    first = codex_closeout.hook(payload, self.env)
+                    again = codex_closeout.hook(payload, self.env)
+                self.assertEqual(list(first), ["systemMessage"])
+                self.assertEqual(first["systemMessage"].count("\n"), 0)
+                self.assertIn(named, first["systemMessage"])
+                self.assertIn("Verk's brief", first["systemMessage"])  # no action yet: names it and points to Verk
+                self.assertEqual(again, {})
+                self.assertEqual(verbs, [("brief", "closeout-test")] * 2)  # author-scoped, read only
+        # A new state of the same decision is said again.
+        with self.exceptions_brief([dict(review, state="not_assessed")]):
+            self.assertIn("not_assessed", codex_closeout.hook(payload, self.env)["systemMessage"])
+
+    def test_stop_relays_the_action_verbatim(self):
+        payload = {"hook_event_name": "Stop", "session_id": "closeout-test", "cwd": str(self.repo)}
+        action = "vk answer vk-d1 'approve `x` $(y) \"z\"' --reject"
+        entry = {"kind": "review", "decision": "vk-d1", "contract": "vk-1", "state": "proposed", "action": action}
+        with self.exceptions_brief([entry]):
+            self.assertTrue(codex_closeout.hook(payload, self.env)["systemMessage"].endswith(": " + action))
+
+    def test_stop_relays_exceptions_beside_a_pending_request_and_leaves_it_pending(self):
+        path, request, payload = self.pending()
+        entry = {"kind": "review", "decision": "vk-d1", "contract": "vk-9", "state": "pending", "action": None}
+        def read(repo, scoped, verb, *args, **kwargs):
+            if verb == "brief":
+                return {"exceptions": [entry]}
+            if verb == "reconcile":
+                self.assertEqual(args[:2], ("--id", "vk-1"))  # the request's own closeout step, never for the exception's contract
+                return {}
+            if verb == "view":
+                return {"state": "open", "receipts": [], "reviews": [{"decision": "vk-d9", "lifecycle": "open", "verdict": None}],
+                        "policy": {"checks": []}, "contract": {"id": "vk-1"}}
+            self.fail(f"unexpected {verb}")
+        with patch.object(closeout, "call", side_effect=read):
+            result = codex_closeout.hook(payload, self.env)
+        self.assertIn("vk-d1", result["systemMessage"])
+        self.assertTrue(path.exists())
+
+    def test_a_reviewer_launch_hears_no_exceptions(self):
+        payload = {"hook_event_name": "Stop", "session_id": "closeout-test", "cwd": str(self.repo)}
+        env = dict(self.env, VERK_REVIEWER="1", VERK_ACTOR="codex-reviewer:closeout-test")
+        with patch.object(closeout, "call", side_effect=AssertionError("called Verk")):
+            self.assertEqual(codex_closeout.hook(payload, env), {})
+
     def test_a_reviewer_launch_stops_before_any_lock_or_request_read(self):
         path, request, payload = self.pending()
         before = path.read_bytes()

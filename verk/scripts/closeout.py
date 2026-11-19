@@ -148,11 +148,11 @@ def verdict_row(env, decision):
 
 NEXT_ACTION = {
     "receipt": "None: a receipt covers this revision.",
-    "disagreement_gate_rejected": "The reviewer approved but the automated gate rejected. Read both, then repair or ask the operator; do not wait.",
+    "disagreement_gate_rejected": "The reviewer approved but the automated gate rejected. Read both and repair. If Verk lists it as an exception, relay its action as given; do not wait.",
     "disagreement_reviewer_rejected": "The reviewer rejected though the automated gate approved. Read the report and repair the work.",
     "process_failure": ("The reviewer process failed before judging, so nothing was assessed. It may retry briefly; after that the review stays open "
-                        "until another review opens or `verk-reviewer` runs. Read the report or ask the operator; do not keep waiting. This is not a rejection."),
-    "unavailable": "The reviewer could not assess this. It stays open; retry explicitly or ask the operator. This is not a rejection.",
+                        "until another review opens or `verk-reviewer` runs. Read the report; if Verk lists it as an exception, relay its action as given. Do not keep waiting. This is not a rejection."),
+    "unavailable": "The reviewer could not assess this. It stays open; retry explicitly, or if Verk lists it as an exception, relay its action as given. This is not a rejection.",
     "stale_bindings": "Terms or policy changed after this evidence. Run closeout again under the current terms.",
     "review_rejected": "The review rejected the work. Read the report, repair, and request closeout again.",
     "check_rejected": "Verk rejected a check run. Fix the cause it names and run the check again.",

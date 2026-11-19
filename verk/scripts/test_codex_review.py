@@ -236,7 +236,7 @@ class DelegatedGoalTests(unittest.TestCase):
                 result = codex_closeout.hook(payload, env)
                 self.assertEqual(result['decision'], 'block')
                 reasons.append(result['reason'])
-        self.assertEqual(verbs, ['view', 'view', 'view'])  # one read per callback: no reconcile, check or answer
+        self.assertEqual(verbs, ['view', 'brief'] * 3)  # one receipt read and one exceptions read per callback: no reconcile, check or answer
         self.assertIn('checkout_missing', reasons[0])
         self.assertIn('no checks or repair were started', reasons[0])
         self.assertLess(len(reasons[1]), 100)
@@ -525,7 +525,7 @@ with patch.object(closeout,'git',side_effect=git), patch.object(closeout,'call',
                 return {'contract': {'id': 'vk-1'}, 'proof': {'status': 'none'}, 'receipts': []}
             with patch.object(closeout, 'git', return_value='changed'), patch.object(closeout, 'call', side_effect=read_only):
                 result = codex_closeout.hook(payload, env)
-                self.assertEqual(verbs, ['view'])
+                self.assertEqual(verbs, ['view', 'brief'])  # the receipt read, then the exceptions read
                 self.assertEqual(result['decision'], 'block')
                 self.assertIn('changed', result['reason'])
                 self.assertTrue(path.exists())
