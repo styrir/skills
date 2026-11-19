@@ -12,7 +12,7 @@ import time
 import uuid
 
 sys.dont_write_bytecode = True  # Running from the source checkout must not dirty it.
-from verk import invocation, session_identity
+from verk import author_copy, invocation, refuse_other_principals, reviewer_launch, session_identity
 
 
 def git(repo, *args):
@@ -156,7 +156,8 @@ NEXT_ACTION = {
     "stale_bindings": "Terms or policy changed after this evidence. Run closeout again under the current terms.",
     "review_rejected": "The review rejected the work. Read the report, repair, and request closeout again.",
     "check_rejected": "Verk rejected a check run. Fix the cause it names and run the check again.",
-    "approved_awaiting_answer": "The reviewer approved; the review waits for whoever may answer it.",
+    "approved_awaiting_answer": ("The reviewer approved; the review waits for whoever may answer it. If it is the operator's, "
+                                 "Verk's own notice gives their action; do not run `answer` yourself."),
     "answered_no_receipt": "The review was answered approved, but no receipt covers this revision. Inspect Verk view, then close out at the current HEAD.",
     "stale_target": "This review judged another revision. Run closeout again at the current HEAD.",
     "review_withdrawn": "The review was withdrawn. Inspect Verk view, then request closeout again if the work is still wanted.",
@@ -308,6 +309,7 @@ def review_covers(view, decision, head):
 
 
 def closeout(repo, env, contract, proof, wait, qualification=None, source_only=False, delegate_approved_goals=False):
+    refuse_other_principals(env.get("VERK_CLOSEOUT_HARNESS", "codex"), env)  # Before git, Verk or any request lookup.
     repo = repo.resolve()
     path = state_path(env)
     began = time.time_ns()  # Overlapping closeouts settle by when they began, not by which finished last.
@@ -409,6 +411,8 @@ CLAIM_SECONDS = 60  # Longer than one Stop's bounded calls.
 
 
 def hook(payload, env):
+    if reviewer_launch(env):
+        return {}  # A reviewer's Stop is nobody's closeout: before any lock or request read.
     if not isinstance(payload, dict):
         raise ValueError("Stop payload must be an object")
     if payload.get("hook_event_name") != "Stop" or payload.get("stop_hook_active"):
@@ -420,8 +424,7 @@ def hook(payload, env):
     existing = env.get("CLAUDE_CODE_SESSION_ID") if claude else env.get("CODEX_THREAD_ID") or env.get("CODEX_SESSION_ID")
     if existing and existing != session:
         raise ValueError("Stop session differs from harness execution identity")
-    scoped = dict(env)
-    scoped["CLAUDE_CODE_SESSION_ID" if claude else "CODEX_THREAD_ID"] = session
+    scoped = author_copy("claude-code" if claude else "codex", env, session)
     path = state_path(scoped)
     with request_lock(path):
         try:
@@ -484,6 +487,7 @@ def operation(name, arguments, harness, env):
         parser.add_argument("--revision", help="Revision the receipt must cover; defaults to HEAD")
     args = parser.parse_args(arguments)
     try:
+        refuse_other_principals(harness, env)
         repo = (args.repo or Path.cwd()).resolve()
         if name == "complete":
             if harness != "codex":

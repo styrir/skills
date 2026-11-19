@@ -12,6 +12,12 @@ from unittest.mock import patch
 import closeout
 import codex_review
 import codex_closeout
+from verk import author_copy
+
+
+def author_env(session, **extra):
+    """The real environment, minus any other principal's claims, as this Codex author session."""
+    return dict(author_copy('codex', os.environ, session), **extra)
 
 
 class DelegatedGoalTests(unittest.TestCase):
@@ -19,7 +25,7 @@ class DelegatedGoalTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.env = dict(os.environ, VERK_HOME=str(self.root / 'store'), CODEX_THREAD_ID='codex-delegation-test')
+        self.env = author_env('codex-delegation-test', VERK_HOME=str(self.root / 'store'))
         self.head = 'a' * 40
         self.view = {'contract': {'id': 'vk-1', 'project': 'fixture', 'kind': 'goal', 'acceptance_version': 1, 'subjects_version': 0},
                      'children': [], 'prerequisites': []}
@@ -403,7 +409,7 @@ class CodexStopTests(unittest.TestCase):
     def test_foreground_replacement_during_stop_keeps_the_new_request(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            env = dict(os.environ, CODEX_THREAD_ID='codex-race-test', VERK_HOME=str(root / 'store'))
+            env = author_env('codex-race-test', VERK_HOME=str(root / 'store'))
             path = closeout.state_path(env)
             first = {'request_id': 'one', 'repo': str(root), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git'}
             newer = dict(first, request_id='two', head='newer')
@@ -446,7 +452,7 @@ class CodexStopTests(unittest.TestCase):
     def test_unreadable_verk_stays_blocked_and_interruption_is_not_acceptance(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            env = dict(os.environ, CODEX_THREAD_ID='codex-int-test', VERK_HOME=str(root / 'store'))
+            env = author_env('codex-int-test', VERK_HOME=str(root / 'store'))
             path = closeout.state_path(env)
             request = {'request_id': 'one', 'repo': str(root / 'deleted'), 'contract': 'vk-1', 'head': 'H', 'common_dir': 'g'}
             closeout.save(path, request)
@@ -464,7 +470,7 @@ class CodexStopTests(unittest.TestCase):
     def test_hard_exit_during_stop_never_consumes_pending_review(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            env = dict(os.environ, CODEX_THREAD_ID='codex-crash-test', VERK_HOME=str(root / 'store'))
+            env = author_env('codex-crash-test', VERK_HOME=str(root / 'store'))
             path = closeout.state_path(env)
             request = {'repo': str(root), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git'}
             closeout.save(path, request)
@@ -485,7 +491,7 @@ with patch.object(closeout,'git',side_effect=git), patch.object(closeout,'call',
     def test_pending_survives_repeated_stops_and_receipt_ends_continuation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            env = dict(os.environ, CODEX_THREAD_ID='codex-stop-test', VERK_HOME=str(root / 'store'))
+            env = author_env('codex-stop-test', VERK_HOME=str(root / 'store'))
             path = closeout.state_path(env)
             request = {'repo': str(root), 'contract': 'vk-1', 'head': 'head', 'common_dir': 'git',
                        'delegate_approved_goals': True}
@@ -509,7 +515,7 @@ with patch.object(closeout,'git',side_effect=git), patch.object(closeout,'call',
     def test_changed_work_blocks_completion_without_verk_mutation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            env = dict(os.environ, CODEX_THREAD_ID='codex-stale-test', VERK_HOME=str(root / 'store'))
+            env = author_env('codex-stale-test', VERK_HOME=str(root / 'store'))
             path = closeout.state_path(env)
             closeout.save(path, {'repo': str(root), 'contract': 'vk-1', 'head': 'old', 'common_dir': 'git'})
             payload = {'hook_event_name': 'Stop', 'session_id': 'codex-stale-test', 'cwd': str(root)}
@@ -530,7 +536,7 @@ class BlockedStopLimitTest(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
-        self.env = dict(os.environ, CODEX_THREAD_ID='limit-test', VERK_HOME=str(self.root / 'store'))
+        self.env = author_env('limit-test', VERK_HOME=str(self.root / 'store'))
         self.env.pop('VERK_CLOSEOUT_READ_DIR', None)
         self.path = closeout.state_path(self.env)
         self.payload = {'hook_event_name': 'Stop', 'session_id': 'limit-test', 'cwd': str(self.root)}

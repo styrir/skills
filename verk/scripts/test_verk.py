@@ -7,7 +7,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from verk import invocation
+from unittest.mock import patch
+
+import verk
+from verk import author_copy, invocation
 
 SCRIPT = Path(__file__).with_name("verk.py")
 BIN = Path.home() / ".local" / "bin"
@@ -27,23 +30,62 @@ class SessionWrapperTests(unittest.TestCase):
 
     def test_identity_is_session_scoped_and_arguments_remain_literal(self):
         title = "Keep spaces; literal $(text) and 'quotes'"
-        command, _, env = invocation(["add", title], {
-            "CODEX_THREAD_ID": "test-session", "VERK_ACTOR": "operator:test",
-            "VERK_SESSION": "other-session", "VERK_REVIEWER": "1"
-        })
+        command, _, env = invocation(["add", title], {"CODEX_THREAD_ID": "test-session"})
         self.assertEqual(command, [str(BIN / "verk"), "add", title])
         self.assertEqual(env["VERK_ACTOR"], "codex:test-session")
         self.assertEqual(env["VERK_SESSION"], "test-session")
         self.assertNotIn("VERK_REVIEWER", env)
 
+    def test_equal_claims_pass_and_the_thread_id_wins_over_the_session_id(self):
+        _, _, env = invocation(["brief"], {"CODEX_THREAD_ID": "thread", "CODEX_SESSION_ID": "other",
+                                           "VERK_ACTOR": "codex:thread", "VERK_SESSION": "thread", "VERK_REVIEWER": "0"})
+        self.assertEqual((env["VERK_ACTOR"], env["VERK_SESSION"]), ("codex:thread", "thread"))
+        _, _, env = invocation(["--harness", "claude-code", "brief"], {
+            "CLAUDE_CODE_SESSION_ID": "claude-test", "VERK_ACTOR": "claude-code:claude-test", "VERK_SESSION": "claude-test"})
+        self.assertEqual(env["VERK_ACTOR"], "claude-code:claude-test")
+
+    def refusals(self):
+        codex, claude = {"CODEX_THREAD_ID": "codex-test"}, {"CLAUDE_CODE_SESSION_ID": "claude-test"}
+        return [
+            ([], dict(codex, CLAUDE_CODE_SESSION_ID="claude-test")), ([], dict(codex, CLAUDECODE="1")),
+            ([], dict(codex, PI_CODING_AGENT="true")), ([], dict(codex, PI_SESSION_ID="pi-test")),
+            ([], {"PI_CODING_AGENT": "true", "CODEX_THREAD_ID": "codex-test", "VERK_ACTOR": "pi:pi-test"}),
+            (["--harness", "claude-code"], dict(claude, CODEX_THREAD_ID="codex-test")),
+            (["--harness", "claude-code"], dict(claude, PI_CODING_AGENT="true")),
+            ([], dict(codex, VERK_ACTOR="operator:test")), ([], dict(codex, VERK_ACTOR="codex:another")),
+            ([], dict(codex, VERK_SESSION="another")),
+            (["--harness", "claude-code"], dict(claude, VERK_ACTOR="codex:claude-test")),
+            ([], dict(codex, VERK_REVIEWER="1")), (["--harness", "claude-code"], dict(claude, VERK_REVIEWER="1")),
+        ]
+
+    def test_each_refusal_happens_before_any_subprocess(self):
+        for flags, environment in self.refusals():
+            with self.subTest(flags=flags, environment=environment):
+                with self.assertRaises(ValueError):
+                    invocation([*flags, "brief"], environment)
+                with patch.dict(os.environ, environment, clear=True), \
+                        patch.object(verk.subprocess, "run", side_effect=AssertionError("ran Verk")), \
+                        patch.object(verk.shutil, "which", side_effect=AssertionError("looked up Verk")), \
+                        patch("sys.stderr"):
+                    self.assertEqual(verk.main([*flags, "brief"]), 2)
+
+    def test_a_refusal_names_the_fix_for_the_agent(self):
+        with self.assertRaisesRegex(ValueError, "Run `verk` directly"):
+            invocation(["brief"], {"CODEX_THREAD_ID": "codex-test", "PI_CODING_AGENT": "true"})
+
+    def test_a_scrubbed_copy_carries_no_other_principal(self):
+        dirty = {"CODEX_THREAD_ID": "old", "PI_CODING_AGENT": "true", "CLAUDE_CODE_SESSION_ID": "c", "VERK_ACTOR": "pi:x",
+                 "VERK_SESSION": "x", "VERK_REVIEWER": "1", "HOME": "/h"}
+        clean = author_copy("codex", dirty, "payload-session")
+        self.assertEqual(clean, {"CODEX_THREAD_ID": "payload-session", "HOME": "/h"})
+        invocation(["brief"], clean)
+
     def test_claude_identity_is_explicit_and_author_only(self):
-        environment = {"CLAUDE_CODE_SESSION_ID": "claude-test", "CODEX_THREAD_ID": "codex-test",
-                       "VERK_REVIEWER": "1", "VERK_ACTOR": "operator:test"}
+        environment = {"CLAUDE_CODE_SESSION_ID": "claude-test"}
         _, _, env = invocation(["--harness", "claude-code", "brief"], environment)
         self.assertEqual(env["VERK_ACTOR"], "claude-code:claude-test")
         self.assertEqual(env["VERK_SESSION"], "claude-test")
-        self.assertNotIn("VERK_REVIEWER", env)
-        with self.assertRaisesRegex(ValueError, "identity"):
+        with self.assertRaisesRegex(ValueError, "another harness|identity"):
             invocation(["--harness", "claude-code", "brief"], {"CODEX_THREAD_ID": "wrong-harness"})
         with self.assertRaises(ValueError):
             invocation(["--harness", "claude-code", "answer", "vk-d1", "approved"], environment)
@@ -77,9 +119,7 @@ class SessionWrapperTests(unittest.TestCase):
             root = Path(directory)
             repo = root / "repo"
             repo.mkdir()
-            env = dict(os.environ, VERK_HOME=str(root / "store"), CODEX_THREAD_ID="skill-test-session",
-                       VERK_ACTOR="operator:must-not-carry", VERK_SESSION="must-not-carry")
-            env.pop("VERK_REVIEWER", None)
+            env = dict(author_copy("codex", os.environ, "skill-test-session"), VERK_HOME=str(root / "store"))
             def run(command):
                 result = subprocess.run(command, cwd=repo, env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

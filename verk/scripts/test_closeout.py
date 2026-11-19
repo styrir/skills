@@ -13,6 +13,8 @@ import unittest
 from unittest.mock import patch
 
 import closeout
+import codex_closeout
+from verk import author_copy
 
 
 class CloseoutTests(unittest.TestCase):
@@ -21,10 +23,7 @@ class CloseoutTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.repo = Path(self.tmp.name) / "repo"
         self.repo.mkdir()
-        self.env = dict(os.environ, CODEX_THREAD_ID="closeout-test", VERK_HOME=str(Path(self.tmp.name) / "store"))
-        self.env.pop("VERK_REVIEWER", None)
-        self.env.pop("VERK_ACTOR", None)
-        self.env.pop("VERK_SESSION", None)
+        self.env = dict(author_copy("codex", os.environ, "closeout-test"), VERK_HOME=str(Path(self.tmp.name) / "store"))
         for args in [("init", "-q"), ("config", "user.name", "Synthetic test"),
                      ("config", "user.email", "test@example.invalid")]:
             self.git(*args)
@@ -345,6 +344,65 @@ with patch.object(closeout,'call',side_effect=lambda *a,**k:os._exit(17)):
         self.assertEqual(record["repo"], str(self.repo.resolve()))
         self.assertTrue(record["common_dir"].endswith(".git"))
         self.assertEqual(record["bindings"], {"acceptanceVersion": 1, "subjectsVersion": 0, "policyVersion": 2})
+
+    def foreign_environments(self):
+        codex = {"CODEX_THREAD_ID": "closeout-test", "VERK_HOME": self.env["VERK_HOME"]}
+        return [("codex", dict(codex, CLAUDE_CODE_SESSION_ID="claude")), ("codex", dict(codex, PI_CODING_AGENT="true")),
+                ("codex", dict(codex, VERK_ACTOR="pi:someone")), ("codex", dict(codex, VERK_SESSION="someone")),
+                ("codex", dict(codex, VERK_REVIEWER="1")),
+                ("claude-code", {"CLAUDE_CODE_SESSION_ID": "closeout-test", "CODEX_THREAD_ID": "codex"}),
+                ("claude-code", {"CLAUDE_CODE_SESSION_ID": "closeout-test", "PI_CODING_AGENT": "true"}),
+                ("claude-code", {"CLAUDE_CODE_SESSION_ID": "closeout-test", "VERK_REVIEWER": "1"})]
+
+    def test_foreground_routes_refuse_another_principal_before_any_subprocess_or_request_lookup(self):
+        shielded = [patch.object(closeout.subprocess, "run", side_effect=AssertionError("ran a subprocess")),
+                    patch.object(closeout.subprocess, "check_output", side_effect=AssertionError("ran git")),
+                    patch.object(closeout, "read_request", side_effect=AssertionError("looked up a request")),
+                    patch.object(closeout, "request_lock", side_effect=AssertionError("took a lock"))]
+        with contextlib.ExitStack() as stack, patch("sys.stderr"):
+            for guard in shielded:
+                stack.enter_context(guard)
+            for harness, environment in self.foreign_environments():
+                env = dict(environment, VERK_CLOSEOUT_HARNESS=harness)
+                with self.subTest(harness=harness, environment=environment):
+                    with self.assertRaises(ValueError):
+                        closeout.closeout(self.repo, env, "vk-1", None, 0, source_only=True)
+                    for name in closeout.OPERATIONS:
+                        self.assertEqual(closeout.operation(name, ["--repo", str(self.repo), "--id", "vk-1"], harness, env), 2)
+                    if harness == "codex":
+                        with self.assertRaises(ValueError):
+                            codex_closeout.closeout(self.repo, env, "vk-1", None, 0, source_only=True)
+        self.assertFalse(list(Path(self.env["VERK_HOME"]).glob("**/*")))
+
+    def test_a_reviewer_launch_stops_before_any_lock_or_request_read(self):
+        path, request, payload = self.pending()
+        before = path.read_bytes()
+        for harness, runner in (("codex", codex_closeout.hook), ("codex", closeout.hook), ("claude-code", closeout.hook)):
+            env = dict(self.env, VERK_REVIEWER="1", VERK_ACTOR=f"{harness}-reviewer:closeout-test", VERK_CLOSEOUT_HARNESS=harness)
+            with self.subTest(harness=harness, runner=runner.__module__), \
+                    patch.object(closeout, "call", side_effect=AssertionError("called Verk")), \
+                    patch.object(closeout, "request_lock", side_effect=AssertionError("took a lock")), \
+                    patch.object(closeout, "read_request", side_effect=AssertionError("read a request")):
+                self.assertEqual(runner(payload, env), {})
+                self.assertEqual(runner("not even a payload", env), {})
+        self.assertEqual(path.read_bytes(), before)
+        self.assertFalse(path.with_suffix(".lock").exists())
+        self.assertFalse(path.with_suffix(".result.json").exists())
+
+    def test_stop_acts_as_the_payloads_author_on_a_cleaned_copy(self):
+        for runner in (closeout.hook, codex_closeout.hook):
+            path, request, payload = self.pending()
+            seen = []
+            def invoke(repo, scoped, *args, **kwargs):
+                command, _, author = closeout.invocation(["--harness", "codex", "brief"], scoped)
+                seen.append((author["VERK_ACTOR"], author["VERK_SESSION"], tuple(sorted(set(scoped) & {"PI_CODING_AGENT", "CLAUDE_CODE_SESSION_ID", "VERK_REVIEWER"}))))
+                return {"state": "satisfied", "receipts": [{"id": "vk-r1", "revision": self.head}]}
+            env = dict(self.env, PI_CODING_AGENT="true", VERK_ACTOR="pi:the-parent", VERK_SESSION="the-parent",
+                       VERK_CLOSEOUT_HARNESS="codex")
+            with self.subTest(runner=runner.__module__), patch.object(closeout, "call", side_effect=invoke):
+                self.assertIn("receipt", runner(payload, env)["systemMessage"])
+            self.assertEqual(set(seen), {("codex:closeout-test", "closeout-test", ())})
+            self.assertFalse(path.exists())
 
     def test_dirty_work_is_never_submitted(self):
         (self.repo / "proof.txt").write_text("uncommitted")

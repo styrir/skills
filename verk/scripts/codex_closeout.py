@@ -161,6 +161,8 @@ def closeout(repo, env, contract, proof, wait, qualification=None, source_only=F
 
 
 def hook(payload, env):
+    if shared.reviewer_launch(env):
+        return {}  # A reviewer's Stop is nobody's closeout: before any lock or request read.
     if not isinstance(payload, dict):
         raise ValueError("Stop payload must be an object")
     if payload.get("hook_event_name") != "Stop":
@@ -169,7 +171,7 @@ def hook(payload, env):
     existing = env.get("CODEX_THREAD_ID") or env.get("CODEX_SESSION_ID")
     if not session or existing and existing != session:
         raise ValueError("Stop session differs from Codex execution identity")
-    scoped = dict(env, CODEX_THREAD_ID=session)
+    scoped = shared.author_copy("codex", env, session)
     path = shared.state_path(scoped)
     request = None
     result = {"status": "needs_action", "reason": "Malformed Codex closeout request"}

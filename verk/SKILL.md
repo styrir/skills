@@ -15,14 +15,13 @@ Use the bundled session wrapper for every Verk command:
 python3 <skill-dir>/scripts/verk.py --repo /absolute/project/path brief --json
 ```
 
-Resolve `<skill-dir>` from this skill's location. `--repo` selects the real repository, not this chat's artifact directory. Read its guidance and the brief before choosing work. The wrapper calls the installed `~/.local/bin/verk` or `verk-check` with argument arrays, preserving quoted text. It sets `VERK_ACTOR=codex:<current-thread>` and `VERK_SESSION` from the host's `CODEX_THREAD_ID` (or `CODEX_SESSION_ID`), rather than acting as the operator. If identity or the executable is missing, stop and report it; do not silently call the CLI as the operator.
+Resolve `<skill-dir>` from this skill's location. `--repo` selects the real repository, not this chat's artifact directory. Read its guidance and the brief before choosing work. The wrapper calls the installed `~/.local/bin/verk` or `verk-check` with argument arrays, preserving quoted text. It sets `VERK_ACTOR=codex:<current-thread>` and `VERK_SESSION` from the host's `CODEX_THREAD_ID` (the thread ID wins over `CODEX_SESSION_ID`), rather than acting as the operator. If identity or the executable is missing, stop and report it; do not silently call the CLI as the operator.
 
 This is a chat workflow, not a persistent side panel or an edit-enforcement hook. The packaged plugin adds an opt-in Stop follow-up for explicitly requested closeouts. Read [desktop integration](references/desktop.md) when changing hooks, packaging a plugin, comparing Claude Code/Pi integration, or diagnosing discovery.
 
-For Claude Code, explicitly pass `--harness claude-code` to both wrappers and
-supply `CLAUDE_CODE_SESSION_ID` from the actual Claude session. The mod supplies
-this SDK identity itself. Codex remains the default; neither route accepts an
-operator or reviewer role. Claude pending markers have their own harness prefix.
+The wrapper serves two routes only: Codex desktop, and the explicit Claude Code closeout (pass `--harness claude-code` to the closeout helper, with `CLAUDE_CODE_SESSION_ID` from the actual Claude session). Everywhere else, use `verk` itself: Pi, Claude Code's own shell, Codex CLI and reviewer sessions get their identity from their own integration, and the wrapper never supplies one.
+
+The wrapper never overwrites another principal. It refuses, before running anything, when the environment shows another harness's session variable or marker (for example `PI_CODING_AGENT`, `CLAUDE_CODE_SESSION_ID` under Codex, `CODEX_THREAD_ID` under Claude), when `VERK_ACTOR` or `VERK_SESSION` already names a different principal (equal or absent values are fine), or under `VERK_REVIEWER=1`. A refusal is not a failure to work around: run `verk` directly where your harness supplies your identity. Neither route accepts an operator or reviewer role. Claude pending markers have their own harness prefix.
 
 ## Work lifecycle
 
@@ -74,7 +73,7 @@ operator delegates automatic goal completion, add `--delegate-approved-goals`;
 Codex records that delegated action only after a matching independent approval.
 Read [Codex review completion](references/codex-review-completion.md) for scope,
 authorization, report validation and the native Stop contract. Claude retains
-its separate behavior. Never ask the operator to run terminal review commands.
+its separate behavior. Never ask the operator to run terminal review commands: when a review is theirs to answer, the action comes from Verk's own notice.
 
 Read the structured outcome. `receipt` names a receipt covering current HEAD. `review_pending` means the existing independent reviewer still has work; wait or inspect the review, repair findings and request closeout again. `needs_action` and command errors remain unfinished; an open review whose reviewer failed or could not assess reports `needs_action`, because no verdict is coming by itself. Exit 3 means pending/action needed, not success. Tests, commit, source publication, installation and live acceptance remain separate evidence.
 

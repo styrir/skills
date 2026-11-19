@@ -19,6 +19,45 @@ def session_identity(harness, environment):
     return session
 
 
+# What each harness leaves in its agent shell. Another harness's name here means the shell is not this wrapper's principal.
+HOST_VARIABLES = {"codex": ("CODEX_THREAD_ID", "CODEX_SESSION_ID"), "claude-code": ("CLAUDE_CODE_SESSION_ID", "CLAUDECODE"),
+                  "pi": ("PI_CODING_AGENT", "PI_SESSION_ID")}
+
+
+def reviewer_launch(environment):
+    return environment.get("VERK_REVIEWER") == "1"
+
+
+def foreign_variables(harness, environment):
+    return sorted(name for host, names in HOST_VARIABLES.items() if host != harness
+                  for name in names if environment.get(name))
+
+
+def refuse_other_principals(harness, environment):
+    """Raises, before any subprocess or lookup, unless the environment is this harness's own author session. Returns its session."""
+    if reviewer_launch(environment):
+        raise ValueError("This is a designated reviewer launch (VERK_REVIEWER=1); the author wrapper never serves reviewers. "
+                         "Run `verk` directly: its integration supplies your identity. No Verk command was run.")
+    foreign = foreign_variables(harness, environment)
+    if foreign:
+        raise ValueError(f"{', '.join(foreign)} shows another harness's session, and this wrapper serves only {harness}. "
+                         "Run `verk` directly in that harness: its integration supplies your identity. No Verk command was run.")
+    session = session_identity(harness, environment)
+    for name, own in (("VERK_ACTOR", f"{harness}:{session}"), ("VERK_SESSION", session)):
+        if environment.get(name) and environment[name] != own:
+            raise ValueError(f"{name}={environment[name]} names another principal than this {harness} session ({own}); "
+                             f"the wrapper never overwrites it. Run `verk` directly as that principal. No Verk command was run.")
+    return session
+
+
+def author_copy(harness, environment, session):
+    """The environment scoped to a Stop payload's author: no claim to another principal, no foreign host's variables."""
+    drop = {"VERK_ACTOR", "VERK_SESSION", "VERK_REVIEWER", *foreign_variables(harness, environment)}
+    scoped = {name: value for name, value in environment.items() if name not in drop}
+    scoped[HOST_VARIABLES[harness][0]] = session
+    return scoped
+
+
 def installed(name, environment, bin_dir=None):
     """Where the install put it: the folder given, then VERK_BIN_DIR, then PATH, then the install's default."""
     folder = bin_dir or environment.get("VERK_BIN_DIR")
@@ -42,7 +81,7 @@ def invocation(arguments, environment, bin_dir=None):
         raise ValueError(f"{verb!r} is outside this author-session wrapper; use the operator's own interface if required.")
     if verb == "setup" and any(a == "--apply" or a.startswith("--apply=") for a in args[1:]):
         raise ValueError("Applying setup is the operator's action; this wrapper can show setup plans only.")
-    session = session_identity(options.harness, environment)
+    session = refuse_other_principals(options.harness, environment)
     repo = (options.repo or Path.cwd()).expanduser().resolve()
     if not repo.is_dir():
         raise ValueError(f"Repository directory does not exist: {repo}")
@@ -52,7 +91,6 @@ def invocation(arguments, environment, bin_dir=None):
     env = dict(environment)
     env["VERK_ACTOR"] = f"{options.harness}:{session}"
     env["VERK_SESSION"] = session
-    env.pop("VERK_REVIEWER", None)
     command = [str(binary), *(args[1:] if verb == "check" else args)]
     return command, repo, env
 
